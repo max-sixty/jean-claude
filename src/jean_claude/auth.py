@@ -1,28 +1,10 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#     "google-api-python-client",
-#     "google-auth-oauthlib",
-# ]
-# ///
-"""
-Shared OAuth authentication for Google APIs.
+"""Shared OAuth authentication for Google APIs."""
 
-Run this script to set up credentials:
-    uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/auth.py
-"""
+from __future__ import annotations
 
 import json
-import logging
 import sys
 from pathlib import Path
-
-# Configure API logging to stderr so agents can see what's happening
-_handler = logging.StreamHandler(sys.stderr)
-_handler.setFormatter(logging.Formatter("[%(name)s] %(message)s"))
-logging.getLogger("googleapiclient.discovery").addHandler(_handler)
-logging.getLogger("googleapiclient.discovery").setLevel(logging.DEBUG)
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -32,6 +14,20 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 CONFIG_DIR = Path.home() / ".config" / "jean-claude"
 CLIENT_SECRET_FILE = CONFIG_DIR / "client_secret.json"
 TOKEN_FILE = CONFIG_DIR / "token.json"
+
+# Embedded OAuth credentials for public distribution.
+# These are inherently non-secret for desktop/CLI apps per Google's OAuth model.
+# User tokens are what must be protected (stored with 0600 permissions).
+# Users can override by placing their own client_secret.json in CONFIG_DIR.
+EMBEDDED_CLIENT_CONFIG = {
+    "installed": {
+        "client_id": "632159173278-jdi7d5i4aldosvhu4vvu2hsck4fusg00.apps.googleusercontent.com",
+        "client_secret": "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",
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "redirect_uris": ["http://localhost"],
+    }
+}
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -45,18 +41,15 @@ SCOPES = [
 
 
 def _run_oauth_flow() -> Credentials:
-    """Run OAuth flow to get new credentials."""
-    if not CLIENT_SECRET_FILE.exists():
-        raise SystemExit(
-            f"Missing {CLIENT_SECRET_FILE}\n\n"
-            "To create OAuth credentials:\n"
-            "1. Go to: https://console.cloud.google.com/apis/credentials\n"
-            "2. Click 'Create Credentials' -> 'OAuth client ID'\n"
-            "3. Select 'Desktop app' as application type\n"
-            "4. Download the JSON file\n"
-            f"5. Save it as: {CLIENT_SECRET_FILE}"
-        )
-    flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES)
+    """Run OAuth flow to get new credentials.
+
+    Uses user-provided client_secret.json if present, otherwise falls back
+    to embedded credentials.
+    """
+    if CLIENT_SECRET_FILE.exists():
+        flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES)
+    else:
+        flow = InstalledAppFlow.from_client_config(EMBEDDED_CLIENT_CONFIG, SCOPES)
     creds = flow.run_local_server(port=0)
     _save_token(creds)
     return creds
@@ -111,6 +104,11 @@ def _save_token(creds: Credentials) -> None:
     TOKEN_FILE.chmod(0o600)
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """CLI entry point for running auth setup."""
     get_credentials()
     print("OAuth setup complete!")
+
+
+if __name__ == "__main__":
+    main()

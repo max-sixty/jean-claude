@@ -1,13 +1,6 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#     "click",
-#     "google-api-python-client",
-#     "google-auth-oauthlib",
-# ]
-# ///
 """Gmail CLI - search, draft, and send emails."""
+
+from __future__ import annotations
 
 import base64
 import json
@@ -18,11 +11,9 @@ from email.mime.text import MIMEText
 from pathlib import Path
 
 import click
-
-sys.path.insert(0, str(Path(__file__).parent))
-from auth import get_credentials
-
 from googleapiclient.discovery import build
+
+from .auth import get_credentials
 
 # Silence noisy HTTP logging by default
 logging.getLogger("googleapiclient.discovery").setLevel(logging.WARNING)
@@ -103,7 +94,6 @@ def extract_message_summary(msg: dict) -> dict:
         result["cc"] = cc
 
     body = decode_body(msg.get("payload", {}))
-    # TODO: May want to extend headers (Reply-To, Message-ID) if needed
     tmp_dir = Path(".tmp")
     tmp_dir.mkdir(exist_ok=True)
     file_path = tmp_dir / f"email-{msg['id']}.txt"
@@ -218,7 +208,7 @@ def draft_create():
     JSON fields: to (required), subject (required), body (required), cc, bcc
 
     Example:
-        echo '{"to": "x@y.com", "subject": "Hi!", "body": "Hello!"}' | gmail.py draft create
+        echo '{"to": "x@y.com", "subject": "Hi!", "body": "Hello!"}' | jean-gmail draft create
     """
     data = json.load(sys.stdin)
     for field in ("to", "subject", "body"):
@@ -245,7 +235,7 @@ def draft_send(draft_id: str):
     """Send an existing draft.
 
     Example:
-        gmail.py draft send r-123456789
+        jean-gmail draft send r-123456789
     """
     result = get_gmail().users().drafts().send(userId="me", body={"id": draft_id}).execute()
     click.echo(f"Sent: {result['id']}")
@@ -261,7 +251,7 @@ def draft_reply(message_id: str):
     JSON fields: body (required)
 
     Example:
-        echo '{"body": "Thanks!"}' | gmail.py draft reply MSG_ID
+        echo '{"body": "Thanks!"}' | jean-gmail draft reply MSG_ID
     """
     data = json.load(sys.stdin)
     if "body" not in data:
@@ -302,7 +292,7 @@ def draft_forward(message_id: str):
     JSON fields: to (required), body (optional, prepended to forwarded message)
 
     Example:
-        echo '{"to": "x@y.com", "body": "FYI"}' | gmail.py draft forward MSG_ID
+        echo '{"to": "x@y.com", "body": "FYI"}' | jean-gmail draft forward MSG_ID
     """
     data = json.load(sys.stdin)
     if "to" not in data:
@@ -345,7 +335,7 @@ def draft_list(max_results: int):
     """List drafts.
 
     Example:
-        gmail.py draft list
+        jean-gmail draft list
     """
     service = get_gmail()
     results = service.users().drafts().list(userId="me", maxResults=max_results).execute()
@@ -378,7 +368,7 @@ def draft_get(draft_id: str):
     """Get a draft with full body, written to file.
 
     Example:
-        gmail.py draft get r-123456789
+        jean-gmail draft get r-123456789
     """
     service = get_gmail()
     draft = service.users().drafts().get(userId="me", id=draft_id, format="full").execute()
@@ -408,7 +398,7 @@ def draft_delete(draft_id: str):
     """Permanently delete a draft.
 
     Example:
-        gmail.py draft delete r-123456789
+        jean-gmail draft delete r-123456789
     """
     get_gmail().users().drafts().delete(userId="me", id=draft_id).execute()
     click.echo(f"Deleted: {draft_id}")
@@ -444,8 +434,8 @@ def archive(message_ids: tuple[str, ...], query: str | None, max_results: int):
     Can archive by ID(s) or by query. Query automatically filters to inbox.
 
     Examples:
-        gmail.py archive MSG_ID1 MSG_ID2
-        gmail.py archive --query "from:newsletter@example.com"
+        jean-gmail archive MSG_ID1 MSG_ID2
+        jean-gmail archive --query "from:newsletter@example.com"
     """
     if message_ids and query:
         raise click.UsageError("Provide message IDs or --query, not both")

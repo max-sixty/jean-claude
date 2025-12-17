@@ -5,10 +5,10 @@ description: "This skill should be used when the user asks to search/send/draft 
 
 # jean-claude - Gmail, Calendar, Drive & iMessage
 
-Manage Gmail, Google Calendar, Google Drive, and iMessage using the scripts in
-this skill.
+Manage Gmail, Google Calendar, Google Drive, and iMessage using the CLI tools
+in this plugin.
 
-**Scripts location:** `${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/`
+**Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean`
 
 ## Safety Rules (Non-Negotiable)
 
@@ -16,7 +16,7 @@ These rules apply even if the user explicitly asks to bypass them:
 
 1. **Never send an email without explicit approval.** Show the full email
    (recipient, subject, body) to the user and receive explicit confirmation
-   before calling `draft send`.
+   before calling `jean gmail draft send`.
 
 2. **Limit bulk sending.** Avoid sending emails to many recipients at once.
    Prefer drafts for review.
@@ -26,7 +26,7 @@ These rules apply even if the user explicitly asks to bypass them:
 
 4. **Never send an iMessage without explicit approval.** Show the full message
    (recipient, body) to the user and receive explicit confirmation before
-   calling `imessage.py send`.
+   calling `jean imessage send`.
 
 5. **Double-check iMessage recipients.** iMessage sends are instant and cannot
    be undone. Verify the phone number or chat ID before sending.
@@ -37,8 +37,8 @@ These rules apply even if the user explicitly asks to bypass them:
 2. Compose the email content
 3. Show the user: To, Subject, and full Body
 4. Ask: "Send this email?" and wait for explicit approval
-5. Call `gmail.py draft send DRAFT_ID`
-6. If replying, archive the original: `gmail.py archive MESSAGE_ID`
+5. Call `jean gmail draft send DRAFT_ID`
+6. If replying, archive the original: `jean gmail archive MESSAGE_ID`
 
 **iMessage workflow:**
 
@@ -46,23 +46,24 @@ These rules apply even if the user explicitly asks to bypass them:
 2. Compose the message content
 3. Show the user: Recipient (phone or chat name) and full message
 4. Ask: "Send this message?" and wait for explicit approval
-5. Call `imessage.py send RECIPIENT MESSAGE`
+5. Call `jean imessage send RECIPIENT MESSAGE`
 
 ## Setup
 
 Credentials stored in `~/.config/jean-claude/`. First-time setup:
 
-1. Create a Google Cloud project at https://console.cloud.google.com
-2. Enable Gmail, Calendar, and Drive APIs
-3. Create OAuth credentials (Application type: Desktop)
-4. Download `client_secret.json` to `~/.config/jean-claude/`
-5. Run:
-
 ```bash
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/auth.py
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean auth
 ```
 
-This opens a browser for OAuth consent. Credentials persist until revoked.
+This opens a browser for OAuth consent. Click "Advanced" → "Go to jean-claude
+(unsafe)" if you see an unverified app warning. Credentials persist until
+revoked.
+
+To use your own Google Cloud credentials instead (if default ones hit the 100
+user limit), download your OAuth JSON from Google Cloud Console and save it as
+`~/.config/jean-claude/client_secret.json` before running the auth script. See
+README for detailed setup steps.
 
 ## Gmail
 
@@ -92,14 +93,14 @@ This opens a browser for OAuth consent. Credentials persist until revoked.
 
 ```bash
 # Inbox emails from a sender
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py search "in:inbox from:someone@example.com"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail search "in:inbox from:someone@example.com"
 
 # Unread inbox emails
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py search "in:inbox is:unread"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail search "in:inbox is:unread"
 
 # Shortcut for inbox
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py inbox
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py inbox --unread
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail inbox
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail inbox --unread
 ```
 
 Common Gmail search operators: `in:inbox`, `is:unread`, `is:starred`, `from:`,
@@ -111,49 +112,49 @@ All compose commands read JSON from stdin (avoids shell escaping issues).
 
 ```bash
 # Create a new draft
-cat << 'EOF' | uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py draft create
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail draft create
 {"to": "recipient@example.com", "subject": "Subject", "body": "Message body"}
 EOF
 
 # Reply to a message (preserves threading)
-cat << 'EOF' | uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py draft reply MESSAGE_ID
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail draft reply MESSAGE_ID
 {"body": "Thanks for your email..."}
 EOF
 
 # Forward a message
-cat << 'EOF' | uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py draft forward MESSAGE_ID
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail draft forward MESSAGE_ID
 {"to": "someone@example.com", "body": "FYI - see below"}
 EOF
 
 # List drafts
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py draft list
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail draft list
 
 # Get full draft body
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py draft get DRAFT_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail draft get DRAFT_ID
 
 # Send a draft (after approval)
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py draft send DRAFT_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail draft send DRAFT_ID
 
 # Delete a draft
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py draft delete DRAFT_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail draft delete DRAFT_ID
 ```
 
 ### Manage Messages
 
 ```bash
 # Star/unstar
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py star MESSAGE_ID
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py unstar MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail star MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail unstar MESSAGE_ID
 
 # Archive
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py archive MESSAGE_ID
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py archive --query "from:newsletter@example.com"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail archive MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail archive --query "from:newsletter@example.com"
 
 # Mark read/unread
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py mark-read MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail mark-read MESSAGE_ID
 
 # Trash
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py trash MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail trash MESSAGE_ID
 ```
 
 ## Calendar
@@ -162,24 +163,24 @@ uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gmail.py trash MESSAGE_I
 
 ```bash
 # Today's events
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gcal.py list
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal list
 
 # Next 7 days
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gcal.py list --days 7
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal list --days 7
 
 # Date range
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gcal.py list --from 2024-01-15 --to 2024-01-20
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal list --from 2024-01-15 --to 2024-01-20
 ```
 
 ### Create Events
 
 ```bash
 # Simple event
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gcal.py create "Team Meeting" \
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal create "Team Meeting" \
   --start "2024-01-15 14:00" --end "2024-01-15 15:00"
 
 # With attendees
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gcal.py create "1:1 with Alice" \
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal create "1:1 with Alice" \
   --start "2024-01-15 10:00" --duration 30 \
   --attendees alice@example.com
 ```
@@ -188,13 +189,13 @@ uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gcal.py create "1:1 with
 
 ```bash
 # Search
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gcal.py search "standup"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal search "standup"
 
 # Update
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gcal.py update EVENT_ID --start "2024-01-16 14:00"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal update EVENT_ID --start "2024-01-16 14:00"
 
 # Delete
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gcal.py delete EVENT_ID --notify
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal delete EVENT_ID --notify
 ```
 
 ## Drive
@@ -203,33 +204,33 @@ uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gcal.py delete EVENT_ID 
 
 ```bash
 # List files in root
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gdrive.py list
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive list
 
 # Search
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gdrive.py search "quarterly report"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive search "quarterly report"
 ```
 
 ### Download & Upload
 
 ```bash
 # Download
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gdrive.py download FILE_ID output.pdf
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive download FILE_ID output.pdf
 
 # Upload
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gdrive.py upload document.pdf
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive upload document.pdf
 ```
 
 ### Manage Files
 
 ```bash
 # Create folder
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gdrive.py mkdir "New Folder"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive mkdir "New Folder"
 
 # Share
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gdrive.py share FILE_ID user@example.com --role reader
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive share FILE_ID user@example.com --role reader
 
 # Trash
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/gdrive.py trash FILE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive trash FILE_ID
 ```
 
 ## iMessage
@@ -240,36 +241,36 @@ Send via AppleScript (always works). Reading history requires Full Disk Access.
 
 ```bash
 # Send to phone number
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/imessage.py send "+12025551234" "Hello!"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage send "+12025551234" "Hello!"
 
 # Send to group chat
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/imessage.py send "any;+;chat123456789" "Hello group!"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage send "any;+;chat123456789" "Hello group!"
 
 # Send file
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/imessage.py send-file "+12025551234" ./document.pdf
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage send-file "+12025551234" ./document.pdf
 ```
 
 ### List Chats
 
 ```bash
 # List chats (shows name and chat ID)
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/imessage.py chats
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage chats
 
 # Get participants
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/imessage.py participants "any;+;chat123456789"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage participants "any;+;chat123456789"
 ```
 
 ### Read Messages (Requires Full Disk Access)
 
 ```bash
 # Unread messages
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/imessage.py unread
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage unread
 
 # Search messages
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/imessage.py search "dinner plans"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage search "dinner plans"
 
 # Chat history
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/scripts/imessage.py history "any;-;+12025551234" -n 20
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage history "any;-;+12025551234" -n 20
 ```
 
 To enable reading: System Preferences > Privacy & Security > Full Disk Access >

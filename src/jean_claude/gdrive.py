@@ -1,28 +1,16 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#     "click",
-#     "google-api-python-client",
-#     "google-auth-oauthlib",
-# ]
-# ///
 """Google Drive CLI - list, search, and manage files."""
 
 from __future__ import annotations
 
 import io
 import json
-import sys
 from pathlib import Path
 
 import click
-
-sys.path.insert(0, str(Path(__file__).parent))
-from auth import get_credentials
-
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+
+from .auth import get_credentials
 
 
 def get_drive():

@@ -1,26 +1,17 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#     "click",
-#     "google-api-python-client",
-#     "google-auth-oauthlib",
-# ]
-# ///
 """Google Calendar CLI - list, create, and search events."""
 
+from __future__ import annotations
+
 import json
-import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import click
-
-sys.path.insert(0, str(Path(__file__).parent))
-from auth import get_credentials
-
 from googleapiclient.discovery import build
+
+from .auth import get_credentials
+
 
 # Auto-detect timezone from system
 def _get_local_timezone() -> str:

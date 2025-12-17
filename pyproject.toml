@@ -1,0 +1,22 @@
+[project]
+name = "jean-claude"
+version = "1.0.0"
+description = "Google Workspace (Gmail, Calendar, Drive) and iMessage integration for Claude Code"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "Maximilian" }]
+keywords = ["gmail", "google-calendar", "google-drive", "imessage", "claude-code"]
+
+dependencies = [
+    "click",
+    "google-api-python-client",
+    "google-auth-oauthlib",
+]
+
+[project.scripts]
+jean = "jean_claude.cli:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

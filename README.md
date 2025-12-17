@@ -23,21 +23,43 @@ Clone this repository and add it to your Claude Code plugins directory.
 
 ### Google Workspace (Gmail, Calendar, Drive)
 
-1. Create a Google Cloud project at https://console.cloud.google.com
-2. Enable the Gmail, Calendar, and Drive APIs
-3. Create OAuth credentials:
-   - Go to "Credentials" > "Create Credentials" > "OAuth client ID"
-   - Select "Desktop app" as application type
-   - Download the JSON file
-4. Save the file as `~/.config/jean-claude/client_secret.json`
-5. Run the auth script to complete OAuth flow:
+Run the auth command to authenticate:
 
 ```bash
-uv run /path/to/jean-claude/skills/jean-claude/scripts/auth.py
+jean auth
 ```
 
 This opens a browser for OAuth consent. Credentials are saved to
 `~/.config/jean-claude/token.json` and persist until revoked.
+
+**Note**: You may see an "unverified app" warning during OAuth. Click
+"Advanced" → "Go to jean-claude (unsafe)" to proceed. This is normal for
+apps pending Google verification.
+
+#### Using Your Own Google Cloud Credentials (Optional)
+
+Use your own credentials if the default ones stop working (Google limits
+unverified apps to 100 users) or if you want your own quota.
+
+1. Create a Google Cloud project at https://console.cloud.google.com
+2. Go to "APIs & Services" → "Enabled APIs" and enable:
+   - Gmail API
+   - Google Calendar API
+   - Google Drive API
+3. Go to "APIs & Services" → "OAuth consent screen":
+   - Choose "External" user type
+   - Fill in app name and your email
+   - Add scopes: `gmail.modify`, `calendar`, `drive`
+   - Add yourself as a test user
+4. Go to "APIs & Services" → "Credentials":
+   - Click "Create Credentials" → "OAuth client ID"
+   - Choose "Desktop app" as application type
+   - Download the JSON file
+5. Rename and move the downloaded file:
+   ```bash
+   mv ~/Downloads/client_secret_*.json ~/.config/jean-claude/client_secret.json
+   ```
+6. Run the auth command—it will automatically use your credentials
 
 ### iMessage
 
@@ -63,6 +85,18 @@ Once installed, the skill activates automatically when you ask Claude to:
 "Send an email to alice@example.com about the meeting"
 "Search Drive for quarterly reports"
 "Text +12025551234 that I'm running late"
+```
+
+### CLI Commands
+
+The plugin provides a unified CLI with subcommands:
+
+```bash
+jean --help
+jean gmail --help
+jean gcal --help
+jean gdrive --help
+jean imessage --help
 ```
 
 ## Features
@@ -99,8 +133,9 @@ Once installed, the skill activates automatically when you ask Claude to:
 ## Security
 
 - OAuth tokens are stored with 0600 permissions (owner read/write only)
-- No credentials are stored in the plugin itself
-- Each user must provide their own Google Cloud OAuth credentials
+- Default OAuth client credentials are embedded for convenience (standard
+  practice for desktop/CLI apps per Google's guidelines)
+- Users can provide their own Google Cloud credentials if preferred
 - All email/message sends require explicit user approval
 
 ## License

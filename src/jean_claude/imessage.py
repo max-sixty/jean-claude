@@ -1,10 +1,3 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#     "click",
-# ]
-# ///
 """iMessage CLI - send messages and list chats via AppleScript."""
 
 from __future__ import annotations
@@ -96,8 +89,8 @@ def send(recipient: str, message: str):
     MESSAGE: The message text to send
 
     Examples:
-        imessage.py send "+12025551234" "Hello!"
-        imessage.py send "any;+;chat123456789" "Hello group!"
+        jean-imessage send "+12025551234" "Hello!"
+        jean-imessage send "any;+;chat123456789" "Hello group!"
     """
     if recipient.startswith("any;"):
         # Chat ID - send directly to chat
@@ -131,8 +124,8 @@ def send_file(recipient: str, file_path: Path):
     FILE_PATH: Path to file to send
 
     Examples:
-        imessage.py send-file "+12025551234" ./document.pdf
-        imessage.py send-file "any;+;chat123456789" ./photo.jpg
+        jean-imessage send-file "+12025551234" ./document.pdf
+        jean-imessage send-file "any;+;chat123456789" ./photo.jpg
     """
     abs_path = str(file_path.resolve())
 
@@ -166,7 +159,7 @@ def chats(max_results: int):
     Shows chat name (if any) and chat ID. Use chat ID to send to groups.
 
     Example:
-        imessage.py chats
+        jean-imessage chats
     """
     script = '''tell application "Messages"
   set chatInfo to {}
@@ -220,7 +213,7 @@ def participants(chat_id: str):
     CHAT_ID: The chat ID (e.g., any;+;chat123456789)
 
     Example:
-        imessage.py participants "any;+;chat123456789"
+        jean-imessage participants "any;+;chat123456789"
     """
     script = '''on run {chatId}
   tell application "Messages"
@@ -264,8 +257,8 @@ def open_chat(chat_id: str):
     CHAT_ID: The chat ID (e.g., any;-;+12025551234 or any;+;chat123...)
 
     Example:
-        imessage.py open "any;-;+12025551234"
-        imessage.py open "any;+;chat123456789"
+        jean-imessage open "any;-;+12025551234"
+        jean-imessage open "any;+;chat123456789"
     """
     script = '''on run {chatId}
   tell application "Messages"
@@ -286,8 +279,8 @@ def unread(max_results: int):
     Shows messages that haven't been read yet, excluding messages you sent.
 
     Example:
-        imessage.py unread
-        imessage.py unread -n 50
+        jean-imessage unread
+        jean-imessage unread -n 50
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -344,8 +337,8 @@ def search(query: str | None, max_results: int):
     QUERY: Search term (searches message text)
 
     Examples:
-        imessage.py search "dinner plans"
-        imessage.py search -n 50
+        jean-imessage search "dinner plans"
+        jean-imessage search -n 50
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -393,7 +386,7 @@ def history(chat_id: str, max_results: int):
     CHAT_ID: The chat ID (e.g., any;-;+12025551234 or any;+;chat123...)
 
     Example:
-        imessage.py history "any;-;+12025551234" -n 10
+        jean-imessage history "any;-;+12025551234" -n 10
     """
     # Extract chat identifier for database lookup
     # Chat IDs from AppleScript look like "any;-;+16467194457" or "any;+;chat123..."
