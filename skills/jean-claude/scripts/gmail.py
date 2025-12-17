@@ -1,0 +1,518 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "click",
+#     "google-api-python-client",
+#     "google-auth-oauthlib",
+# ]
+# ///
+"""Gmail CLI - search, draft, and send emails."""
+
+import base64
+import json
+import logging
+import sys
+import time
+from email.mime.text import MIMEText
+from pathlib import Path
+
+import click
+
+sys.path.insert(0, str(Path(__file__).parent))
+from auth import get_credentials
+
+from googleapiclient.discovery import build
+
+# Silence noisy HTTP logging by default
+logging.getLogger("googleapiclient.discovery").setLevel(logging.WARNING)
+logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.WARNING)
+
+
+def get_gmail():
+    return build("gmail", "v1", credentials=get_credentials())
+
+
+def _strip_html(html: str) -> str:
+    """Strip HTML tags for basic text extraction."""
+    import re
+    # Remove script and style elements
+    html = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    # Replace common block elements with newlines
+    html = re.sub(r"<(br|p|div|tr|li)[^>]*>", "\n", html, flags=re.IGNORECASE)
+    # Remove remaining tags
+    html = re.sub(r"<[^>]+>", "", html)
+    # Decode common HTML entities
+    html = html.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"')
+    # Collapse multiple newlines
+    html = re.sub(r"\n\s*\n+", "\n\n", html)
+    return html.strip()
+
+
+def decode_body(payload: dict) -> str:
+    """Extract text body from message payload. Falls back to HTML if no plain text."""
+    if "body" in payload and payload["body"].get("data"):
+        return base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8", errors="replace")
+    if "parts" in payload:
+        # First pass: look for text/plain
+        for part in payload["parts"]:
+            if part["mimeType"] == "text/plain" and part["body"].get("data"):
+                return base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8", errors="replace")
+            if part["mimeType"].startswith("multipart/"):
+                if result := decode_body(part):
+                    return result
+        # Second pass: fall back to text/html
+        for part in payload["parts"]:
+            if part["mimeType"] == "text/html" and part["body"].get("data"):
+                html = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8", errors="replace")
+                return _strip_html(html)
+            if part["mimeType"].startswith("multipart/"):
+                # Check nested parts for HTML
+                if "parts" in part:
+                    for subpart in part["parts"]:
+                        if subpart["mimeType"] == "text/html" and subpart["body"].get("data"):
+                            html = base64.urlsafe_b64decode(subpart["body"]["data"]).decode("utf-8", errors="replace")
+                            return _strip_html(html)
+    return ""
+
+
+def get_header(headers: list, name: str) -> str:
+    for h in headers:
+        if h["name"].lower() == name.lower():
+            return h["value"]
+    return ""
+
+
+def extract_message_summary(msg: dict) -> dict:
+    """Extract essential fields from a message for compact output.
+
+    Writes full decoded message to .tmp/ and includes path in result.
+    """
+    headers = msg.get("payload", {}).get("headers", [])
+    result = {
+        "id": msg["id"],
+        "threadId": msg.get("threadId"),
+        "from": get_header(headers, "From"),
+        "to": get_header(headers, "To"),
+        "subject": get_header(headers, "Subject"),
+        "date": get_header(headers, "Date"),
+        "snippet": msg.get("snippet", ""),
+        "labels": msg.get("labelIds", []),
+    }
+    if cc := get_header(headers, "Cc"):
+        result["cc"] = cc
+
+    body = decode_body(msg.get("payload", {}))
+    # TODO: May want to extend headers (Reply-To, Message-ID) if needed
+    tmp_dir = Path(".tmp")
+    tmp_dir.mkdir(exist_ok=True)
+    file_path = tmp_dir / f"email-{msg['id']}.txt"
+
+    with open(file_path, "w") as f:
+        f.write(f"From: {result['from']}\n")
+        f.write(f"To: {result['to']}\n")
+        f.write(f"Cc: {result.get('cc', '')}\n")
+        f.write(f"Subject: {result['subject']}\n")
+        f.write(f"Date: {result['date']}\n")
+        f.write(f"\n{body}")
+
+    result["file"] = str(file_path)
+
+    return result
+
+
+def extract_draft_summary(draft: dict) -> dict:
+    """Extract essential fields from a draft for compact output."""
+    msg = draft.get("message", {})
+    headers = msg.get("payload", {}).get("headers", [])
+    result = {
+        "id": draft["id"],
+        "messageId": msg.get("id"),
+        "to": get_header(headers, "To"),
+        "subject": get_header(headers, "Subject"),
+        "snippet": msg.get("snippet", ""),
+    }
+    if cc := get_header(headers, "Cc"):
+        result["cc"] = cc
+    return result
+
+
+def draft_url(draft_result: dict) -> str:
+    """Get Gmail URL for a draft."""
+    return f"https://mail.google.com/mail/u/0/#drafts/{draft_result['message']['id']}"
+
+
+@click.group()
+@click.option("--verbose", is_flag=True, help="Enable verbose logging")
+def cli(verbose: bool):
+    """Gmail CLI - search, draft, and send emails."""
+    if verbose:
+        logging.getLogger("googleapiclient.discovery").setLevel(logging.INFO)
+
+
+@cli.command()
+@click.option("-n", "--max-results", default=100, help="Maximum results")
+@click.option("--unread", is_flag=True, help="Only show unread messages")
+def inbox(max_results: int, unread: bool):
+    """List messages in inbox (shortcut for search "in:inbox")."""
+    query = "in:inbox"
+    if unread:
+        query += " is:unread"
+    _search_messages(query, max_results)
+
+
+@cli.command()
+@click.argument("query")
+@click.option("-n", "--max-results", default=100, help="Maximum results")
+def search(query: str, max_results: int):
+    """Search Gmail messages.
+
+    QUERY: Gmail search query (e.g., 'is:unread', 'from:someone@example.com')
+    """
+    _search_messages(query, max_results)
+
+
+def _search_messages(query: str, max_results: int):
+    """Shared search implementation."""
+    service = get_gmail()
+    results = service.users().messages().list(userId="me", q=query, maxResults=max_results).execute()
+    messages = results.get("messages", [])
+
+    if not messages:
+        click.echo(json.dumps([]))
+        return
+
+    # Batch fetch messages in chunks of 20 to avoid rate limits
+    responses = {}
+    chunk_size = 20
+
+    def callback(request_id, response, exception):
+        if exception:
+            raise exception
+        responses[request_id] = response
+
+    for i in range(0, len(messages), chunk_size):
+        chunk = messages[i : i + chunk_size]
+        batch = service.new_batch_http_request(callback=callback)
+        for m in chunk:
+            batch.add(service.users().messages().get(userId="me", id=m["id"], format="full"), request_id=m["id"])
+        batch.execute()
+        if i + chunk_size < len(messages):
+            time.sleep(0.2)
+
+    detailed = [extract_message_summary(responses[m["id"]]) for m in messages if m["id"] in responses]
+    click.echo(json.dumps(detailed, indent=2))
+
+
+# Draft command group
+@cli.group()
+def draft():
+    """Manage email drafts."""
+    pass
+
+
+@draft.command("create")
+def draft_create():
+    """Create a new email draft from JSON stdin.
+
+    JSON fields: to (required), subject (required), body (required), cc, bcc
+
+    Example:
+        echo '{"to": "x@y.com", "subject": "Hi!", "body": "Hello!"}' | gmail.py draft create
+    """
+    data = json.load(sys.stdin)
+    for field in ("to", "subject", "body"):
+        if field not in data:
+            raise click.UsageError(f"Missing required field: {field}")
+
+    msg = MIMEText(data["body"])
+    msg["to"] = data["to"]
+    msg["subject"] = data["subject"]
+    if data.get("cc"):
+        msg["cc"] = data["cc"]
+    if data.get("bcc"):
+        msg["bcc"] = data["bcc"]
+
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    result = get_gmail().users().drafts().create(userId="me", body={"message": {"raw": raw}}).execute()
+    click.echo(f"Draft created: {result['id']}")
+    click.echo(f"View: {draft_url(result)}")
+
+
+@draft.command("send")
+@click.argument("draft_id")
+def draft_send(draft_id: str):
+    """Send an existing draft.
+
+    Example:
+        gmail.py draft send r-123456789
+    """
+    result = get_gmail().users().drafts().send(userId="me", body={"id": draft_id}).execute()
+    click.echo(f"Sent: {result['id']}")
+
+
+@draft.command("reply")
+@click.argument("message_id")
+def draft_reply(message_id: str):
+    """Create a reply draft from JSON stdin.
+
+    Preserves threading with the original message.
+
+    JSON fields: body (required)
+
+    Example:
+        echo '{"body": "Thanks!"}' | gmail.py draft reply MSG_ID
+    """
+    data = json.load(sys.stdin)
+    if "body" not in data:
+        raise click.UsageError("Missing required field: body")
+
+    service = get_gmail()
+    original = service.users().messages().get(userId="me", id=message_id, format="metadata").execute()
+
+    headers = original.get("payload", {}).get("headers", [])
+    subject = get_header(headers, "Subject") or ""
+    from_addr = get_header(headers, "From")
+    message_id_header = get_header(headers, "Message-ID")
+    thread_id = original.get("threadId")
+
+    if not subject.lower().startswith("re:"):
+        subject = f"Re: {subject}"
+
+    msg = MIMEText(data["body"])
+    msg["to"] = from_addr
+    msg["subject"] = subject
+    if message_id_header:
+        msg["In-Reply-To"] = message_id_header
+        msg["References"] = message_id_header
+
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    result = service.users().drafts().create(
+        userId="me", body={"message": {"raw": raw, "threadId": thread_id}}
+    ).execute()
+    click.echo(f"Reply draft created: {result['id']}")
+    click.echo(f"View: {draft_url(result)}")
+
+
+@draft.command("forward")
+@click.argument("message_id")
+def draft_forward(message_id: str):
+    """Create a forward draft from JSON stdin.
+
+    JSON fields: to (required), body (optional, prepended to forwarded message)
+
+    Example:
+        echo '{"to": "x@y.com", "body": "FYI"}' | gmail.py draft forward MSG_ID
+    """
+    data = json.load(sys.stdin)
+    if "to" not in data:
+        raise click.UsageError("Missing required field: to")
+
+    service = get_gmail()
+    original = service.users().messages().get(userId="me", id=message_id, format="full").execute()
+
+    headers = original.get("payload", {}).get("headers", [])
+    subject = get_header(headers, "Subject") or ""
+    from_addr = get_header(headers, "From")
+    date = get_header(headers, "Date")
+    original_body = decode_body(original.get("payload", {}))
+
+    if not subject.lower().startswith("fwd:"):
+        subject = f"Fwd: {subject}"
+
+    fwd_body = data.get("body", "")
+    if fwd_body:
+        fwd_body += "\n\n"
+    fwd_body += f"---------- Forwarded message ----------\n"
+    fwd_body += f"From: {from_addr}\n"
+    fwd_body += f"Date: {date}\n"
+    fwd_body += f"Subject: {get_header(headers, 'Subject')}\n\n"
+    fwd_body += original_body
+
+    msg = MIMEText(fwd_body)
+    msg["to"] = data["to"]
+    msg["subject"] = subject
+
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    result = service.users().drafts().create(userId="me", body={"message": {"raw": raw}}).execute()
+    click.echo(f"Forward draft created: {result['id']}")
+    click.echo(f"View: {draft_url(result)}")
+
+
+@draft.command("list")
+@click.option("-n", "--max-results", default=20, help="Maximum results")
+def draft_list(max_results: int):
+    """List drafts.
+
+    Example:
+        gmail.py draft list
+    """
+    service = get_gmail()
+    results = service.users().drafts().list(userId="me", maxResults=max_results).execute()
+    drafts = results.get("drafts", [])
+
+    if not drafts:
+        click.echo(json.dumps([]))
+        return
+
+    # Batch fetch draft details
+    responses = {}
+
+    def callback(request_id, response, exception):
+        if exception:
+            raise exception
+        responses[request_id] = response
+
+    batch = service.new_batch_http_request(callback=callback)
+    for d in drafts:
+        batch.add(service.users().drafts().get(userId="me", id=d["id"], format="metadata"), request_id=d["id"])
+    batch.execute()
+
+    detailed = [extract_draft_summary(responses[d["id"]]) for d in drafts if d["id"] in responses]
+    click.echo(json.dumps(detailed, indent=2))
+
+
+@draft.command("get")
+@click.argument("draft_id")
+def draft_get(draft_id: str):
+    """Get a draft with full body, written to file.
+
+    Example:
+        gmail.py draft get r-123456789
+    """
+    service = get_gmail()
+    draft = service.users().drafts().get(userId="me", id=draft_id, format="full").execute()
+    msg = draft.get("message", {})
+    headers = msg.get("payload", {}).get("headers", [])
+
+    body = decode_body(msg.get("payload", {}))
+    tmp_dir = Path(".tmp")
+    tmp_dir.mkdir(exist_ok=True)
+    file_path = tmp_dir / f"draft-{draft_id}.txt"
+
+    with open(file_path, "w") as f:
+        f.write(f"From: {get_header(headers, 'From')}\n")
+        f.write(f"To: {get_header(headers, 'To')}\n")
+        f.write(f"Cc: {get_header(headers, 'Cc')}\n")
+        f.write(f"Bcc: {get_header(headers, 'Bcc')}\n")
+        f.write(f"Subject: {get_header(headers, 'Subject')}\n")
+        f.write(f"Date: {get_header(headers, 'Date')}\n")
+        f.write(f"\n{body}")
+
+    click.echo(str(file_path))
+
+
+@draft.command("delete")
+@click.argument("draft_id")
+def draft_delete(draft_id: str):
+    """Permanently delete a draft.
+
+    Example:
+        gmail.py draft delete r-123456789
+    """
+    get_gmail().users().drafts().delete(userId="me", id=draft_id).execute()
+    click.echo(f"Deleted: {draft_id}")
+
+
+@cli.command()
+@click.argument("message_id")
+def star(message_id: str):
+    """Star a message."""
+    get_gmail().users().messages().modify(
+        userId="me", id=message_id, body={"addLabelIds": ["STARRED"]}
+    ).execute()
+    click.echo(f"Starred: {message_id}")
+
+
+@cli.command()
+@click.argument("message_id")
+def unstar(message_id: str):
+    """Remove star from a message."""
+    get_gmail().users().messages().modify(
+        userId="me", id=message_id, body={"removeLabelIds": ["STARRED"]}
+    ).execute()
+    click.echo(f"Unstarred: {message_id}")
+
+
+@cli.command()
+@click.argument("message_ids", nargs=-1)
+@click.option("--query", "-q", help="Archive all inbox messages matching query (e.g., 'from:example.com')")
+@click.option("-n", "--max-results", default=100, help="Max messages to archive when using --query")
+def archive(message_ids: tuple[str, ...], query: str | None, max_results: int):
+    """Archive messages (remove from inbox).
+
+    Can archive by ID(s) or by query. Query automatically filters to inbox.
+
+    Examples:
+        gmail.py archive MSG_ID1 MSG_ID2
+        gmail.py archive --query "from:newsletter@example.com"
+    """
+    if message_ids and query:
+        raise click.UsageError("Provide message IDs or --query, not both")
+
+    service = get_gmail()
+
+    if query:
+        full_query = f"in:inbox {query}"
+        results = service.users().messages().list(userId="me", q=full_query, maxResults=max_results).execute()
+        ids_to_archive = [m["id"] for m in results["messages"]] if "messages" in results else []
+    else:
+        ids_to_archive = list(message_ids)
+
+    if not ids_to_archive:
+        click.echo("No messages to archive.", err=True)
+        return
+
+    def callback(_id, _response, exception):
+        if exception:
+            raise exception
+    batch = service.new_batch_http_request(callback=callback)
+    for msg_id in ids_to_archive:
+        batch.add(service.users().messages().modify(
+            userId="me", id=msg_id, body={"removeLabelIds": ["INBOX"]}
+        ))
+    batch.execute()
+
+    click.echo(f"Archived {len(ids_to_archive)} message(s)")
+
+
+@cli.command()
+@click.argument("message_id")
+def unarchive(message_id: str):
+    """Move a message back to inbox."""
+    get_gmail().users().messages().modify(
+        userId="me", id=message_id, body={"addLabelIds": ["INBOX"]}
+    ).execute()
+    click.echo(f"Moved to inbox: {message_id}")
+
+
+@cli.command("mark-read")
+@click.argument("message_id")
+def mark_read(message_id: str):
+    """Mark a message as read."""
+    get_gmail().users().messages().modify(
+        userId="me", id=message_id, body={"removeLabelIds": ["UNREAD"]}
+    ).execute()
+    click.echo(f"Marked read: {message_id}")
+
+
+@cli.command("mark-unread")
+@click.argument("message_id")
+def mark_unread(message_id: str):
+    """Mark a message as unread."""
+    get_gmail().users().messages().modify(
+        userId="me", id=message_id, body={"addLabelIds": ["UNREAD"]}
+    ).execute()
+    click.echo(f"Marked unread: {message_id}")
+
+
+@cli.command()
+@click.argument("message_id")
+def trash(message_id: str):
+    """Move a message to trash."""
+    get_gmail().users().messages().trash(userId="me", id=message_id).execute()
+    click.echo(f"Trashed: {message_id}")
+
+
+if __name__ == "__main__":
+    cli()

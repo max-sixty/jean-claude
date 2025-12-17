@@ -1,0 +1,13 @@
+{
+  "name": "jean-claude",
+  "owner": {
+    "name": "Maximilian"
+  },
+  "plugins": [
+    {
+      "name": "jean-claude",
+      "source": "./",
+      "description": "Gmail, Calendar, Drive, and iMessage integration"
+    }
+  ]
+}
