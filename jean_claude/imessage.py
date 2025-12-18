@@ -424,7 +424,3 @@ def history(chat_id: str, max_results: int):
     # Reverse to show oldest first
     for date, sender, text, is_from_me in reversed(rows):
         format_message_row(date, sender, text, is_from_me)
-
-
-if __name__ == "__main__":
-    cli()

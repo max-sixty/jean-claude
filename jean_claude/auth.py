@@ -22,14 +22,14 @@ TOKEN_FILE = CONFIG_DIR / "token.json"
 EMBEDDED_CLIENT_CONFIG = {
     "installed": {
         "client_id": "632159173278-jdi7d5i4aldosvhu4vvu2hsck4fusg00.apps.googleusercontent.com",
-        "client_secret": "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",
+        "client_secret": "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",
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
         "token_uri": "https://oauth2.googleapis.com/token",
         "redirect_uris": ["http://localhost"],
     }
 }
 
-SCOPES = [
+SCOPES_FULL = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/gmail.compose",
@@ -39,17 +39,25 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
+SCOPES_READONLY = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/drive.readonly",
+]
 
-def _run_oauth_flow() -> Credentials:
+
+def _run_oauth_flow(readonly: bool = False) -> Credentials:
     """Run OAuth flow to get new credentials.
 
     Uses user-provided client_secret.json if present, otherwise falls back
     to embedded credentials.
     """
+    scopes = SCOPES_READONLY if readonly else SCOPES_FULL
     if CLIENT_SECRET_FILE.exists():
-        flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES)
+        print(f"Using custom credentials from {CLIENT_SECRET_FILE}", file=sys.stderr)
+        flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, scopes)
     else:
-        flow = InstalledAppFlow.from_client_config(EMBEDDED_CLIENT_CONFIG, SCOPES)
+        flow = InstalledAppFlow.from_client_config(EMBEDDED_CLIENT_CONFIG, scopes)
     creds = flow.run_local_server(port=0)
     _save_token(creds)
     return creds
@@ -104,11 +112,31 @@ def _save_token(creds: Credentials) -> None:
     TOKEN_FILE.chmod(0o600)
 
 
-def main() -> None:
-    """CLI entry point for running auth setup."""
-    get_credentials()
-    print("OAuth setup complete!")
+def run_auth(readonly: bool = False) -> None:
+    """Run OAuth authentication flow.
 
+    Args:
+        readonly: If True, request only read-only scopes.
+    """
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
-if __name__ == "__main__":
-    main()
+    # Check if re-authenticating with different scope level
+    if TOKEN_FILE.exists():
+        try:
+            token_data = json.loads(TOKEN_FILE.read_text())
+            existing_scopes = set(token_data.get("scopes", []))
+            requested_scopes = set(SCOPES_READONLY if readonly else SCOPES_FULL)
+
+            if existing_scopes != requested_scopes:
+                print("Scope change detected. Re-authenticating...", file=sys.stderr)
+                TOKEN_FILE.unlink()
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    if TOKEN_FILE.exists():
+        print("Already authenticated. Delete ~/.config/jean-claude/token.json to re-authenticate.")
+        return
+
+    _run_oauth_flow(readonly=readonly)
+    scope_type = "read-only" if readonly else "full access"
+    print(f"OAuth setup complete! ({scope_type})")

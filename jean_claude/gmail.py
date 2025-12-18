@@ -24,6 +24,21 @@ def get_gmail():
     return build("gmail", "v1", credentials=get_credentials())
 
 
+def _batch_callback(responses: dict):
+    """Create a batch callback that stores responses by request_id."""
+    def callback(request_id, response, exception):
+        if exception:
+            raise exception
+        responses[request_id] = response
+    return callback
+
+
+def _raise_on_error(_request_id, _response, exception):
+    """Batch callback that only raises exceptions (ignores responses)."""
+    if exception:
+        raise exception
+
+
 def _strip_html(html: str) -> str:
     """Strip HTML tags for basic text extraction."""
     import re
@@ -176,14 +191,9 @@ def _search_messages(query: str, max_results: int):
     responses = {}
     chunk_size = 20
 
-    def callback(request_id, response, exception):
-        if exception:
-            raise exception
-        responses[request_id] = response
-
     for i in range(0, len(messages), chunk_size):
         chunk = messages[i : i + chunk_size]
-        batch = service.new_batch_http_request(callback=callback)
+        batch = service.new_batch_http_request(callback=_batch_callback(responses))
         for m in chunk:
             batch.add(service.users().messages().get(userId="me", id=m["id"], format="full"), request_id=m["id"])
         batch.execute()
@@ -347,13 +357,7 @@ def draft_list(max_results: int):
 
     # Batch fetch draft details
     responses = {}
-
-    def callback(request_id, response, exception):
-        if exception:
-            raise exception
-        responses[request_id] = response
-
-    batch = service.new_batch_http_request(callback=callback)
+    batch = service.new_batch_http_request(callback=_batch_callback(responses))
     for d in drafts:
         batch.add(service.users().drafts().get(userId="me", id=d["id"], format="metadata"), request_id=d["id"])
     batch.execute()
@@ -453,10 +457,7 @@ def archive(message_ids: tuple[str, ...], query: str | None, max_results: int):
         click.echo("No messages to archive.", err=True)
         return
 
-    def callback(_id, _response, exception):
-        if exception:
-            raise exception
-    batch = service.new_batch_http_request(callback=callback)
+    batch = service.new_batch_http_request(callback=_raise_on_error)
     for msg_id in ids_to_archive:
         batch.add(service.users().messages().modify(
             userId="me", id=msg_id, body={"removeLabelIds": ["INBOX"]}
@@ -502,7 +503,3 @@ def trash(message_id: str):
     """Move a message to trash."""
     get_gmail().users().messages().trash(userId="me", id=message_id).execute()
     click.echo(f"Trashed: {message_id}")
-
-
-if __name__ == "__main__":
-    cli()

@@ -26,7 +26,11 @@ Clone this repository and add it to your Claude Code plugins directory.
 Run the auth command to authenticate:
 
 ```bash
+# Full access (read, send, modify)
 jean auth
+
+# Or read-only access (no send/modify capabilities)
+jean auth --readonly
 ```
 
 This opens a browser for OAuth consent. Credentials are saved to
@@ -63,7 +67,8 @@ unverified apps to 100 users) or if you want your own quota.
 
 ### iMessage
 
-- **Sending messages**: Works immediately via AppleScript
+- **Sending messages**: Works via AppleScript. On first use, macOS will prompt
+  to allow your terminal to control Messages.app (Automation permission).
 - **Reading messages**: Requires Full Disk Access for your terminal app
   - System Preferences > Privacy & Security > Full Disk Access
   - Add and enable your terminal (Terminal, iTerm2, Ghostty, etc.)

@@ -293,7 +293,3 @@ def update(event_id: str, summary: str, start: str, end: str, duration: int,
     click.echo(f"View: {result.get('htmlLink', '')}")
     if notify:
         click.echo("Update notifications sent to attendees.")
-
-
-if __name__ == "__main__":
-    cli()

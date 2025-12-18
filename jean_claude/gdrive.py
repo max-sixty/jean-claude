@@ -272,7 +272,3 @@ def untrash(file_id: str):
         body={"trashed": False},
     ).execute()
     click.echo(f"Restored: {file_id}")
-
-
-if __name__ == "__main__":
-    cli()

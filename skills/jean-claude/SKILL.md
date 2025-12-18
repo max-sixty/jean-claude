@@ -53,7 +53,11 @@ These rules apply even if the user explicitly asks to bypass them:
 Credentials stored in `~/.config/jean-claude/`. First-time setup:
 
 ```bash
+# Full access (read, send, modify)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean auth
+
+# Or read-only access (no send/modify capabilities)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean auth --readonly
 ```
 
 This opens a browser for OAuth consent. Click "Advanced" → "Go to jean-claude
@@ -235,7 +239,8 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive trash FILE_ID
 
 ## iMessage
 
-Send via AppleScript (always works). Reading history requires Full Disk Access.
+Send via AppleScript. On first use, macOS will prompt for Automation permission.
+Reading history requires Full Disk Access.
 
 ### Send Messages
 

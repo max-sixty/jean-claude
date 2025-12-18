@@ -1,6 +1,7 @@
 [project]
 name = "jean-claude"
-version = "1.0.0"
+# No version - this is a plugin, not a published package
+version = "0.0.0"
 description = "Google Workspace (Gmail, Calendar, Drive) and iMessage integration for Claude Code"
 readme = "README.md"
 license = "MIT"
@@ -17,6 +18,12 @@ dependencies = [
 [project.scripts]
 jean = "jean_claude.cli:cli"
 
+[project.optional-dependencies]
+dev = ["pytest"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
