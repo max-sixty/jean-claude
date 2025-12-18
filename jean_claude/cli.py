@@ -25,7 +25,9 @@ cli.add_command(imessage_cli, name="imessage")
 
 
 @cli.command()
-@click.option("--readonly", is_flag=True, help="Request read-only access (no send/modify)")
+@click.option(
+    "--readonly", is_flag=True, help="Request read-only access (no send/modify)"
+)
 @click.option("--logout", is_flag=True, help="Remove stored credentials and log out")
 def auth(readonly: bool, logout: bool):
     """Authenticate with Google APIs.
@@ -112,7 +114,7 @@ def _print_api_error(api_name: str, error: Exception) -> None:
     error_str = str(error)
     if "403" in error_str and "not been used" in error_str.lower():
         click.echo(f"  {api_name}: " + click.style("API not enabled", fg="red"))
-        click.echo(f"    Enable at: https://console.cloud.google.com/apis/library")
+        click.echo("    Enable at: https://console.cloud.google.com/apis/library")
     elif "403" in error_str:
         click.echo(f"  {api_name}: " + click.style("Access denied", fg="red"))
     else:

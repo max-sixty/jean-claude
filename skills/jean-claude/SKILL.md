@@ -58,6 +58,12 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean auth
 
 # Or read-only access (no send/modify capabilities)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean auth --readonly
+
+# Check authentication status and API availability
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean status
+
+# Log out (remove stored credentials)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean auth --logout
 ```
 
 This opens a browser for OAuth consent. Click "Advanced" → "Go to jean-claude
@@ -68,6 +74,21 @@ To use your own Google Cloud credentials instead (if default ones hit the 100
 user limit), download your OAuth JSON from Google Cloud Console and save it as
 `~/.config/jean-claude/client_secret.json` before running the auth script. See
 README for detailed setup steps.
+
+### Shell Completions
+
+Enable tab completion for the jean CLI:
+
+```bash
+# Bash (~/.bashrc)
+eval "$(uv run --project ${CLAUDE_PLUGIN_ROOT} jean completions bash)"
+
+# Zsh (~/.zshrc)
+eval "$(uv run --project ${CLAUDE_PLUGIN_ROOT} jean completions zsh)"
+
+# Fish (~/.config/fish/config.fish)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean completions fish | source
+```
 
 ## Gmail
 
@@ -161,6 +182,16 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail mark-read MESSAGE_ID
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail trash MESSAGE_ID
 ```
 
+### Attachments
+
+```bash
+# List attachments for a message
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail attachments MESSAGE_ID
+
+# Download an attachment
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail attachment-download MESSAGE_ID ATTACHMENT_ID ./output.pdf
+```
+
 ## Calendar
 
 ### List Events
@@ -187,6 +218,14 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal create "Team Meeting" \
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal create "1:1 with Alice" \
   --start "2024-01-15 10:00" --duration 30 \
   --attendees alice@example.com
+
+# All-day event (single day)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal create "Holiday" \
+  --start 2024-01-15 --all-day
+
+# Multi-day all-day event
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal create "Vacation" \
+  --start 2024-01-15 --end 2024-01-20 --all-day
 ```
 
 ### Search & Manage Events

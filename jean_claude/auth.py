@@ -101,14 +101,18 @@ def get_credentials() -> Credentials:
 
 def _save_token(creds: Credentials) -> None:
     """Save credentials to token file with secure permissions."""
-    TOKEN_FILE.write_text(json.dumps({
-        "token": creds.token,
-        "refresh_token": creds.refresh_token,
-        "token_uri": creds.token_uri,
-        "client_id": creds.client_id,
-        "client_secret": creds.client_secret,
-        "scopes": list(creds.scopes),
-    }))
+    TOKEN_FILE.write_text(
+        json.dumps(
+            {
+                "token": creds.token,
+                "refresh_token": creds.refresh_token,
+                "token_uri": creds.token_uri,
+                "client_id": creds.client_id,
+                "client_secret": creds.client_secret,
+                "scopes": list(creds.scopes),
+            }
+        )
+    )
     TOKEN_FILE.chmod(0o600)
 
 
@@ -134,7 +138,9 @@ def run_auth(readonly: bool = False) -> None:
             pass
 
     if TOKEN_FILE.exists():
-        print("Already authenticated. Delete ~/.config/jean-claude/token.json to re-authenticate.")
+        print(
+            "Already authenticated. Delete ~/.config/jean-claude/token.json to re-authenticate."
+        )
         return
 
     _run_oauth_flow(readonly=readonly)

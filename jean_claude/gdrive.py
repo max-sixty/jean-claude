@@ -25,7 +25,7 @@ def format_file(f: dict) -> str:
         size = f" ({int(size):,} bytes)"
     modified = f.get("modifiedTime", "")[:10] if f.get("modifiedTime") else ""
 
-    name = f['name']
+    name = f["name"]
     if is_folder:
         name += "/"
 
@@ -56,17 +56,25 @@ def list_files(folder: str | None, max_results: int, as_json: bool):
     parent = folder or "root"
     query = f"'{parent}' in parents and trashed = false"
 
-    result = get_drive().files().list(
-        q=query,
-        pageSize=max_results,
-        fields="files(id, name, mimeType, size, modifiedTime, webViewLink)",
-        orderBy="folder, name",
-    ).execute()
+    result = (
+        get_drive()
+        .files()
+        .list(
+            q=query,
+            pageSize=max_results,
+            fields="files(id, name, mimeType, size, modifiedTime, webViewLink)",
+            orderBy="folder, name",
+        )
+        .execute()
+    )
 
     files = result.get("files", [])
 
     if not files:
-        click.echo("No files found.", err=True)
+        if as_json:
+            click.echo(json.dumps([]))
+        else:
+            click.echo("No files found.", err=True)
         return
 
     if as_json:
@@ -93,16 +101,24 @@ def search(query: str, max_results: int, as_json: bool):
     elif "trashed" not in query.lower():
         query = f"({query}) and trashed = false"
 
-    result = get_drive().files().list(
-        q=query,
-        pageSize=max_results,
-        fields="files(id, name, mimeType, size, modifiedTime, webViewLink)",
-    ).execute()
+    result = (
+        get_drive()
+        .files()
+        .list(
+            q=query,
+            pageSize=max_results,
+            fields="files(id, name, mimeType, size, modifiedTime, webViewLink)",
+        )
+        .execute()
+    )
 
     files = result.get("files", [])
 
     if not files:
-        click.echo("No files found.", err=True)
+        if as_json:
+            click.echo(json.dumps([]))
+        else:
+            click.echo("No files found.", err=True)
         return
 
     if as_json:
@@ -119,10 +135,15 @@ def search(query: str, max_results: int, as_json: bool):
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def get(file_id: str, as_json: bool):
     """Get file metadata."""
-    f = get_drive().files().get(
-        fileId=file_id,
-        fields="id, name, mimeType, size, createdTime, modifiedTime, webViewLink, parents, owners",
-    ).execute()
+    f = (
+        get_drive()
+        .files()
+        .get(
+            fileId=file_id,
+            fields="id, name, mimeType, size, createdTime, modifiedTime, webViewLink, parents, owners",
+        )
+        .execute()
+    )
 
     if as_json:
         click.echo(json.dumps(f, indent=2))
@@ -157,7 +178,9 @@ def download(file_id: str, output: str):
     }
 
     if mime_type in export_types:
-        request = service.files().export_media(fileId=file_id, mimeType=export_types[mime_type])
+        request = service.files().export_media(
+            fileId=file_id, mimeType=export_types[mime_type]
+        )
     else:
         request = service.files().get_media(fileId=file_id)
 
@@ -188,11 +211,16 @@ def upload(file_path: str, folder: str | None, name: str | None):
         file_metadata["parents"] = [folder]
 
     media = MediaFileUpload(file_path)
-    f = get_drive().files().create(
-        body=file_metadata,
-        media_body=media,
-        fields="id, name, webViewLink",
-    ).execute()
+    f = (
+        get_drive()
+        .files()
+        .create(
+            body=file_metadata,
+            media_body=media,
+            fields="id, name, webViewLink",
+        )
+        .execute()
+    )
 
     click.echo(f"Uploaded: {f['name']}")
     click.echo(f"ID: {f['id']}")
@@ -215,10 +243,15 @@ def mkdir(name: str, folder: str | None):
     if folder:
         file_metadata["parents"] = [folder]
 
-    f = get_drive().files().create(
-        body=file_metadata,
-        fields="id, name, webViewLink",
-    ).execute()
+    f = (
+        get_drive()
+        .files()
+        .create(
+            body=file_metadata,
+            fields="id, name, webViewLink",
+        )
+        .execute()
+    )
 
     click.echo(f"Created folder: {f['name']}")
     click.echo(f"ID: {f['id']}")
@@ -229,7 +262,12 @@ def mkdir(name: str, folder: str | None):
 @cli.command()
 @click.argument("file_id")
 @click.argument("email")
-@click.option("--role", type=click.Choice(["reader", "commenter", "writer"]), default="reader", help="Permission level")
+@click.option(
+    "--role",
+    type=click.Choice(["reader", "commenter", "writer"]),
+    default="reader",
+    help="Permission level",
+)
 @click.option("--notify", is_flag=True, help="Send notification email")
 def share(file_id: str, email: str, role: str, notify: bool):
     """Share a file or folder.

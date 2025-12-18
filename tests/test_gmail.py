@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jean_claude.gmail import _strip_html, decode_body, get_header
+from jean_claude.gmail import _extract_attachments, _strip_html, decode_body, get_header
 
 
 class TestStripHtml:
@@ -89,6 +89,7 @@ class TestDecodeBody:
     def test_simple_body(self):
         """Test with simple body data."""
         import base64
+
         content = "Hello, World!"
         encoded = base64.urlsafe_b64encode(content.encode()).decode()
         payload = {"body": {"data": encoded}}
@@ -97,6 +98,7 @@ class TestDecodeBody:
     def test_multipart_plain(self):
         """Test multipart with plain text part."""
         import base64
+
         content = "Plain text content"
         encoded = base64.urlsafe_b64encode(content.encode()).decode()
         payload = {
@@ -110,6 +112,7 @@ class TestDecodeBody:
     def test_multipart_html_fallback(self):
         """Test multipart falls back to HTML when no plain text."""
         import base64
+
         html_content = "<p>HTML content</p>"
         encoded = base64.urlsafe_b64encode(html_content.encode()).decode()
         payload = {
@@ -120,3 +123,87 @@ class TestDecodeBody:
         result = decode_body(payload)
         assert "HTML content" in result
         assert "<p>" not in result  # Tags should be stripped
+
+
+class TestExtractAttachments:
+    """Tests for attachment extraction."""
+
+    def test_no_attachments(self):
+        """Test parts with no attachments."""
+        parts = [
+            {"mimeType": "text/plain", "body": {"data": "SGVsbG8="}},
+        ]
+        attachments: list = []
+        _extract_attachments(parts, attachments)
+        assert attachments == []
+
+    def test_single_attachment(self):
+        """Test extracting a single attachment."""
+        parts = [
+            {"mimeType": "text/plain", "body": {"data": "SGVsbG8="}},
+            {
+                "filename": "report.pdf",
+                "mimeType": "application/pdf",
+                "body": {"attachmentId": "ANGjdJ8xyz", "size": 12345},
+            },
+        ]
+        attachments: list = []
+        _extract_attachments(parts, attachments)
+        assert len(attachments) == 1
+        assert attachments[0]["filename"] == "report.pdf"
+        assert attachments[0]["mimeType"] == "application/pdf"
+        assert attachments[0]["size"] == 12345
+        assert attachments[0]["attachmentId"] == "ANGjdJ8xyz"
+
+    def test_multiple_attachments(self):
+        """Test extracting multiple attachments."""
+        parts = [
+            {
+                "filename": "doc1.pdf",
+                "mimeType": "application/pdf",
+                "body": {"attachmentId": "id1", "size": 100},
+            },
+            {
+                "filename": "image.png",
+                "mimeType": "image/png",
+                "body": {"attachmentId": "id2", "size": 200},
+            },
+        ]
+        attachments: list = []
+        _extract_attachments(parts, attachments)
+        assert len(attachments) == 2
+        assert attachments[0]["filename"] == "doc1.pdf"
+        assert attachments[1]["filename"] == "image.png"
+
+    def test_nested_attachments(self):
+        """Test extracting attachments from nested multipart."""
+        parts = [
+            {
+                "mimeType": "multipart/alternative",
+                "parts": [
+                    {"mimeType": "text/plain", "body": {"data": "SGVsbG8="}},
+                    {
+                        "filename": "nested.pdf",
+                        "mimeType": "application/pdf",
+                        "body": {"attachmentId": "nested_id", "size": 500},
+                    },
+                ],
+            },
+        ]
+        attachments: list = []
+        _extract_attachments(parts, attachments)
+        assert len(attachments) == 1
+        assert attachments[0]["filename"] == "nested.pdf"
+
+    def test_filename_without_attachment_id(self):
+        """Test that parts with filename but no attachmentId are skipped."""
+        parts = [
+            {
+                "filename": "inline.gif",
+                "mimeType": "image/gif",
+                "body": {"data": "R0lGODlh"},  # inline, no attachmentId
+            },
+        ]
+        attachments: list = []
+        _extract_attachments(parts, attachments)
+        assert attachments == []

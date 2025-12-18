@@ -52,10 +52,14 @@ def truncate_text(text: str | None) -> str:
     return text
 
 
-def format_message_row(date: str, sender: str, text: str, is_from_me: bool = False) -> None:
+def format_message_row(
+    date: str, sender: str, text: str, is_from_me: bool = False
+) -> None:
     """Format and print a message row."""
     if is_from_me:
-        click.echo(f"{click.style(date, dim=True)} {click.style('me', fg='blue', bold=True)}")
+        click.echo(
+            f"{click.style(date, dim=True)} {click.style('me', fg='blue', bold=True)}"
+        )
     else:
         click.echo(f"{click.style(date, dim=True)} {click.style(sender, bold=True)}")
     click.echo(f"  {truncate_text(text)}")
@@ -94,21 +98,21 @@ def send(recipient: str, message: str):
     """
     if recipient.startswith("any;"):
         # Chat ID - send directly to chat
-        script = '''on run {chatId, msg}
+        script = """on run {chatId, msg}
   tell application "Messages"
     set targetChat to chat id chatId
     send msg to targetChat
   end tell
-end run'''
+end run"""
     else:
         # Phone number - use buddy
-        script = '''on run {phoneNumber, msg}
+        script = """on run {phoneNumber, msg}
   tell application "Messages"
     set targetService to 1st service whose service type = iMessage
     set targetBuddy to buddy phoneNumber of targetService
     send msg to targetBuddy
   end tell
-end run'''
+end run"""
 
     run_applescript(script, recipient, message)
     click.echo(f"Sent to {recipient}")
@@ -130,22 +134,22 @@ def send_file(recipient: str, file_path: Path):
     abs_path = str(file_path.resolve())
 
     if recipient.startswith("any;"):
-        script = '''on run {chatId, filePath}
+        script = """on run {chatId, filePath}
   tell application "Messages"
     set targetChat to chat id chatId
     set theFile to POSIX file filePath
     send theFile to targetChat
   end tell
-end run'''
+end run"""
     else:
-        script = '''on run {phoneNumber, filePath}
+        script = """on run {phoneNumber, filePath}
   tell application "Messages"
     set targetService to 1st service whose service type = iMessage
     set targetBuddy to buddy phoneNumber of targetService
     set theFile to POSIX file filePath
     send theFile to targetBuddy
   end tell
-end run'''
+end run"""
 
     run_applescript(script, recipient, abs_path)
     click.echo(f"Sent {file_path.name} to {recipient}")
@@ -161,7 +165,7 @@ def chats(max_results: int):
     Example:
         jean-imessage chats
     """
-    script = '''tell application "Messages"
+    script = """tell application "Messages"
   set chatInfo to {}
   repeat with c in chats
     try
@@ -173,7 +177,7 @@ def chats(max_results: int):
     end try
   end repeat
   return chatInfo
-end tell'''
+end tell"""
 
     output = run_applescript(script)
     if not output:
@@ -215,7 +219,7 @@ def participants(chat_id: str):
     Example:
         jean-imessage participants "any;+;chat123456789"
     """
-    script = '''on run {chatId}
+    script = """on run {chatId}
   tell application "Messages"
     set c to chat id chatId
     set pList to {}
@@ -236,7 +240,7 @@ def participants(chat_id: str):
     end repeat
     return pList
   end tell
-end run'''
+end run"""
 
     output = run_applescript(script, chat_id)
     if not output:
@@ -260,12 +264,12 @@ def open_chat(chat_id: str):
         jean-imessage open "any;-;+12025551234"
         jean-imessage open "any;+;chat123456789"
     """
-    script = '''on run {chatId}
+    script = """on run {chatId}
   tell application "Messages"
     activate
     set targetChat to chat id chatId
   end tell
-end run'''
+end run"""
 
     run_applescript(script, chat_id)
     click.echo(f"Opened chat: {chat_id}")
@@ -320,7 +324,9 @@ def unread(max_results: int):
                 f"in {click.style(display_name, fg='cyan')}"
             )
         else:
-            click.echo(f"{click.style(date, dim=True)} {click.style(sender, bold=True)}")
+            click.echo(
+                f"{click.style(date, dim=True)} {click.style(sender, bold=True)}"
+            )
         click.echo(f"  {truncate_text(text)}")
         click.echo()
 

@@ -28,8 +28,11 @@ def _get_local_timezone() -> str:
     except Exception:
         pass
     # Fallback with warning
-    click.echo("Warning: Could not detect timezone, using America/Los_Angeles", err=True)
+    click.echo(
+        "Warning: Could not detect timezone, using America/Los_Angeles", err=True
+    )
     return "America/Los_Angeles"
+
 
 TIMEZONE = _get_local_timezone()
 LOCAL_TZ = ZoneInfo(TIMEZONE)
@@ -84,7 +87,11 @@ def format_event(event: dict) -> str:
         lines.append(f"Attendees: {', '.join(names)}")
 
     if desc := event.get("description"):
-        lines.append(f"Description: {desc[:100]}..." if len(desc) > 100 else f"Description: {desc}")
+        lines.append(
+            f"Description: {desc[:100]}..."
+            if len(desc) > 100
+            else f"Description: {desc}"
+        )
 
     return "\n".join(lines)
 
@@ -105,26 +112,37 @@ def list_events(days: int, from_date: str, to_date: str, as_json: bool):
     if from_date:
         time_min = parse_datetime(from_date).replace(tzinfo=LOCAL_TZ)
     else:
-        time_min = datetime.now(LOCAL_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+        time_min = datetime.now(LOCAL_TZ).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
 
     if to_date:
-        time_max = parse_datetime(to_date).replace(hour=23, minute=59, second=59, tzinfo=LOCAL_TZ)
+        time_max = parse_datetime(to_date).replace(
+            hour=23, minute=59, second=59, tzinfo=LOCAL_TZ
+        )
     else:
         time_max = time_min + timedelta(days=days)
 
     service = get_calendar()
-    result = service.events().list(
-        calendarId="primary",
-        timeMin=time_min.isoformat(),
-        timeMax=time_max.isoformat(),
-        singleEvents=True,
-        orderBy="startTime",
-    ).execute()
+    result = (
+        service.events()
+        .list(
+            calendarId="primary",
+            timeMin=time_min.isoformat(),
+            timeMax=time_max.isoformat(),
+            singleEvents=True,
+            orderBy="startTime",
+        )
+        .execute()
+    )
 
     events = result.get("items", [])
 
     if not events:
-        click.echo("No events found.", err=True)
+        if as_json:
+            click.echo(json.dumps([]))
+        else:
+            click.echo("No events found.", err=True)
         return
 
     if as_json:
@@ -138,31 +156,69 @@ def list_events(days: int, from_date: str, to_date: str, as_json: bool):
 
 @cli.command()
 @click.argument("summary")
-@click.option("--start", required=True, help="Start time (YYYY-MM-DD HH:MM)")
-@click.option("--end", help="End time (YYYY-MM-DD HH:MM)")
-@click.option("--duration", type=int, help="Duration in minutes (alternative to --end)")
+@click.option(
+    "--start", required=True, help="Start time (YYYY-MM-DD HH:MM) or date (YYYY-MM-DD)"
+)
+@click.option("--end", help="End time (YYYY-MM-DD HH:MM) or date (YYYY-MM-DD)")
+@click.option("--duration", type=int, help="Duration in minutes (or days if --all-day)")
+@click.option(
+    "--all-day", "all_day", is_flag=True, help="Create all-day event (uses date only)"
+)
 @click.option("--location", help="Event location")
 @click.option("--description", help="Event description")
 @click.option("--attendees", help="Comma-separated attendee emails")
-def create(summary: str, start: str, end: str, duration: int, location: str, description: str, attendees: str):
+def create(
+    summary: str,
+    start: str,
+    end: str,
+    duration: int,
+    all_day: bool,
+    location: str,
+    description: str,
+    attendees: str,
+):
     """Create a calendar event.
 
     SUMMARY: Event title
+
+    \b
+    Examples:
+        jean gcal create "Meeting" --start "2024-01-15 14:00"
+        jean gcal create "Vacation" --start 2024-01-15 --end 2024-01-20 --all-day
     """
     start_dt = parse_datetime(start)
 
-    if end:
-        end_dt = parse_datetime(end)
-    elif duration:
-        end_dt = start_dt + timedelta(minutes=duration)
-    else:
-        end_dt = start_dt + timedelta(hours=1)
+    if all_day:
+        # All-day events use date strings, not datetime
+        start_date = start_dt.strftime("%Y-%m-%d")
+        if end:
+            end_dt = parse_datetime(end)
+            # All-day end date is exclusive, so add 1 day
+            end_date = (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+        elif duration:
+            end_date = (start_dt + timedelta(days=duration)).strftime("%Y-%m-%d")
+        else:
+            # Default: 1-day event (end is exclusive)
+            end_date = (start_dt + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    event_body = {
-        "summary": summary,
-        "start": {"dateTime": start_dt.isoformat(), "timeZone": TIMEZONE},
-        "end": {"dateTime": end_dt.isoformat(), "timeZone": TIMEZONE},
-    }
+        event_body = {
+            "summary": summary,
+            "start": {"date": start_date},
+            "end": {"date": end_date},
+        }
+    else:
+        if end:
+            end_dt = parse_datetime(end)
+        elif duration:
+            end_dt = start_dt + timedelta(minutes=duration)
+        else:
+            end_dt = start_dt + timedelta(hours=1)
+
+        event_body = {
+            "summary": summary,
+            "start": {"dateTime": start_dt.isoformat(), "timeZone": TIMEZONE},
+            "end": {"dateTime": end_dt.isoformat(), "timeZone": TIMEZONE},
+        }
 
     if location:
         event_body["location"] = location
@@ -171,7 +227,9 @@ def create(summary: str, start: str, end: str, duration: int, location: str, des
     if attendees:
         event_body["attendees"] = [{"email": e.strip()} for e in attendees.split(",")]
 
-    result = get_calendar().events().insert(calendarId="primary", body=event_body).execute()
+    result = (
+        get_calendar().events().insert(calendarId="primary", body=event_body).execute()
+    )
     click.echo(f"Event created: {result['id']}")
     click.echo(f"View: {result.get('htmlLink', '')}")
 
@@ -189,19 +247,26 @@ def search(query: str, days: int, as_json: bool):
     time_max = time_min + timedelta(days=days)
 
     service = get_calendar()
-    result = service.events().list(
-        calendarId="primary",
-        timeMin=time_min.isoformat(),
-        timeMax=time_max.isoformat(),
-        q=query,
-        singleEvents=True,
-        orderBy="startTime",
-    ).execute()
+    result = (
+        service.events()
+        .list(
+            calendarId="primary",
+            timeMin=time_min.isoformat(),
+            timeMax=time_max.isoformat(),
+            q=query,
+            singleEvents=True,
+            orderBy="startTime",
+        )
+        .execute()
+    )
 
     events = result.get("items", [])
 
     if not events:
-        click.echo("No events found.", err=True)
+        if as_json:
+            click.echo(json.dumps([]))
+        else:
+            click.echo("No events found.", err=True)
         return
 
     if as_json:
@@ -235,12 +300,22 @@ def delete(event_id: str, notify: bool):
 @click.option("--summary", help="New event title")
 @click.option("--start", help="New start time (YYYY-MM-DD HH:MM)")
 @click.option("--end", help="New end time (YYYY-MM-DD HH:MM)")
-@click.option("--duration", type=int, help="New duration in minutes (alternative to --end)")
+@click.option(
+    "--duration", type=int, help="New duration in minutes (alternative to --end)"
+)
 @click.option("--location", help="New location")
 @click.option("--description", help="New description")
 @click.option("--notify", is_flag=True, help="Send update emails to attendees")
-def update(event_id: str, summary: str, start: str, end: str, duration: int,
-           location: str, description: str, notify: bool):
+def update(
+    event_id: str,
+    summary: str,
+    start: str,
+    end: str,
+    duration: int,
+    location: str,
+    description: str,
+    notify: bool,
+):
     """Update/modify an existing calendar event.
 
     EVENT_ID: The event ID (from list or search output)
@@ -273,8 +348,9 @@ def update(event_id: str, summary: str, start: str, end: str, duration: int,
             old_start = event.get("start", {}).get("dateTime", "")
             old_end = event.get("end", {}).get("dateTime", "")
             if old_start and old_end:
-                old_duration = datetime.fromisoformat(old_end.replace("Z", "+00:00")) - \
-                               datetime.fromisoformat(old_start.replace("Z", "+00:00"))
+                old_duration = datetime.fromisoformat(
+                    old_end.replace("Z", "+00:00")
+                ) - datetime.fromisoformat(old_start.replace("Z", "+00:00"))
                 end_dt = start_dt + old_duration
             else:
                 end_dt = start_dt + timedelta(hours=1)
@@ -285,9 +361,13 @@ def update(event_id: str, summary: str, start: str, end: str, duration: int,
         event["end"] = {"dateTime": end_dt.isoformat(), "timeZone": TIMEZONE}
 
     send_updates = "all" if notify else "none"
-    result = service.events().update(
-        calendarId="primary", eventId=event_id, body=event, sendUpdates=send_updates
-    ).execute()
+    result = (
+        service.events()
+        .update(
+            calendarId="primary", eventId=event_id, body=event, sendUpdates=send_updates
+        )
+        .execute()
+    )
 
     click.echo(f"Event updated: {result['id']}")
     click.echo(f"View: {result.get('htmlLink', '')}")
