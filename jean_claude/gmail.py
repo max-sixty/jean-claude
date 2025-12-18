@@ -251,7 +251,7 @@ def draft_create():
     JSON fields: to (required), subject (required), body (required), cc, bcc
 
     Example:
-        echo '{"to": "x@y.com", "subject": "Hi!", "body": "Hello!"}' | jean-gmail draft create
+        echo '{"to": "x@y.com", "subject": "Hi!", "body": "Hello!"}' | jean-claude gmail draft create
     """
     data = json.load(sys.stdin)
     for field in ("to", "subject", "body"):
@@ -284,7 +284,7 @@ def draft_send(draft_id: str):
     """Send an existing draft.
 
     Example:
-        jean-gmail draft send r-123456789
+        jean-claude gmail draft send r-123456789
     """
     result = (
         get_gmail().users().drafts().send(userId="me", body={"id": draft_id}).execute()
@@ -302,7 +302,7 @@ def draft_reply(message_id: str):
     JSON fields: body (required)
 
     Example:
-        echo '{"body": "Thanks!"}' | jean-gmail draft reply MSG_ID
+        echo '{"body": "Thanks!"}' | jean-claude gmail draft reply MSG_ID
     """
     data = json.load(sys.stdin)
     if "body" not in data:
@@ -351,7 +351,7 @@ def draft_forward(message_id: str):
     JSON fields: to (required), body (optional, prepended to forwarded message)
 
     Example:
-        echo '{"to": "x@y.com", "body": "FYI"}' | jean-gmail draft forward MSG_ID
+        echo '{"to": "x@y.com", "body": "FYI"}' | jean-claude gmail draft forward MSG_ID
     """
     data = json.load(sys.stdin)
     if "to" not in data:
@@ -404,7 +404,7 @@ def draft_list(max_results: int):
     """List drafts.
 
     Example:
-        jean-gmail draft list
+        jean-claude gmail draft list
     """
     service = get_gmail()
     results = (
@@ -440,7 +440,7 @@ def draft_get(draft_id: str):
     """Get a draft with full body, written to file.
 
     Example:
-        jean-gmail draft get r-123456789
+        jean-claude gmail draft get r-123456789
     """
     service = get_gmail()
     draft = (
@@ -472,7 +472,7 @@ def draft_delete(draft_id: str):
     """Permanently delete a draft.
 
     Example:
-        jean-gmail draft delete r-123456789
+        jean-claude gmail draft delete r-123456789
     """
     get_gmail().users().drafts().delete(userId="me", id=draft_id).execute()
     click.echo(f"Deleted: {draft_id}")
@@ -517,8 +517,8 @@ def archive(message_ids: tuple[str, ...], query: str | None, max_results: int):
     Can archive by ID(s) or by query. Query automatically filters to inbox.
 
     Examples:
-        jean-gmail archive MSG_ID1 MSG_ID2
-        jean-gmail archive --query "from:newsletter@example.com"
+        jean-claude gmail archive MSG_ID1 MSG_ID2
+        jean-claude gmail archive --query "from:newsletter@example.com"
     """
     if message_ids and query:
         raise click.UsageError("Provide message IDs or --query, not both")
@@ -621,7 +621,7 @@ def attachments(message_id: str):
     """List attachments for a message.
 
     Example:
-        jean gmail attachments MSG_ID
+        jean-claude gmail attachments MSG_ID
     """
     service = get_gmail()
     msg = (
@@ -650,12 +650,12 @@ def attachments(message_id: str):
 def attachment_download(message_id: str, attachment_id: str, output: str):
     """Download an attachment from a message.
 
-    Use 'jean gmail attachments MSG_ID' to get attachment IDs.
+    Use 'jean-claude gmail attachments MSG_ID' to get attachment IDs.
 
     \b
     Example:
-        jean gmail attachments MSG_ID
-        jean gmail attachment-download MSG_ID ATTACH_ID ./file.pdf
+        jean-claude gmail attachments MSG_ID
+        jean-claude gmail attachment-download MSG_ID ATTACH_ID ./file.pdf
     """
     service = get_gmail()
     attachment = (

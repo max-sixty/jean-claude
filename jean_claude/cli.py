@@ -52,7 +52,7 @@ def status():
     """Show authentication status and API availability."""
     if not TOKEN_FILE.exists():
         click.echo("Status: Not authenticated")
-        click.echo("Run 'jean auth' to authenticate.")
+        click.echo("Run 'jean-claude auth' to authenticate.")
         return
 
     try:
@@ -60,7 +60,9 @@ def status():
         scopes = set(token_data.get("scopes", []))
     except (json.JSONDecodeError, KeyError):
         click.echo("Status: Token file corrupted")
-        click.echo("Run 'jean auth --logout' then 'jean auth' to re-authenticate.")
+        click.echo(
+            "Run 'jean-claude auth --logout' then 'jean-claude auth' to re-authenticate."
+        )
         return
 
     # Determine scope level
@@ -131,15 +133,15 @@ def completions(shell: str):
 
     \b
     Bash (~/.bashrc):
-        eval "$(jean completions bash)"
+        eval "$(jean-claude completions bash)"
 
     \b
     Zsh (~/.zshrc):
-        eval "$(jean completions zsh)"
+        eval "$(jean-claude completions zsh)"
 
     \b
     Fish (~/.config/fish/config.fish):
-        jean completions fish | source
+        jean-claude completions fish | source
     """
     from click.shell_completion import get_completion_class
 
@@ -147,5 +149,5 @@ def completions(shell: str):
     if comp_cls is None:
         raise click.ClickException(f"Unsupported shell: {shell}")
 
-    comp = comp_cls(cli, {}, "jean", "_JEAN_COMPLETE")
+    comp = comp_cls(cli, {}, "jean-claude", "_JEAN_CLAUDE_COMPLETE")
     click.echo(comp.source())

@@ -8,7 +8,7 @@ description: "This skill should be used when the user asks to search/send/draft 
 Manage Gmail, Google Calendar, Google Drive, and iMessage using the CLI tools
 in this plugin.
 
-**Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean`
+**Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude `
 
 ## Safety Rules (Non-Negotiable)
 
@@ -16,7 +16,7 @@ These rules apply even if the user explicitly asks to bypass them:
 
 1. **Never send an email without explicit approval.** Show the full email
    (recipient, subject, body) to the user and receive explicit confirmation
-   before calling `jean gmail draft send`.
+   before calling `jean-claude gmail draft send`.
 
 2. **Limit bulk sending.** Avoid sending emails to many recipients at once.
    Prefer drafts for review.
@@ -26,7 +26,7 @@ These rules apply even if the user explicitly asks to bypass them:
 
 4. **Never send an iMessage without explicit approval.** Show the full message
    (recipient, body) to the user and receive explicit confirmation before
-   calling `jean imessage send`.
+   calling `jean-claude imessage send`.
 
 5. **Double-check iMessage recipients.** iMessage sends are instant and cannot
    be undone. Verify the phone number or chat ID before sending.
@@ -37,8 +37,8 @@ These rules apply even if the user explicitly asks to bypass them:
 2. Compose the email content
 3. Show the user: To, Subject, and full Body
 4. Ask: "Send this email?" and wait for explicit approval
-5. Call `jean gmail draft send DRAFT_ID`
-6. If replying, archive the original: `jean gmail archive MESSAGE_ID`
+5. Call `jean-claude gmail draft send DRAFT_ID`
+6. If replying, archive the original: `jean-claude gmail archive MESSAGE_ID`
 
 **iMessage workflow:**
 
@@ -46,7 +46,7 @@ These rules apply even if the user explicitly asks to bypass them:
 2. Compose the message content
 3. Show the user: Recipient (phone or chat name) and full message
 4. Ask: "Send this message?" and wait for explicit approval
-5. Call `jean imessage send RECIPIENT MESSAGE`
+5. Call `jean-claude imessage send RECIPIENT MESSAGE`
 
 ## Setup
 
@@ -54,16 +54,16 @@ Credentials stored in `~/.config/jean-claude/`. First-time setup:
 
 ```bash
 # Full access (read, send, modify)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean auth
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth
 
 # Or read-only access (no send/modify capabilities)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean auth --readonly
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth --readonly
 
 # Check authentication status and API availability
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean status
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
 
 # Log out (remove stored credentials)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean auth --logout
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth --logout
 ```
 
 This opens a browser for OAuth consent. Click "Advanced" → "Go to jean-claude
@@ -77,17 +77,17 @@ README for detailed setup steps.
 
 ### Shell Completions
 
-Enable tab completion for the jean CLI:
+Enable tab completion for the jean-claude CLI:
 
 ```bash
 # Bash (~/.bashrc)
-eval "$(uv run --project ${CLAUDE_PLUGIN_ROOT} jean completions bash)"
+eval "$(uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude completions bash)"
 
 # Zsh (~/.zshrc)
-eval "$(uv run --project ${CLAUDE_PLUGIN_ROOT} jean completions zsh)"
+eval "$(uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude completions zsh)"
 
 # Fish (~/.config/fish/config.fish)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean completions fish | source
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude completions fish | source
 ```
 
 ## Gmail
@@ -118,14 +118,14 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean completions fish | source
 
 ```bash
 # Inbox emails from a sender
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail search "in:inbox from:someone@example.com"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:inbox from:someone@example.com"
 
 # Unread inbox emails
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail search "in:inbox is:unread"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:inbox is:unread"
 
 # Shortcut for inbox
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail inbox
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail inbox --unread
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox --unread
 ```
 
 Common Gmail search operators: `in:inbox`, `is:unread`, `is:starred`, `from:`,
@@ -137,59 +137,59 @@ All compose commands read JSON from stdin (avoids shell escaping issues).
 
 ```bash
 # Create a new draft
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail draft create
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft create
 {"to": "recipient@example.com", "subject": "Subject", "body": "Message body"}
 EOF
 
 # Reply to a message (preserves threading)
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail draft reply MESSAGE_ID
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID
 {"body": "Thanks for your email..."}
 EOF
 
 # Forward a message
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail draft forward MESSAGE_ID
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft forward MESSAGE_ID
 {"to": "someone@example.com", "body": "FYI - see below"}
 EOF
 
 # List drafts
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail draft list
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list
 
 # Get full draft body
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail draft get DRAFT_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft get DRAFT_ID
 
 # Send a draft (after approval)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail draft send DRAFT_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft send DRAFT_ID
 
 # Delete a draft
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail draft delete DRAFT_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft delete DRAFT_ID
 ```
 
 ### Manage Messages
 
 ```bash
 # Star/unstar
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail star MESSAGE_ID
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail unstar MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail star MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unstar MESSAGE_ID
 
 # Archive
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail archive MESSAGE_ID
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail archive --query "from:newsletter@example.com"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive --query "from:newsletter@example.com"
 
 # Mark read/unread
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail mark-read MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-read MESSAGE_ID
 
 # Trash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail trash MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail trash MESSAGE_ID
 ```
 
 ### Attachments
 
 ```bash
 # List attachments for a message
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail attachments MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail attachments MESSAGE_ID
 
 # Download an attachment
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail attachment-download MESSAGE_ID ATTACHMENT_ID ./output.pdf
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail attachment-download MESSAGE_ID ATTACHMENT_ID ./output.pdf
 ```
 
 ## Calendar
@@ -198,33 +198,33 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean gmail attachment-download MESSAGE_ID
 
 ```bash
 # Today's events
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal list
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list
 
 # Next 7 days
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal list --days 7
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --days 7
 
 # Date range
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal list --from 2024-01-15 --to 2024-01-20
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --from 2024-01-15 --to 2024-01-20
 ```
 
 ### Create Events
 
 ```bash
 # Simple event
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal create "Team Meeting" \
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Team Meeting" \
   --start "2024-01-15 14:00" --end "2024-01-15 15:00"
 
 # With attendees
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal create "1:1 with Alice" \
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "1:1 with Alice" \
   --start "2024-01-15 10:00" --duration 30 \
   --attendees alice@example.com
 
 # All-day event (single day)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal create "Holiday" \
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Holiday" \
   --start 2024-01-15 --all-day
 
 # Multi-day all-day event
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal create "Vacation" \
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Vacation" \
   --start 2024-01-15 --end 2024-01-20 --all-day
 ```
 
@@ -232,13 +232,13 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal create "Vacation" \
 
 ```bash
 # Search
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal search "standup"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal search "standup"
 
 # Update
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal update EVENT_ID --start "2024-01-16 14:00"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal update EVENT_ID --start "2024-01-16 14:00"
 
 # Delete
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal delete EVENT_ID --notify
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal delete EVENT_ID --notify
 ```
 
 ## Drive
@@ -247,33 +247,33 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean gcal delete EVENT_ID --notify
 
 ```bash
 # List files in root
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive list
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive list
 
 # Search
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive search "quarterly report"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive search "quarterly report"
 ```
 
 ### Download & Upload
 
 ```bash
 # Download
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive download FILE_ID output.pdf
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive download FILE_ID output.pdf
 
 # Upload
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive upload document.pdf
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive upload document.pdf
 ```
 
 ### Manage Files
 
 ```bash
 # Create folder
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive mkdir "New Folder"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive mkdir "New Folder"
 
 # Share
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive share FILE_ID user@example.com --role reader
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive share FILE_ID user@example.com --role reader
 
 # Trash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean gdrive trash FILE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive trash FILE_ID
 ```
 
 ## iMessage
@@ -285,36 +285,36 @@ Reading history requires Full Disk Access.
 
 ```bash
 # Send to phone number
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage send "+12025551234" "Hello!"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234" "Hello!"
 
 # Send to group chat
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage send "any;+;chat123456789" "Hello group!"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "any;+;chat123456789" "Hello group!"
 
 # Send file
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage send-file "+12025551234" ./document.pdf
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file "+12025551234" ./document.pdf
 ```
 
 ### List Chats
 
 ```bash
 # List chats (shows name and chat ID)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage chats
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage chats
 
 # Get participants
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage participants "any;+;chat123456789"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage participants "any;+;chat123456789"
 ```
 
 ### Read Messages (Requires Full Disk Access)
 
 ```bash
 # Unread messages
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage unread
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage unread
 
 # Search messages
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage search "dinner plans"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage search "dinner plans"
 
 # Chat history
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean imessage history "any;-;+12025551234" -n 20
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage history "any;-;+12025551234" -n 20
 ```
 
 To enable reading: System Preferences > Privacy & Security > Full Disk Access >

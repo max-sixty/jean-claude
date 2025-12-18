@@ -183,8 +183,8 @@ def create(
 
     \b
     Examples:
-        jean gcal create "Meeting" --start "2024-01-15 14:00"
-        jean gcal create "Vacation" --start 2024-01-15 --end 2024-01-20 --all-day
+        jean-claude gcal create "Meeting" --start "2024-01-15 14:00"
+        jean-claude gcal create "Vacation" --start 2024-01-15 --end 2024-01-20 --all-day
     """
     start_dt = parse_datetime(start)
 

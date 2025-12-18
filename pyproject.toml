@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-jean = "jean_claude.cli:cli"
+jean-claude = "jean_claude.cli:cli"
 
 [project.optional-dependencies]
 dev = ["pytest", "pre-commit"]

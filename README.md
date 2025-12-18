@@ -27,10 +27,10 @@ Run the auth command to authenticate:
 
 ```bash
 # Full access (read, send, modify)
-jean auth
+jean-claude auth
 
 # Or read-only access (no send/modify capabilities)
-jean auth --readonly
+jean-claude auth --readonly
 ```
 
 This opens a browser for OAuth consent. Credentials are saved to
@@ -97,11 +97,11 @@ Once installed, the skill activates automatically when you ask Claude to:
 The plugin provides a unified CLI with subcommands:
 
 ```bash
-jean --help
-jean gmail --help
-jean gcal --help
-jean gdrive --help
-jean imessage --help
+jean-claude --help
+jean-claude gmail --help
+jean-claude gcal --help
+jean-claude gdrive --help
+jean-claude imessage --help
 ```
 
 ## Features

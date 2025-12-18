@@ -74,7 +74,7 @@ def test_completions_bash():
     runner = CliRunner()
     result = runner.invoke(cli, ["completions", "bash"])
     assert result.exit_code == 0
-    assert "_JEAN_COMPLETE" in result.output
+    assert "_JEAN_CLAUDE_COMPLETE" in result.output
     assert "complete" in result.output.lower()
 
 
@@ -83,7 +83,7 @@ def test_completions_zsh():
     runner = CliRunner()
     result = runner.invoke(cli, ["completions", "zsh"])
     assert result.exit_code == 0
-    assert "_JEAN_COMPLETE" in result.output
+    assert "jean-claude" in result.output
 
 
 def test_completions_fish():
@@ -91,7 +91,7 @@ def test_completions_fish():
     runner = CliRunner()
     result = runner.invoke(cli, ["completions", "fish"])
     assert result.exit_code == 0
-    assert "_JEAN_COMPLETE" in result.output
+    assert "_JEAN_CLAUDE_COMPLETE" in result.output
 
 
 def test_gmail_help():
