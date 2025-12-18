@@ -50,39 +50,48 @@ def auth(readonly: bool, logout: bool):
 @cli.command()
 def status():
     """Show authentication status and API availability."""
+    # Google Workspace status
     if not TOKEN_FILE.exists():
-        click.echo("Status: Not authenticated")
-        click.echo("Run 'jean-claude auth' to authenticate.")
-        return
-
-    try:
-        token_data = json.loads(TOKEN_FILE.read_text())
-        scopes = set(token_data.get("scopes", []))
-    except (json.JSONDecodeError, KeyError):
-        click.echo("Status: Token file corrupted")
-        click.echo(
-            "Run 'jean-claude auth --logout' then 'jean-claude auth' to re-authenticate."
-        )
-        return
-
-    # Determine scope level
-    if scopes == set(SCOPES_FULL):
-        scope_level = "full access"
-    elif scopes == set(SCOPES_READONLY):
-        scope_level = "read-only"
+        click.echo("Google: " + click.style("Not authenticated", fg="yellow"))
+        click.echo("  Run 'jean-claude auth' to authenticate.")
     else:
-        scope_level = "custom"
+        try:
+            token_data = json.loads(TOKEN_FILE.read_text())
+            scopes = set(token_data.get("scopes", []))
+        except (json.JSONDecodeError, KeyError):
+            click.echo("Google: " + click.style("Token file corrupted", fg="red"))
+            click.echo(
+                "  Run 'jean-claude auth --logout' then 'jean-claude auth' to fix."
+            )
+            scopes = None
 
-    click.echo(f"Status: Authenticated ({scope_level})")
+        if scopes is not None:
+            # Determine scope level
+            if scopes == set(SCOPES_FULL):
+                scope_level = "full access"
+            elif scopes == set(SCOPES_READONLY):
+                scope_level = "read-only"
+            else:
+                scope_level = "custom"
 
-    # Check API availability
-    click.echo("\nAPI Status:")
-    try:
-        creds = get_credentials()
-    except Exception as e:
-        click.echo(f"  Error getting credentials: {e}")
-        return
+            click.echo(
+                "Google: " + click.style(f"Authenticated ({scope_level})", fg="green")
+            )
 
+            # Check API availability
+            try:
+                creds = get_credentials()
+                _check_google_apis(creds)
+            except Exception as e:
+                click.echo(f"  Error getting credentials: {e}")
+
+    # iMessage status (doesn't require Google auth)
+    click.echo()
+    _check_imessage_status()
+
+
+def _check_google_apis(creds) -> None:
+    """Check Google API availability."""
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
 
@@ -109,6 +118,56 @@ def status():
         click.echo("  Drive: " + click.style("OK", fg="green"))
     except HttpError as e:
         _print_api_error("Drive", e)
+
+
+def _check_imessage_status() -> None:
+    """Check iMessage availability (send and read capabilities)."""
+    import sqlite3
+    import subprocess
+    from pathlib import Path
+
+    click.echo("iMessage:")
+
+    # Check send capability (AppleScript/Automation permission)
+    # This script just checks if Messages.app is accessible, doesn't send anything
+    test_script = 'tell application "Messages" to get name'
+    result = subprocess.run(
+        ["osascript", "-e", test_script],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        click.echo("  Send: " + click.style("OK", fg="green"))
+    else:
+        error = result.stderr.strip()
+        if "not allowed" in error.lower() or "assistive" in error.lower():
+            click.echo(
+                "  Send: " + click.style("No Automation permission", fg="yellow")
+            )
+            click.echo("    Grant when prompted on first send, or enable in:")
+            click.echo("    System Preferences > Privacy & Security > Automation")
+        else:
+            click.echo("  Send: " + click.style(f"Error - {error}", fg="red"))
+
+    # Check read capability (Full Disk Access to Messages database)
+    db_path = Path.home() / "Library" / "Messages" / "chat.db"
+    if not db_path.exists():
+        click.echo("  Read: " + click.style("Messages database not found", fg="yellow"))
+    else:
+        try:
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            conn.execute("SELECT 1 FROM message LIMIT 1")
+            conn.close()
+            click.echo("  Read: " + click.style("OK", fg="green"))
+        except sqlite3.OperationalError as e:
+            if "unable to open" in str(e):
+                click.echo("  Read: " + click.style("No Full Disk Access", fg="yellow"))
+                click.echo(
+                    "    System Preferences > Privacy & Security > Full Disk Access"
+                )
+                click.echo("    Add and enable your terminal app")
+            else:
+                click.echo("  Read: " + click.style(f"Error - {e}", fg="red"))
 
 
 def _print_api_error(api_name: str, error: Exception) -> None:
