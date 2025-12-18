@@ -19,7 +19,7 @@ dependencies = [
 jean = "jean_claude.cli:cli"
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "pre-commit"]
 
 [build-system]
 requires = ["hatchling"]
