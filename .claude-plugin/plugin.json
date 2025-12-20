@@ -14,5 +14,8 @@
     "imessage",
     "assistant",
     "productivity"
+  ],
+  "skills": [
+    "./skills/jean-claude"
   ]
 }
