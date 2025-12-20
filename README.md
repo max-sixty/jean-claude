@@ -68,10 +68,11 @@ revoked.
 
 </details>
 
-**Note**: You may see an "unverified app" warning during OAuth—this is normal
-for apps pending Google verification. Click "Advanced" → "Go to jean-claude
-(unsafe)" to proceed. The app only requests the permissions you approve and
-stores credentials locally on your machine.
+> [!NOTE]
+> You may see an "unverified app" warning during OAuth—this is normal for apps
+> pending Google verification. Click "Advanced" → "Go to jean-claude (unsafe)"
+> to proceed. The app only requests the permissions you approve and stores
+> credentials locally on your machine.
 
 <details>
 <summary><strong>Using your own Google Cloud credentials</strong> (optional)</summary>
