@@ -18,8 +18,8 @@ dependencies = [
 [project.scripts]
 jean-claude = "jean_claude.cli:cli"
 
-[project.optional-dependencies]
-dev = ["pytest", "pre-commit"]
+[dependency-groups]
+dev = ["pytest", "pre-commit", "ty"]
 
 [build-system]
 requires = ["hatchling"]
