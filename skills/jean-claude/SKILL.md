@@ -139,7 +139,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox --unread
 ```
 
 Common Gmail search operators: `in:inbox`, `is:unread`, `is:starred`, `from:`,
-`to:`, `subject:`, `after:2024/01/01`, `has:attachment`, `label:`
+`to:`, `subject:`, `after:2025/01/01`, `has:attachment`, `label:`
 
 ### Drafts
 
@@ -284,14 +284,21 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive mkdir "New Folder"
 # Share
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive share FILE_ID user@example.com --role reader
 
-# Trash
+# Trash/untrash
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive trash FILE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive untrash FILE_ID
+
+# Get file metadata
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive get FILE_ID
 ```
 
 ## iMessage
 
 Send via AppleScript. On first use, macOS will prompt for Automation permission.
 Reading history requires Full Disk Access.
+
+**Chat IDs:** Individual chats use `any;-;+1234567890` (phone number), group
+chats use `any;+;chat123...`. Get these from `imessage chats`.
 
 ### Send Messages
 
@@ -315,6 +322,8 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage chats
 # Get participants
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage participants "any;+;chat123456789"
 ```
+
+Other: `imessage open CHAT_ID` opens a chat in Messages.app (brings app to focus).
 
 ### Read Messages (Requires Full Disk Access)
 
