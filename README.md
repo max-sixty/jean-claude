@@ -1,52 +1,80 @@
 # jean-claude
 
 A Claude Code plugin for managing Gmail, Google Calendar, Google Drive, and
-iMessage.
+iMessage (macOS only).
 
-## Installation
+## Prerequisites
+
+### Claude Code
+
+This is a plugin for [Claude Code](https://code.claude.com/docs/en/setup),
+Anthropic's agentic coding tool. Install it first:
 
 ```bash
-# Add as a marketplace and install the plugin
-/plugin marketplace add max-sixty/jean-claude
-/plugin install jean-claude@jean-claude
+curl -fsSL https://claude.ai/install.sh | bash
 ```
 
-Or use the interactive plugin browser:
-```bash
-/plugin
-```
-Then navigate to **Discover** → search for "jean-claude".
+### uv (Python package manager)
 
-## Setup
-
-### Prerequisites
-
-This plugin requires [uv](https://docs.astral.sh/uv/) (Python package manager):
+This plugin requires [uv](https://docs.astral.sh/uv/) to manage Python
+dependencies (requires Python 3.11+, which uv will install automatically if
+needed):
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### Google Workspace (Gmail, Calendar, Drive)
+## Installation
 
-Run the auth command to authenticate:
+In Claude Code, run:
 
-```bash
-# Full access (read, send, modify)
-jean-claude auth
-
-# Or read-only access (no send/modify capabilities)
-jean-claude auth --readonly
+```
+/plugin marketplace add max-sixty/jean-claude
+/plugin install jean-claude@jean-claude
 ```
 
-This opens a browser for OAuth consent. Credentials are saved to
-`~/.config/jean-claude/token.json` and persist until revoked.
+## Setup
 
-**Note**: You may see an "unverified app" warning during OAuth. Click
-"Advanced" → "Go to jean-claude (unsafe)" to proceed. This is normal for
-apps pending Google verification.
+### Google Workspace (Gmail, Calendar, Drive)
 
-#### Using Your Own Google Cloud Credentials (Optional)
+After installing the plugin, ask Claude to authenticate:
+
+```
+"Set up Google authentication for jean-claude"
+```
+
+Claude will run the auth command for you, which opens a browser for OAuth
+consent.
+
+<details>
+<summary><strong>Manual setup</strong> (if you prefer running commands yourself)</summary>
+
+```bash
+# The plugin is installed at:
+cd ~/.claude/plugins/max-sixty/jean-claude
+
+# Full access (read, send, modify)
+uv run jean-claude auth
+
+# Or read-only access (no send/modify capabilities)
+uv run jean-claude auth --readonly
+
+# Verify it worked
+uv run jean-claude status
+```
+
+Credentials are saved to `~/.config/jean-claude/token.json` and persist until
+revoked.
+
+</details>
+
+**Note**: You may see an "unverified app" warning during OAuth—this is normal
+for apps pending Google verification. Click "Advanced" → "Go to jean-claude
+(unsafe)" to proceed. The app only requests the permissions you approve and
+stores credentials locally on your machine.
+
+<details>
+<summary><strong>Using your own Google Cloud credentials</strong> (optional)</summary>
 
 Use your own credentials if the default ones stop working (Google limits
 unverified apps to 100 users) or if you want your own quota.
@@ -65,23 +93,36 @@ unverified apps to 100 users) or if you want your own quota.
    - Click "Create Credentials" → "OAuth client ID"
    - Choose "Desktop app" as application type
    - Download the JSON file
-5. Rename and move the downloaded file:
+5. Move the downloaded file:
    ```bash
+   mkdir -p ~/.config/jean-claude
    mv ~/Downloads/client_secret_*.json ~/.config/jean-claude/client_secret.json
    ```
 6. Run the auth command—it will automatically use your credentials
 
-### iMessage
+</details>
 
-- **Sending messages**: Works via AppleScript. On first use, macOS will prompt
-  to allow your terminal to control Messages.app (Automation permission).
-- **Reading messages**: Requires Full Disk Access for your terminal app
-  - System Preferences > Privacy & Security > Full Disk Access
-  - Add and enable your terminal (Terminal, iTerm2, Ghostty, etc.)
+### iMessage (macOS only)
+
+iMessage integration requires macOS—it uses AppleScript and the local Messages
+database.
+
+- **Sending messages**: Works via AppleScript. On first use, macOS prompts to
+  allow your terminal to control Messages.app (Automation permission). Grant
+  this to whichever app runs Claude Code (Terminal, iTerm2, VS Code, etc.).
+
+- **Reading messages**: Requires Full Disk Access to read the Messages database.
+  1. Open **System Settings** → **Privacy & Security** → **Full Disk Access**
+  2. Click **+** and add the app that runs Claude Code:
+     - If using Terminal: add `/Applications/Utilities/Terminal.app`
+     - If using iTerm2: add `/Applications/iTerm.app`
+     - If using VS Code: add `/Applications/Visual Studio Code.app`
+     - If using another terminal: find it in `/Applications` or via `which`
+  3. Toggle the app **on** and restart it
 
 ## Usage
 
-Once installed, the skill activates automatically when you ask Claude to:
+Once installed, Claude automatically uses this plugin when you ask it to:
 
 - Search, send, or draft emails
 - Check calendar or create events
@@ -98,17 +139,22 @@ Once installed, the skill activates automatically when you ask Claude to:
 "Text +12025551234 that I'm running late"
 ```
 
-### CLI Commands
+<details>
+<summary><strong>CLI Commands</strong></summary>
 
-The plugin provides a unified CLI with subcommands:
+The plugin provides a unified CLI with subcommands. Claude invokes these
+automatically, but you can also run them manually:
 
 ```bash
-jean-claude --help
-jean-claude gmail --help
-jean-claude gcal --help
-jean-claude gdrive --help
-jean-claude imessage --help
+cd ~/.claude/plugins/max-sixty/jean-claude
+uv run jean-claude --help
+uv run jean-claude gmail --help
+uv run jean-claude gcal --help
+uv run jean-claude gdrive --help
+uv run jean-claude imessage --help  # macOS only
 ```
+
+</details>
 
 ## Features
 
@@ -133,7 +179,7 @@ jean-claude imessage --help
 - Create folders and share files
 - Trash and restore files
 
-### iMessage
+### iMessage (macOS only)
 
 - Send messages to individuals or groups
 - Send file attachments
@@ -149,12 +195,12 @@ jean-claude imessage --help
 - Users can provide their own Google Cloud credentials if preferred
 - All email/message sends require explicit user approval
 
-## Development
+<details>
+<summary><strong>Development</strong></summary>
 
 ```bash
 # Install with dev dependencies
 uv sync
-uv pip install pytest pre-commit
 
 # Run tests
 uv run pytest
@@ -162,6 +208,8 @@ uv run pytest
 # Run lints
 pre-commit run --all-files
 ```
+
+</details>
 
 ## License
 
