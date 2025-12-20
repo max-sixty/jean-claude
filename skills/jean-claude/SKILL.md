@@ -22,7 +22,7 @@ These rules apply even if the user explicitly asks to bypass them:
    Prefer drafts for review.
 
 3. **Load prose skills when drafting.** Before composing any email or message,
-   load relevant skills for writing prose (e.g., `documentation`).
+   load any available skills for writing prose, emails, or documentation.
 
 4. **Never send an iMessage without explicit approval.** Show the full message
    (recipient, body) to the user and receive explicit confirmation before
@@ -33,7 +33,7 @@ These rules apply even if the user explicitly asks to bypass them:
 
 **Email workflow:**
 
-1. Load prose skills (e.g., `documentation`)
+1. Load any available prose/writing skills
 2. Compose the email content
 3. Show the user: To, Subject, and full Body
 4. Ask: "Send this email?" and wait for explicit approval
@@ -171,12 +171,14 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft delete DRAFT_ID
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail star MESSAGE_ID
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unstar MESSAGE_ID
 
-# Archive
+# Archive/unarchive
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive MESSAGE_ID
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive --query "from:newsletter@example.com"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unarchive MESSAGE_ID
 
 # Mark read/unread
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-read MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-unread MESSAGE_ID
 
 # Trash
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail trash MESSAGE_ID
@@ -204,7 +206,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --days 7
 
 # Date range
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --from 2024-01-15 --to 2024-01-20
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --from 2025-01-15 --to 2025-01-20
 ```
 
 ### Create Events
@@ -212,20 +214,20 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --from 2024-01-15 -
 ```bash
 # Simple event
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Team Meeting" \
-  --start "2024-01-15 14:00" --end "2024-01-15 15:00"
+  --start "2025-01-15 14:00" --end "2025-01-15 15:00"
 
 # With attendees
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "1:1 with Alice" \
-  --start "2024-01-15 10:00" --duration 30 \
+  --start "2025-01-15 10:00" --duration 30 \
   --attendees alice@example.com
 
 # All-day event (single day)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Holiday" \
-  --start 2024-01-15 --all-day
+  --start 2025-01-15 --all-day
 
 # Multi-day all-day event
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Vacation" \
-  --start 2024-01-15 --end 2024-01-20 --all-day
+  --start 2025-01-15 --end 2025-01-20 --all-day
 ```
 
 ### Search & Manage Events
@@ -235,7 +237,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Vacation" \
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal search "standup"
 
 # Update
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal update EVENT_ID --start "2024-01-16 14:00"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal update EVENT_ID --start "2025-01-16 14:00"
 
 # Delete
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal delete EVENT_ID --notify

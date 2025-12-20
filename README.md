@@ -5,19 +5,17 @@ iMessage.
 
 ## Installation
 
-### As a Claude Code Plugin
-
 ```bash
-# Install from the plugin marketplace (when published)
-claude plugins install jean-claude
-
-# Or install from local directory
-claude plugins install /path/to/jean-claude
+# Add as a marketplace and install the plugin
+/plugin marketplace add max-sixty/jean-claude
+/plugin install jean-claude@jean-claude
 ```
 
-### Manual Installation
-
-Clone this repository and add it to your Claude Code plugins directory.
+Or use the interactive plugin browser:
+```bash
+/plugin
+```
+Then navigate to **Discover** → search for "jean-claude".
 
 ## Setup
 
@@ -111,7 +109,7 @@ jean-claude imessage --help
 - Search and list emails
 - Create, send, and manage drafts
 - Reply and forward with threading preserved
-- Star, archive, mark read/unread, trash messages
+- Star, archive/unarchive, mark read/unread, trash messages
 
 ### Google Calendar
 
@@ -142,6 +140,20 @@ jean-claude imessage --help
   practice for desktop/CLI apps per Google's guidelines)
 - Users can provide their own Google Cloud credentials if preferred
 - All email/message sends require explicit user approval
+
+## Development
+
+```bash
+# Install with dev dependencies
+uv sync
+uv pip install pytest pre-commit
+
+# Run tests
+uv run pytest
+
+# Run lints
+pre-commit run --all-files
+```
 
 ## License
 
