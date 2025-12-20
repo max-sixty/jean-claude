@@ -1,5 +1,6 @@
 {
   "name": "jean-claude",
+  "version": "0.1.0",
   "description": "Google Workspace (Gmail, Calendar, Drive) and iMessage integration for Claude Code",
   "author": {
     "name": "Maximilian"
