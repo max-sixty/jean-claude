@@ -10,6 +10,37 @@ in this plugin.
 
 **Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude `
 
+## First-Time Setup
+
+When this skill is first loaded, check Google authentication status:
+
+```bash
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
+```
+
+If the output shows "Google: Not authenticated", use the AskUserQuestion tool to
+ask the user which access level they want:
+
+**Question:** "jean-claude needs Google access. Which mode would you like?"
+
+**Options:**
+1. **Read-only (Recommended to start)** - Can read emails, calendar, and Drive
+   files, but cannot send, modify, or delete anything. Good for getting
+   comfortable with the plugin first.
+2. **Full access** - Can read, send emails, create/modify calendar events, and
+   manage Drive files.
+
+**Context to include:** All data stays between your machine and Google—nothing
+is sent to Anthropic or any third party. The plugin uses OAuth to authenticate
+directly with your Google account.
+
+Based on their choice, run the appropriate auth command:
+- Read-only: `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth --readonly`
+- Full access: `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth`
+
+This opens a browser for OAuth consent. After authentication, verify with
+`status` again.
+
 ## Safety Rules (Non-Negotiable)
 
 These rules apply even if the user explicitly asks to bypass them:
