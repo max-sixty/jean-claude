@@ -19,6 +19,14 @@ Then navigate to **Discover** → search for "jean-claude".
 
 ## Setup
 
+### Prerequisites
+
+This plugin requires [uv](https://docs.astral.sh/uv/) (Python package manager):
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
 ### Google Workspace (Gmail, Calendar, Drive)
 
 Run the auth command to authenticate:

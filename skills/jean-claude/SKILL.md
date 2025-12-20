@@ -50,6 +50,16 @@ These rules apply even if the user explicitly asks to bypass them:
 
 ## Setup
 
+### Prerequisites
+
+This plugin requires `uv` (Python package manager). If not installed:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### Google Workspace
+
 Credentials stored in `~/.config/jean-claude/`. First-time setup:
 
 ```bash
