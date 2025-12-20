@@ -51,7 +51,7 @@ consent.
 
 ```bash
 # The plugin is installed at:
-cd ~/.claude/plugins/cache/jean-claude/jean-claude/*/
+cd ~/.claude/plugins/marketplaces/jean-claude
 
 # Full access (read, send, modify)
 uv run jean-claude auth
@@ -146,7 +146,7 @@ The plugin provides a unified CLI with subcommands. Claude invokes these
 automatically, but you can also run them manually:
 
 ```bash
-cd ~/.claude/plugins/cache/jean-claude/jean-claude/*/
+cd ~/.claude/plugins/marketplaces/jean-claude
 uv run jean-claude --help
 uv run jean-claude gmail --help
 uv run jean-claude gcal --help
