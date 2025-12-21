@@ -8,6 +8,7 @@ import logging
 import sys
 import time
 from email.mime.text import MIMEText
+from email.utils import formataddr, getaddresses, parseaddr
 from pathlib import Path
 
 import click
@@ -292,6 +293,109 @@ def draft_send(draft_id: str):
     click.echo(f"Sent: {result['id']}")
 
 
+def _create_reply_draft(
+    message_id: str, body: str, *, include_cc: bool
+) -> tuple[str, str]:
+    """Create a reply draft, returning (draft_id, draft_url).
+
+    Args:
+        message_id: ID of the message to reply to
+        body: Reply body text
+        include_cc: If True, include CC recipients (reply-all behavior)
+    """
+    service = get_gmail()
+    original = (
+        service.users()
+        .messages()
+        .get(userId="me", id=message_id, format="metadata")
+        .execute()
+    )
+    my_email = service.users().getProfile(userId="me").execute()["emailAddress"]
+
+    headers = original.get("payload", {}).get("headers", [])
+    subject = get_header(headers, "Subject") or ""
+    message_id_header = get_header(headers, "Message-ID")
+    orig_refs = get_header(headers, "References")
+    thread_id = original.get("threadId")
+
+    reply_to = get_header(headers, "Reply-To")
+    from_addr = get_header(headers, "From")
+    orig_to = get_header(headers, "To")
+    orig_cc = get_header(headers, "Cc")
+
+    # Use SENT label to detect own messages (handles send-as aliases)
+    labels = original.get("labelIds", [])
+    is_own_message = "SENT" in labels
+    _, from_email = parseaddr(from_addr)
+
+    # Build recipient list, excluding self (uses RFC 5322 parsing)
+    def filter_addrs(addrs: str, also_exclude: str = "") -> str:
+        """Filter addresses, removing self and optionally another email."""
+        if not addrs:
+            return ""
+        exclude_lower = {my_email.lower()}
+        if also_exclude:
+            exclude_lower.add(also_exclude.lower())
+        # Parse properly (handles quoted commas in display names)
+        parsed = getaddresses([addrs])
+        filtered = [
+            (name, addr)
+            for name, addr in parsed
+            if addr and addr.lower() not in exclude_lower
+        ]
+        return ", ".join(formataddr(pair) for pair in filtered)
+
+    # Determine recipients
+    if reply_to:
+        to_addr = reply_to
+        # Exclude Reply-To addresses from CC to avoid duplicates
+        _, reply_to_email = parseaddr(reply_to)
+        cc_addr = filter_addrs(
+            f"{orig_to}, {orig_cc}" if orig_cc else orig_to,
+            also_exclude=reply_to_email,
+        )
+    elif is_own_message:
+        to_addr = orig_to
+        if not to_addr:
+            raise click.UsageError(
+                "Cannot reply to own message: original has no To header"
+            )
+        # Filter CC to remove self
+        cc_addr = filter_addrs(orig_cc) if orig_cc else ""
+    else:
+        to_addr = from_addr
+        all_others = f"{orig_to}, {orig_cc}" if orig_cc else orig_to
+        cc_addr = filter_addrs(all_others, also_exclude=from_email)
+
+    # Validate we have a recipient
+    if not to_addr:
+        raise click.UsageError("Cannot determine reply recipient: no From/To header")
+
+    if not subject.lower().startswith("re:"):
+        subject = f"Re: {subject}"
+
+    msg = MIMEText(body)
+    msg["to"] = to_addr
+    if include_cc and cc_addr:
+        msg["cc"] = cc_addr
+    msg["subject"] = subject
+    if message_id_header:
+        msg["In-Reply-To"] = message_id_header
+        # Append to existing References chain for proper threading
+        msg["References"] = (
+            f"{orig_refs} {message_id_header}" if orig_refs else message_id_header
+        )
+
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    result = (
+        service.users()
+        .drafts()
+        .create(userId="me", body={"message": {"raw": raw, "threadId": thread_id}})
+        .execute()
+    )
+    return result["id"], draft_url(result)
+
+
 @draft.command("reply")
 @click.argument("message_id")
 def draft_reply(message_id: str):
@@ -308,39 +412,30 @@ def draft_reply(message_id: str):
     if "body" not in data:
         raise click.UsageError("Missing required field: body")
 
-    service = get_gmail()
-    original = (
-        service.users()
-        .messages()
-        .get(userId="me", id=message_id, format="metadata")
-        .execute()
-    )
+    draft_id, url = _create_reply_draft(message_id, data["body"], include_cc=False)
+    click.echo(f"Reply draft created: {draft_id}")
+    click.echo(f"View: {url}")
 
-    headers = original.get("payload", {}).get("headers", [])
-    subject = get_header(headers, "Subject") or ""
-    from_addr = get_header(headers, "From")
-    message_id_header = get_header(headers, "Message-ID")
-    thread_id = original.get("threadId")
 
-    if not subject.lower().startswith("re:"):
-        subject = f"Re: {subject}"
+@draft.command("reply-all")
+@click.argument("message_id")
+def draft_reply_all(message_id: str):
+    """Create a reply-all draft from JSON stdin.
 
-    msg = MIMEText(data["body"])
-    msg["to"] = from_addr
-    msg["subject"] = subject
-    if message_id_header:
-        msg["In-Reply-To"] = message_id_header
-        msg["References"] = message_id_header
+    Preserves threading and includes all original recipients.
 
-    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    result = (
-        service.users()
-        .drafts()
-        .create(userId="me", body={"message": {"raw": raw, "threadId": thread_id}})
-        .execute()
-    )
-    click.echo(f"Reply draft created: {result['id']}")
-    click.echo(f"View: {draft_url(result)}")
+    JSON fields: body (required)
+
+    Example:
+        echo '{"body": "Thanks!"}' | jean-claude gmail draft reply-all MSG_ID
+    """
+    data = json.load(sys.stdin)
+    if "body" not in data:
+        raise click.UsageError("Missing required field: body")
+
+    draft_id, url = _create_reply_draft(message_id, data["body"], include_cc=True)
+    click.echo(f"Reply-all draft created: {draft_id}")
+    click.echo(f"View: {url}")
 
 
 @draft.command("forward")
