@@ -574,23 +574,37 @@ def draft_delete(draft_id: str):
 
 
 @cli.command()
-@click.argument("message_id")
-def star(message_id: str):
-    """Star a message."""
-    get_gmail().users().messages().modify(
-        userId="me", id=message_id, body={"addLabelIds": ["STARRED"]}
-    ).execute()
-    click.echo(f"Starred: {message_id}", err=True)
+@click.argument("message_ids", nargs=-1, required=True)
+def star(message_ids: tuple[str, ...]):
+    """Star messages."""
+    service = get_gmail()
+    batch = service.new_batch_http_request(callback=_raise_on_error)
+    for msg_id in message_ids:
+        batch.add(
+            service.users()
+            .messages()
+            .modify(userId="me", id=msg_id, body={"addLabelIds": ["STARRED"]})
+        )
+    batch.execute()
+    n = len(message_ids)
+    click.echo(f"Starred {n} message{'s' if n != 1 else ''}", err=True)
 
 
 @cli.command()
-@click.argument("message_id")
-def unstar(message_id: str):
-    """Remove star from a message."""
-    get_gmail().users().messages().modify(
-        userId="me", id=message_id, body={"removeLabelIds": ["STARRED"]}
-    ).execute()
-    click.echo(f"Unstarred: {message_id}", err=True)
+@click.argument("message_ids", nargs=-1, required=True)
+def unstar(message_ids: tuple[str, ...]):
+    """Remove star from messages."""
+    service = get_gmail()
+    batch = service.new_batch_http_request(callback=_raise_on_error)
+    for msg_id in message_ids:
+        batch.add(
+            service.users()
+            .messages()
+            .modify(userId="me", id=msg_id, body={"removeLabelIds": ["STARRED"]})
+        )
+    batch.execute()
+    n = len(message_ids)
+    click.echo(f"Unstarred {n} message{'s' if n != 1 else ''}", err=True)
 
 
 @cli.command()
@@ -647,7 +661,8 @@ def archive(message_ids: tuple[str, ...], query: str | None, max_results: int):
         )
     batch.execute()
 
-    click.echo(f"Archived {len(ids_to_archive)} message(s)", err=True)
+    n = len(ids_to_archive)
+    click.echo(f"Archived {n} message{'s' if n != 1 else ''}", err=True)
 
 
 @cli.command()
@@ -661,31 +676,50 @@ def unarchive(message_id: str):
 
 
 @cli.command("mark-read")
-@click.argument("message_id")
-def mark_read(message_id: str):
-    """Mark a message as read."""
-    get_gmail().users().messages().modify(
-        userId="me", id=message_id, body={"removeLabelIds": ["UNREAD"]}
-    ).execute()
-    click.echo(f"Marked read: {message_id}", err=True)
+@click.argument("message_ids", nargs=-1, required=True)
+def mark_read(message_ids: tuple[str, ...]):
+    """Mark messages as read."""
+    service = get_gmail()
+    batch = service.new_batch_http_request(callback=_raise_on_error)
+    for msg_id in message_ids:
+        batch.add(
+            service.users()
+            .messages()
+            .modify(userId="me", id=msg_id, body={"removeLabelIds": ["UNREAD"]})
+        )
+    batch.execute()
+    n = len(message_ids)
+    click.echo(f"Marked {n} message{'s' if n != 1 else ''} read", err=True)
 
 
 @cli.command("mark-unread")
-@click.argument("message_id")
-def mark_unread(message_id: str):
-    """Mark a message as unread."""
-    get_gmail().users().messages().modify(
-        userId="me", id=message_id, body={"addLabelIds": ["UNREAD"]}
-    ).execute()
-    click.echo(f"Marked unread: {message_id}", err=True)
+@click.argument("message_ids", nargs=-1, required=True)
+def mark_unread(message_ids: tuple[str, ...]):
+    """Mark messages as unread."""
+    service = get_gmail()
+    batch = service.new_batch_http_request(callback=_raise_on_error)
+    for msg_id in message_ids:
+        batch.add(
+            service.users()
+            .messages()
+            .modify(userId="me", id=msg_id, body={"addLabelIds": ["UNREAD"]})
+        )
+    batch.execute()
+    n = len(message_ids)
+    click.echo(f"Marked {n} message{'s' if n != 1 else ''} unread", err=True)
 
 
 @cli.command()
-@click.argument("message_id")
-def trash(message_id: str):
-    """Move a message to trash."""
-    get_gmail().users().messages().trash(userId="me", id=message_id).execute()
-    click.echo(f"Trashed: {message_id}", err=True)
+@click.argument("message_ids", nargs=-1, required=True)
+def trash(message_ids: tuple[str, ...]):
+    """Move messages to trash."""
+    service = get_gmail()
+    batch = service.new_batch_http_request(callback=_raise_on_error)
+    for msg_id in message_ids:
+        batch.add(service.users().messages().trash(userId="me", id=msg_id))
+    batch.execute()
+    n = len(message_ids)
+    click.echo(f"Trashed {n} message{'s' if n != 1 else ''}", err=True)
 
 
 def _extract_attachments(parts: list, attachments: list) -> None:

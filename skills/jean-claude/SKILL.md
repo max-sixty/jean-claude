@@ -208,21 +208,22 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft delete DRAFT_ID
 ### Manage Messages
 
 ```bash
+# All these commands accept multiple IDs for batch efficiency
 # Star/unstar
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail star MESSAGE_ID
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unstar MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail star MSG_ID1 [MSG_ID2 ...]
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unstar MSG_ID1 [MSG_ID2 ...]
 
 # Archive/unarchive
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive MSG_ID1 [MSG_ID2 ...]
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive --query "from:newsletter@example.com"
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unarchive MESSAGE_ID
 
 # Mark read/unread
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-read MESSAGE_ID
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-unread MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-read MSG_ID1 [MSG_ID2 ...]
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-unread MSG_ID1 [MSG_ID2 ...]
 
 # Trash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail trash MESSAGE_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail trash MSG_ID1 [MSG_ID2 ...]
 ```
 
 ### Attachments
