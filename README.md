@@ -26,11 +26,11 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ## Installation
 
-In Claude Code, run:
+From your terminal, run:
 
-```
-/plugin marketplace add max-sixty/jean-claude
-/plugin install jean-claude@jean-claude
+```bash
+claude plugin marketplace add max-sixty/jean-claude
+claude plugin install jean-claude@jean-claude
 ```
 
 ## Setup
