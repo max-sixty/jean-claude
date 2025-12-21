@@ -275,8 +275,8 @@ def draft_create():
         .create(userId="me", body={"message": {"raw": raw}})
         .execute()
     )
-    click.echo(f"Draft created: {result['id']}")
-    click.echo(f"View: {draft_url(result)}")
+    click.echo(f"Draft created: {result['id']}", err=True)
+    click.echo(f"View: {draft_url(result)}", err=True)
 
 
 @draft.command("send")
@@ -290,7 +290,7 @@ def draft_send(draft_id: str):
     result = (
         get_gmail().users().drafts().send(userId="me", body={"id": draft_id}).execute()
     )
-    click.echo(f"Sent: {result['id']}")
+    click.echo(f"Sent: {result['id']}", err=True)
 
 
 def _create_reply_draft(
@@ -413,8 +413,8 @@ def draft_reply(message_id: str):
         raise click.UsageError("Missing required field: body")
 
     draft_id, url = _create_reply_draft(message_id, data["body"], include_cc=False)
-    click.echo(f"Reply draft created: {draft_id}")
-    click.echo(f"View: {url}")
+    click.echo(f"Reply draft created: {draft_id}", err=True)
+    click.echo(f"View: {url}", err=True)
 
 
 @draft.command("reply-all")
@@ -434,8 +434,8 @@ def draft_reply_all(message_id: str):
         raise click.UsageError("Missing required field: body")
 
     draft_id, url = _create_reply_draft(message_id, data["body"], include_cc=True)
-    click.echo(f"Reply-all draft created: {draft_id}")
-    click.echo(f"View: {url}")
+    click.echo(f"Reply-all draft created: {draft_id}", err=True)
+    click.echo(f"View: {url}", err=True)
 
 
 @draft.command("forward")
@@ -489,8 +489,8 @@ def draft_forward(message_id: str):
         .create(userId="me", body={"message": {"raw": raw}})
         .execute()
     )
-    click.echo(f"Forward draft created: {result['id']}")
-    click.echo(f"View: {draft_url(result)}")
+    click.echo(f"Forward draft created: {result['id']}", err=True)
+    click.echo(f"View: {draft_url(result)}", err=True)
 
 
 @draft.command("list")
@@ -570,7 +570,7 @@ def draft_delete(draft_id: str):
         jean-claude gmail draft delete r-123456789
     """
     get_gmail().users().drafts().delete(userId="me", id=draft_id).execute()
-    click.echo(f"Deleted: {draft_id}")
+    click.echo(f"Deleted: {draft_id}", err=True)
 
 
 @cli.command()
@@ -580,7 +580,7 @@ def star(message_id: str):
     get_gmail().users().messages().modify(
         userId="me", id=message_id, body={"addLabelIds": ["STARRED"]}
     ).execute()
-    click.echo(f"Starred: {message_id}")
+    click.echo(f"Starred: {message_id}", err=True)
 
 
 @cli.command()
@@ -590,7 +590,7 @@ def unstar(message_id: str):
     get_gmail().users().messages().modify(
         userId="me", id=message_id, body={"removeLabelIds": ["STARRED"]}
     ).execute()
-    click.echo(f"Unstarred: {message_id}")
+    click.echo(f"Unstarred: {message_id}", err=True)
 
 
 @cli.command()
@@ -647,7 +647,7 @@ def archive(message_ids: tuple[str, ...], query: str | None, max_results: int):
         )
     batch.execute()
 
-    click.echo(f"Archived {len(ids_to_archive)} message(s)")
+    click.echo(f"Archived {len(ids_to_archive)} message(s)", err=True)
 
 
 @cli.command()
@@ -657,7 +657,7 @@ def unarchive(message_id: str):
     get_gmail().users().messages().modify(
         userId="me", id=message_id, body={"addLabelIds": ["INBOX"]}
     ).execute()
-    click.echo(f"Moved to inbox: {message_id}")
+    click.echo(f"Moved to inbox: {message_id}", err=True)
 
 
 @cli.command("mark-read")
@@ -667,7 +667,7 @@ def mark_read(message_id: str):
     get_gmail().users().messages().modify(
         userId="me", id=message_id, body={"removeLabelIds": ["UNREAD"]}
     ).execute()
-    click.echo(f"Marked read: {message_id}")
+    click.echo(f"Marked read: {message_id}", err=True)
 
 
 @cli.command("mark-unread")
@@ -677,7 +677,7 @@ def mark_unread(message_id: str):
     get_gmail().users().messages().modify(
         userId="me", id=message_id, body={"addLabelIds": ["UNREAD"]}
     ).execute()
-    click.echo(f"Marked unread: {message_id}")
+    click.echo(f"Marked unread: {message_id}", err=True)
 
 
 @cli.command()
@@ -685,7 +685,7 @@ def mark_unread(message_id: str):
 def trash(message_id: str):
     """Move a message to trash."""
     get_gmail().users().messages().trash(userId="me", id=message_id).execute()
-    click.echo(f"Trashed: {message_id}")
+    click.echo(f"Trashed: {message_id}", err=True)
 
 
 def _extract_attachments(parts: list, attachments: list) -> None:
@@ -763,4 +763,4 @@ def attachment_download(message_id: str, attachment_id: str, output: str):
 
     data = base64.urlsafe_b64decode(attachment["data"])
     Path(output).write_bytes(data)
-    click.echo(f"Downloaded: {output} ({len(data):,} bytes)")
+    click.echo(f"Downloaded: {output} ({len(data):,} bytes)", err=True)
