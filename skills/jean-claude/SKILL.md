@@ -161,12 +161,16 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude completions fish | source
 # Inbox emails from a sender
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:inbox from:someone@example.com"
 
+# Limit results (-n or --max-results)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "from:newsletter@example.com" -n 10
+
 # Unread inbox emails
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:inbox is:unread"
 
 # Shortcut for inbox
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox --unread
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox -n 5
 ```
 
 Common Gmail search operators: `in:inbox`, `is:unread`, `is:starred`, `from:`,
@@ -192,8 +196,14 @@ cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft fo
 {"to": "someone@example.com", "body": "FYI - see below"}
 EOF
 
+# Reply-all (includes all original recipients)
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply-all MESSAGE_ID
+{"body": "Thanks everyone!"}
+EOF
+
 # List drafts
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list -n 5
 
 # Get full draft body
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft get DRAFT_ID
@@ -249,6 +259,9 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --days 7
 
 # Date range
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --from 2025-01-15 --to 2025-01-20
+
+# JSON output for parsing
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --json
 ```
 
 ### Create Events
@@ -258,10 +271,12 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --from 2025-01-15 -
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Team Meeting" \
   --start "2025-01-15 14:00" --end "2025-01-15 15:00"
 
-# With attendees
+# With attendees, location, and description
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "1:1 with Alice" \
   --start "2025-01-15 10:00" --duration 30 \
-  --attendees alice@example.com
+  --attendees alice@example.com \
+  --location "Conference Room A" \
+  --description "Weekly sync"
 
 # All-day event (single day)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Holiday" \
@@ -275,8 +290,9 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Vacation" \
 ### Search & Manage Events
 
 ```bash
-# Search
+# Search (default: 30 days)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal search "standup"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal search "standup" --days 90 --json
 
 # Update
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal update EVENT_ID --start "2025-01-16 14:00"
@@ -292,9 +308,12 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal delete EVENT_ID --notify
 ```bash
 # List files in root
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive list
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive list -n 20
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive list --folder FOLDER_ID --json
 
 # Search
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive search "quarterly report"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive search "quarterly report" -n 10 --json
 ```
 
 ### Download & Upload
@@ -303,8 +322,11 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive search "quarterly repo
 # Download
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive download FILE_ID output.pdf
 
-# Upload
+# Upload to root
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive upload document.pdf
+
+# Upload to folder with custom name
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive upload document.pdf --folder FOLDER_ID --name "Q4 Report.pdf"
 ```
 
 ### Manage Files
@@ -350,6 +372,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file "+12025551
 ```bash
 # List chats (shows name and chat ID)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage chats
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage chats -n 10
 
 # Get participants
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage participants "any;+;chat123456789"
@@ -362,11 +385,13 @@ Other: `imessage open CHAT_ID` opens a chat in Messages.app (brings app to focus
 ```bash
 # Unread messages
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage unread
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage unread -n 50
 
-# Search messages
+# Search messages (-n limits results)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage search "dinner plans"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage search "dinner plans" -n 20
 
-# Chat history
+# Chat history (-n limits messages)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage history "any;-;+12025551234" -n 20
 ```
 
