@@ -1,4 +1,69 @@
-"""Gmail CLI - search, draft, and send emails."""
+"""Gmail CLI - search, draft, and send emails.
+
+Rate Limits and Batching Strategy
+==================================
+
+Gmail API enforces per-user quota limits: 15,000 units/minute (≈250 units/second).
+
+Quota Costs
+-----------
+- messages.batchModify: 50 units (up to 1000 messages)
+- messages.modify: 5 units per message
+- messages.get: 5 units per message
+- messages.trash: 5 units per message
+- messages.send: 100 units per message
+
+jean-claude Batching Strategy
+------------------------------
+
+Label operations (star, archive, mark-read, mark-unread, unarchive):
+    Uses messages.batchModify API
+    - Processes up to 1000 messages per API call
+    - Cost: 50 units per call regardless of message count
+    - Chunk size: 1000 messages
+    - Delay between chunks: 0.5 seconds (only for 1000+ messages)
+    - Rate limits virtually impossible to hit with normal usage
+
+    Examples:
+        - Archive 50 messages = 50 units (one API call)
+        - Archive 1000 messages = 50 units (one API call)
+        - Archive 2500 messages = 150 units (three API calls)
+
+Trash operations:
+    Uses individual messages.trash calls (no batchTrash API)
+    - Batch HTTP requests with 50 messages per batch
+    - Cost: 5 units per message
+    - Delay between batches: 0.3 seconds
+    - Throughput: ~833 messages/minute
+    - Note: Consider using archive instead for bulk inbox cleanup
+
+Search operations:
+    Fetches message details in batches of 15
+    - Cost: 5 units per message
+    - Delay between batches: 0.3 seconds
+    - Throughput: ~50 messages/second
+
+Error Handling
+--------------
+Rate limit errors (rare with batchModify) include:
+    - Progress tracking (how many messages succeeded)
+    - Partial completion (remaining message IDs for retry)
+    - Actionable guidance (specific commands to run)
+    - Automatic delays between chunks
+
+Troubleshooting Rate Limits
+----------------------------
+If you encounter rate limits:
+    1. Check concurrent clients: Other apps using Gmail API share your quota
+    2. Wait between operations: Allow 5-10 seconds between large bulk operations
+    3. Use query filters: For archive/trash, use --query to filter server-side
+    4. Consider daily limits: Daily sending limits (500/2000) are separate from quota
+
+References
+----------
+https://developers.google.com/gmail/api/reference/rest/v1/users.messages/batchModify
+https://developers.google.com/workspace/gmail/api/reference/quota
+"""
 
 from __future__ import annotations
 
@@ -40,6 +105,89 @@ def _raise_on_error(_request_id, _response, exception):
     """Batch callback that only raises exceptions (ignores responses)."""
     if exception:
         raise exception
+
+
+def _batch_modify_labels(
+    service,
+    message_ids: list[str],
+    add_label_ids: list[str] | None = None,
+    remove_label_ids: list[str] | None = None,
+):
+    """Modify labels on messages using Gmail's batchModify API.
+
+    Gmail API quota: messages.batchModify costs 50 units for up to 1000 messages
+    Example: 1000 messages = 50 units (single API call)
+    See module docstring for detailed analysis
+
+    Args:
+        service: Gmail API service instance
+        message_ids: List of message IDs to process (up to 1000 per call)
+        add_label_ids: Label IDs to add (e.g., ["STARRED", "INBOX"])
+        remove_label_ids: Label IDs to remove (e.g., ["UNREAD"])
+    """
+    from googleapiclient.errors import HttpError
+
+    if not message_ids:
+        return
+
+    # batchModify supports up to 1000 messages per call
+    chunk_size = 1000
+    processed_count = 0
+
+    for i in range(0, len(message_ids), chunk_size):
+        chunk = message_ids[i : i + chunk_size]
+        body = {"ids": chunk}
+        if add_label_ids:
+            body["addLabelIds"] = add_label_ids
+        if remove_label_ids:
+            body["removeLabelIds"] = remove_label_ids
+
+        try:
+            service.users().messages().batchModify(userId="me", body=body).execute()
+            processed_count += len(chunk)
+        except HttpError as e:
+            if e.resp.status == 429:
+                remaining = message_ids[i:]
+                raise click.ClickException(
+                    f"Gmail API rate limit exceeded.\n\n"
+                    f"Progress: Successfully processed {processed_count} of {len(message_ids)} messages.\n"
+                    f"Remaining: {len(remaining)} messages still need processing.\n\n"
+                    f"Action required:\n"
+                    f"1. Wait 5-10 seconds for rate limit to reset\n"
+                    f"2. Retry with the remaining {len(remaining)} message IDs:\n"
+                    f"   {' '.join(remaining[:10])}{'...' if len(remaining) > 10 else ''}\n\n"
+                    f"Note: Using batchModify (50 units per 1000 messages). "
+                    f"See module docstring (help jean_claude.gmail) for details."
+                )
+            elif e.resp.status == 404:
+                remaining = message_ids[i:]
+                raise click.ClickException(
+                    f"One or more message IDs not found.\n\n"
+                    f"Progress: Successfully processed {processed_count} of {len(message_ids)} messages.\n"
+                    f"Failed batch: {' '.join(chunk[:10])}{'...' if len(chunk) > 10 else ''}\n\n"
+                    f"Possible causes:\n"
+                    f"- Message(s) were deleted\n"
+                    f"- Invalid message ID format\n"
+                    f"- Message belongs to a different account\n\n"
+                    f"Action required: Verify the message IDs and retry with valid IDs only."
+                )
+            elif e.resp.status in (401, 403):
+                raise click.ClickException(
+                    f"Gmail API authentication failed (HTTP {e.resp.status}).\n\n"
+                    f"Possible causes:\n"
+                    f"- Credentials expired or revoked\n"
+                    f"- Insufficient permissions for this operation\n"
+                    f"- API not enabled in Google Cloud project\n\n"
+                    f"Action required:\n"
+                    f"1. Check authentication: jean-claude status\n"
+                    f"2. Re-authenticate if needed: jean-claude auth\n"
+                    f"3. Verify required scopes are granted"
+                )
+            raise
+
+        # Add small delay between 1000-message chunks (only needed for 1000+ messages)
+        if i + chunk_size < len(message_ids):
+            time.sleep(0.5)
 
 
 def _strip_html(html: str) -> str:
@@ -218,9 +366,13 @@ def _search_messages(query: str, max_results: int, page_token: str | None = None
         click.echo(json.dumps(output, indent=2))
         return
 
-    # Batch fetch messages in chunks of 20 to avoid rate limits
+    # Batch fetch messages in chunks to avoid rate limits
+    # messages.get costs 5 quota units per operation
+    # Strategy: 15 messages/chunk × 5 units = 75 units/chunk
+    # With 0.3s delay: ~250 units/second (100% of limit, acceptable for search)
+    # See module docstring for detailed analysis
     responses = {}
-    chunk_size = 20
+    chunk_size = 15
 
     for i in range(0, len(messages), chunk_size):
         chunk = messages[i : i + chunk_size]
@@ -232,7 +384,7 @@ def _search_messages(query: str, max_results: int, page_token: str | None = None
             )
         batch.execute()
         if i + chunk_size < len(messages):
-            time.sleep(0.2)
+            time.sleep(0.3)
 
     detailed = [
         extract_message_summary(responses[m["id"]])
@@ -585,14 +737,7 @@ def draft_delete(draft_id: str):
 def star(message_ids: tuple[str, ...]):
     """Star messages."""
     service = get_gmail()
-    batch = service.new_batch_http_request(callback=_raise_on_error)
-    for msg_id in message_ids:
-        batch.add(
-            service.users()
-            .messages()
-            .modify(userId="me", id=msg_id, body={"addLabelIds": ["STARRED"]})
-        )
-    batch.execute()
+    _batch_modify_labels(service, list(message_ids), add_label_ids=["STARRED"])
     n = len(message_ids)
     click.echo(f"Starred {n} message{'s' if n != 1 else ''}", err=True)
 
@@ -602,14 +747,7 @@ def star(message_ids: tuple[str, ...]):
 def unstar(message_ids: tuple[str, ...]):
     """Remove star from messages."""
     service = get_gmail()
-    batch = service.new_batch_http_request(callback=_raise_on_error)
-    for msg_id in message_ids:
-        batch.add(
-            service.users()
-            .messages()
-            .modify(userId="me", id=msg_id, body={"removeLabelIds": ["STARRED"]})
-        )
-    batch.execute()
+    _batch_modify_labels(service, list(message_ids), remove_label_ids=["STARRED"])
     n = len(message_ids)
     click.echo(f"Unstarred {n} message{'s' if n != 1 else ''}", err=True)
 
@@ -659,14 +797,7 @@ def archive(message_ids: tuple[str, ...], query: str | None, max_results: int):
         click.echo("No messages to archive.", err=True)
         return
 
-    batch = service.new_batch_http_request(callback=_raise_on_error)
-    for msg_id in ids_to_archive:
-        batch.add(
-            service.users()
-            .messages()
-            .modify(userId="me", id=msg_id, body={"removeLabelIds": ["INBOX"]})
-        )
-    batch.execute()
+    _batch_modify_labels(service, ids_to_archive, remove_label_ids=["INBOX"])
 
     n = len(ids_to_archive)
     click.echo(f"Archived {n} message{'s' if n != 1 else ''}", err=True)
@@ -677,15 +808,7 @@ def archive(message_ids: tuple[str, ...], query: str | None, max_results: int):
 def unarchive(message_ids: tuple[str, ...]):
     """Move messages back to inbox."""
     service = get_gmail()
-    batch = service.new_batch_http_request(callback=_raise_on_error)
-    for msg_id in message_ids:
-        batch.add(
-            service.users()
-            .messages()
-            .modify(userId="me", id=msg_id, body={"addLabelIds": ["INBOX"]})
-        )
-    batch.execute()
-
+    _batch_modify_labels(service, list(message_ids), add_label_ids=["INBOX"])
     n = len(message_ids)
     click.echo(f"Moved {n} message{'s' if n != 1 else ''} to inbox", err=True)
 
@@ -695,14 +818,7 @@ def unarchive(message_ids: tuple[str, ...]):
 def mark_read(message_ids: tuple[str, ...]):
     """Mark messages as read."""
     service = get_gmail()
-    batch = service.new_batch_http_request(callback=_raise_on_error)
-    for msg_id in message_ids:
-        batch.add(
-            service.users()
-            .messages()
-            .modify(userId="me", id=msg_id, body={"removeLabelIds": ["UNREAD"]})
-        )
-    batch.execute()
+    _batch_modify_labels(service, list(message_ids), remove_label_ids=["UNREAD"])
     n = len(message_ids)
     click.echo(f"Marked {n} message{'s' if n != 1 else ''} read", err=True)
 
@@ -712,14 +828,7 @@ def mark_read(message_ids: tuple[str, ...]):
 def mark_unread(message_ids: tuple[str, ...]):
     """Mark messages as unread."""
     service = get_gmail()
-    batch = service.new_batch_http_request(callback=_raise_on_error)
-    for msg_id in message_ids:
-        batch.add(
-            service.users()
-            .messages()
-            .modify(userId="me", id=msg_id, body={"addLabelIds": ["UNREAD"]})
-        )
-    batch.execute()
+    _batch_modify_labels(service, list(message_ids), add_label_ids=["UNREAD"])
     n = len(message_ids)
     click.echo(f"Marked {n} message{'s' if n != 1 else ''} unread", err=True)
 
@@ -727,12 +836,25 @@ def mark_unread(message_ids: tuple[str, ...]):
 @cli.command()
 @click.argument("message_ids", nargs=-1, required=True)
 def trash(message_ids: tuple[str, ...]):
-    """Move messages to trash."""
+    """Move messages to trash.
+
+    Note: Uses individual trash operations (no batchTrash API exists).
+    For bulk operations, consider using archive instead.
+    """
     service = get_gmail()
-    batch = service.new_batch_http_request(callback=_raise_on_error)
-    for msg_id in message_ids:
-        batch.add(service.users().messages().trash(userId="me", id=msg_id))
-    batch.execute()
+
+    # No batchTrash API - use batch HTTP requests (5 units per trash operation)
+    # Process in chunks to avoid overwhelming the API
+    chunk_size = 50  # Conservative for individual operations
+    for i in range(0, len(message_ids), chunk_size):
+        chunk = message_ids[i : i + chunk_size]
+        batch = service.new_batch_http_request(callback=_raise_on_error)
+        for msg_id in chunk:
+            batch.add(service.users().messages().trash(userId="me", id=msg_id))
+        batch.execute()
+        if i + chunk_size < len(message_ids):
+            time.sleep(0.3)
+
     n = len(message_ids)
     click.echo(f"Trashed {n} message{'s' if n != 1 else ''}", err=True)
 
