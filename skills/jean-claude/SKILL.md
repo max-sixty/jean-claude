@@ -138,21 +138,38 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude completions fish | source
 1. **List/search** returns compact JSON with summaries and file paths
 2. **Read the file** if you need the full body
 
-**Message JSON schema:**
+**Search response JSON schema:**
 
 ```json
 {
-  "id": "19b29039fd36d1c1",
-  "threadId": "19b29039fd36d1c1",
-  "from": "Name <email@example.com>",
-  "to": "recipient@example.com",
-  "cc": "other@example.com",
-  "subject": "Subject line",
-  "date": "Tue, 16 Dec 2025 21:12:21 +0000",
-  "snippet": "First ~200 chars of body...",
-  "labels": ["INBOX", "UNREAD"],
-  "file": ".tmp/email-19b29039fd36d1c1.txt"
+  "messages": [
+    {
+      "id": "19b29039fd36d1c1",
+      "threadId": "19b29039fd36d1c1",
+      "from": "Name <email@example.com>",
+      "to": "recipient@example.com",
+      "cc": "other@example.com",
+      "subject": "Subject line",
+      "date": "Tue, 16 Dec 2025 21:12:21 +0000",
+      "snippet": "First ~200 chars of body...",
+      "labels": ["INBOX", "UNREAD"],
+      "file": ".tmp/email-19b29039fd36d1c1.txt"
+    }
+  ],
+  "nextPageToken": "abc123..."
 }
+```
+
+The `nextPageToken` field is only present when more results are available. Use
+`--page-token` to fetch the next page:
+
+```bash
+# First page
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "is:unread" -n 50
+
+# If nextPageToken is in the response, fetch next page
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "is:unread" -n 50 \
+  --page-token "TOKEN_FROM_PREVIOUS_RESPONSE"
 ```
 
 ### Search Emails

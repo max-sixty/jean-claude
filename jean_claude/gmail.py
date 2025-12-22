@@ -180,38 +180,42 @@ def cli(verbose: bool):
 @cli.command()
 @click.option("-n", "--max-results", default=100, help="Maximum results")
 @click.option("--unread", is_flag=True, help="Only show unread messages")
-def inbox(max_results: int, unread: bool):
+@click.option("--page-token", help="Token for next page of results")
+def inbox(max_results: int, unread: bool, page_token: str | None):
     """List messages in inbox (shortcut for search "in:inbox")."""
     query = "in:inbox"
     if unread:
         query += " is:unread"
-    _search_messages(query, max_results)
+    _search_messages(query, max_results, page_token)
 
 
 @cli.command()
 @click.argument("query")
 @click.option("-n", "--max-results", default=100, help="Maximum results")
-def search(query: str, max_results: int):
+@click.option("--page-token", help="Token for next page of results")
+def search(query: str, max_results: int, page_token: str | None):
     """Search Gmail messages.
 
     QUERY: Gmail search query (e.g., 'is:unread', 'from:someone@example.com')
     """
-    _search_messages(query, max_results)
+    _search_messages(query, max_results, page_token)
 
 
-def _search_messages(query: str, max_results: int):
+def _search_messages(query: str, max_results: int, page_token: str | None = None):
     """Shared search implementation."""
     service = get_gmail()
-    results = (
-        service.users()
-        .messages()
-        .list(userId="me", q=query, maxResults=max_results)
-        .execute()
-    )
+    list_kwargs = {"userId": "me", "q": query, "maxResults": max_results}
+    if page_token:
+        list_kwargs["pageToken"] = page_token
+    results = service.users().messages().list(**list_kwargs).execute()
     messages = results.get("messages", [])
+    next_page_token = results.get("nextPageToken")
 
     if not messages:
-        click.echo(json.dumps([]))
+        output: dict = {"messages": []}
+        if next_page_token:
+            output["nextPageToken"] = next_page_token
+        click.echo(json.dumps(output, indent=2))
         return
 
     # Batch fetch messages in chunks of 20 to avoid rate limits
@@ -235,7 +239,10 @@ def _search_messages(query: str, max_results: int):
         for m in messages
         if m["id"] in responses
     ]
-    click.echo(json.dumps(detailed, indent=2))
+    output = {"messages": detailed}
+    if next_page_token:
+        output["nextPageToken"] = next_page_token
+    click.echo(json.dumps(output, indent=2))
 
 
 # Draft command group
