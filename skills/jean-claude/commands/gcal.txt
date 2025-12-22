@@ -1,0 +1,13 @@
+Usage: jean-claude gcal [OPTIONS] COMMAND [ARGS]...
+
+  Google Calendar CLI - list, create, and search events.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  create  Create a calendar event.
+  delete  Delete/cancel a calendar event.
+  list    List calendar events.
+  search  Search calendar events.
+  update  Update/modify an existing calendar event.

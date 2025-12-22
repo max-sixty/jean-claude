@@ -1,0 +1,6 @@
+Usage: jean-claude gmail star [OPTIONS] MESSAGE_IDS...
+
+  Star messages.
+
+Options:
+  --help  Show this message and exit.

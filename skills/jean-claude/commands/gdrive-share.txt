@@ -1,0 +1,11 @@
+Usage: jean-claude gdrive share [OPTIONS] FILE_ID EMAIL
+
+  Share a file or folder.
+
+  FILE_ID: The file/folder ID to share EMAIL: Email address to share with
+
+Options:
+  --role [reader|commenter|writer]
+                                  Permission level
+  --notify                        Send notification email
+  --help                          Show this message and exit.

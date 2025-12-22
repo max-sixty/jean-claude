@@ -1,0 +1,11 @@
+Usage: jean-claude imessage history [OPTIONS] CHAT_ID
+
+  Get message history for a specific chat (requires Full Disk Access).
+
+  CHAT_ID: The chat ID (e.g., any;-;+12025551234 or any;+;chat123...)
+
+  Example:     jean-claude imessage history "any;-;+12025551234" -n 10
+
+Options:
+  -n, --max-results INTEGER  Maximum messages to return
+  --help                     Show this message and exit.

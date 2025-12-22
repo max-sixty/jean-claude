@@ -1,0 +1,6 @@
+Usage: jean-claude gmail mark-read [OPTIONS] MESSAGE_IDS...
+
+  Mark messages as read.
+
+Options:
+  --help  Show this message and exit.

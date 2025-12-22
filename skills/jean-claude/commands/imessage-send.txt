@@ -1,0 +1,12 @@
+Usage: jean-claude imessage send [OPTIONS] RECIPIENT MESSAGE
+
+  Send an iMessage to a phone number or chat ID.
+
+  RECIPIENT: Phone number (+1234567890) or chat ID (any;+;chat123...) MESSAGE:
+  The message text to send
+
+  Examples:     jean-claude imessage send "+12025551234" "Hello!"     jean-
+  claude imessage send "any;+;chat123456789" "Hello group!"
+
+Options:
+  --help  Show this message and exit.

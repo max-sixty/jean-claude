@@ -1,0 +1,6 @@
+Usage: jean-claude gdrive untrash [OPTIONS] FILE_ID
+
+  Restore a file from trash.
+
+Options:
+  --help  Show this message and exit.

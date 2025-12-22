@@ -1,0 +1,14 @@
+Usage: jean-claude gmail archive [OPTIONS] [MESSAGE_IDS]...
+
+  Archive messages (remove from inbox).
+
+  Can archive by ID(s) or by query. Query automatically filters to inbox.
+
+  Examples:     jean-claude gmail archive MSG_ID1 MSG_ID2     jean-claude
+  gmail archive --query "from:newsletter@example.com"
+
+Options:
+  -q, --query TEXT           Archive all inbox messages matching query (e.g.,
+                             'from:example.com')
+  -n, --max-results INTEGER  Max messages to archive when using --query
+  --help                     Show this message and exit.

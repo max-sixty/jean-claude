@@ -1,0 +1,6 @@
+Usage: jean-claude gdrive trash [OPTIONS] FILE_ID
+
+  Move a file to trash.
+
+Options:
+  --help  Show this message and exit.

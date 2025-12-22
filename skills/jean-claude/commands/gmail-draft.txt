@@ -1,0 +1,131 @@
+# gmail draft
+
+Usage: jean-claude gmail draft [OPTIONS] COMMAND [ARGS]...
+
+  Manage email drafts.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  create     Create a new email draft from JSON stdin.
+  delete     Permanently delete a draft.
+  forward    Create a forward draft from JSON stdin.
+  get        Get a draft with full body, written to file.
+  list       List drafts.
+  reply      Create a reply draft from JSON stdin.
+  reply-all  Create a reply-all draft from JSON stdin.
+  send       Send an existing draft.
+
+
+## gmail draft create
+
+Usage: jean-claude gmail draft create [OPTIONS]
+
+  Create a new email draft from JSON stdin.
+
+  JSON fields: to (required), subject (required), body (required), cc, bcc
+
+  Example:     echo '{"to": "x@y.com", "subject": "Hi!", "body": "Hello!"}' |
+  jean-claude gmail draft create
+
+Options:
+  --help  Show this message and exit.
+
+
+## gmail draft delete
+
+Usage: jean-claude gmail draft delete [OPTIONS] DRAFT_ID
+
+  Permanently delete a draft.
+
+  Example:     jean-claude gmail draft delete r-123456789
+
+Options:
+  --help  Show this message and exit.
+
+
+## gmail draft forward
+
+Usage: jean-claude gmail draft forward [OPTIONS] MESSAGE_ID
+
+  Create a forward draft from JSON stdin.
+
+  JSON fields: to (required), body (optional, prepended to forwarded message)
+
+  Example:     echo '{"to": "x@y.com", "body": "FYI"}' | jean-claude gmail
+  draft forward MSG_ID
+
+Options:
+  --help  Show this message and exit.
+
+
+## gmail draft get
+
+Usage: jean-claude gmail draft get [OPTIONS] DRAFT_ID
+
+  Get a draft with full body, written to file.
+
+  Example:     jean-claude gmail draft get r-123456789
+
+Options:
+  --help  Show this message and exit.
+
+
+## gmail draft list
+
+Usage: jean-claude gmail draft list [OPTIONS]
+
+  List drafts.
+
+  Example:     jean-claude gmail draft list
+
+Options:
+  -n, --max-results INTEGER  Maximum results
+  --help                     Show this message and exit.
+
+
+## gmail draft reply
+
+Usage: jean-claude gmail draft reply [OPTIONS] MESSAGE_ID
+
+  Create a reply draft from JSON stdin.
+
+  Preserves threading with the original message.
+
+  JSON fields: body (required)
+
+  Example:     echo '{"body": "Thanks!"}' | jean-claude gmail draft reply
+  MSG_ID
+
+Options:
+  --help  Show this message and exit.
+
+
+## gmail draft reply-all
+
+Usage: jean-claude gmail draft reply-all [OPTIONS] MESSAGE_ID
+
+  Create a reply-all draft from JSON stdin.
+
+  Preserves threading and includes all original recipients.
+
+  JSON fields: body (required)
+
+  Example:     echo '{"body": "Thanks!"}' | jean-claude gmail draft reply-all
+  MSG_ID
+
+Options:
+  --help  Show this message and exit.
+
+
+## gmail draft send
+
+Usage: jean-claude gmail draft send [OPTIONS] DRAFT_ID
+
+  Send an existing draft.
+
+  Example:     jean-claude gmail draft send r-123456789
+
+Options:
+  --help  Show this message and exit.

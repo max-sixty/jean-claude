@@ -1,0 +1,17 @@
+Usage: jean-claude gcal update [OPTIONS] EVENT_ID
+
+  Update/modify an existing calendar event.
+
+  EVENT_ID: The event ID (from list or search output)
+
+  Only specified fields are updated; others remain unchanged.
+
+Options:
+  --summary TEXT      New event title
+  --start TEXT        New start time (YYYY-MM-DD HH:MM)
+  --end TEXT          New end time (YYYY-MM-DD HH:MM)
+  --duration INTEGER  New duration in minutes (alternative to --end)
+  --location TEXT     New location
+  --description TEXT  New description
+  --notify            Send update emails to attendees
+  --help              Show this message and exit.

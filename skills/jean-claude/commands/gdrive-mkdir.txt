@@ -1,0 +1,9 @@
+Usage: jean-claude gdrive mkdir [OPTIONS] NAME
+
+  Create a folder.
+
+  NAME: Folder name
+
+Options:
+  --folder TEXT  Parent folder ID (default: root)
+  --help         Show this message and exit.

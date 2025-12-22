@@ -1,0 +1,18 @@
+Usage: jean-claude completions [OPTIONS] {bash|zsh|fish}
+
+  Generate shell completion script.
+
+  Output the completion script for the specified shell. Add to your shell
+  config to enable tab completion.
+
+  Bash (~/.bashrc):
+      eval "$(jean-claude completions bash)"
+
+  Zsh (~/.zshrc):
+      eval "$(jean-claude completions zsh)"
+
+  Fish (~/.config/fish/config.fish):
+      jean-claude completions fish | source
+
+Options:
+  --help  Show this message and exit.

@@ -1,0 +1,9 @@
+Usage: jean-claude gcal delete [OPTIONS] EVENT_ID
+
+  Delete/cancel a calendar event.
+
+  EVENT_ID: The event ID (from list or search output)
+
+Options:
+  --notify  Send cancellation emails to attendees
+  --help    Show this message and exit.

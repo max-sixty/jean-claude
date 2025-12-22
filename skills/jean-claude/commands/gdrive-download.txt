@@ -1,0 +1,8 @@
+Usage: jean-claude gdrive download [OPTIONS] FILE_ID OUTPUT
+
+  Download a file.
+
+  FILE_ID: The file ID to download OUTPUT: Local path to save the file
+
+Options:
+  --help  Show this message and exit.

@@ -1,0 +1,13 @@
+Usage: jean-claude gmail attachment-download [OPTIONS] MESSAGE_ID
+                                             ATTACHMENT_ID OUTPUT
+
+  Download an attachment from a message.
+
+  Use 'jean-claude gmail attachments MSG_ID' to get attachment IDs.
+
+  Example:
+      jean-claude gmail attachments MSG_ID
+      jean-claude gmail attachment-download MSG_ID ATTACH_ID ./file.pdf
+
+Options:
+  --help  Show this message and exit.

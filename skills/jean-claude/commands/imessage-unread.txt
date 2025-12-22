@@ -1,0 +1,12 @@
+Usage: jean-claude imessage unread [OPTIONS]
+
+  List unread messages (requires Full Disk Access).
+
+  Shows messages that haven't been read yet, excluding messages you sent.
+
+  Example:     jean-claude imessage unread     jean-claude imessage unread -n
+  50
+
+Options:
+  -n, --max-results INTEGER  Maximum messages to return
+  --help                     Show this message and exit.

@@ -1,0 +1,10 @@
+Usage: jean-claude gdrive upload [OPTIONS] FILE_PATH
+
+  Upload a file.
+
+  FILE_PATH: Local file to upload
+
+Options:
+  --folder TEXT  Parent folder ID (default: root)
+  --name TEXT    Name in Drive (default: local filename)
+  --help         Show this message and exit.

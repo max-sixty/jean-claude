@@ -1,0 +1,11 @@
+Usage: jean-claude imessage chats [OPTIONS]
+
+  List available iMessage chats.
+
+  Shows chat name (if any) and chat ID. Use chat ID to send to groups.
+
+  Example:     jean-claude imessage chats
+
+Options:
+  -n, --max-results INTEGER  Maximum chats to list
+  --help                     Show this message and exit.

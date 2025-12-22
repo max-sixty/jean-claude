@@ -1,0 +1,21 @@
+Usage: jean-claude gmail [OPTIONS] COMMAND [ARGS]...
+
+  Gmail CLI - search, draft, and send emails.
+
+Options:
+  --verbose  Enable verbose logging
+  --help     Show this message and exit.
+
+Commands:
+  archive              Archive messages (remove from inbox).
+  attachment-download  Download an attachment from a message.
+  attachments          List attachments for a message.
+  draft                Manage email drafts.
+  inbox                List messages in inbox (shortcut for search...
+  mark-read            Mark messages as read.
+  mark-unread          Mark messages as unread.
+  search               Search Gmail messages.
+  star                 Star messages.
+  trash                Move messages to trash.
+  unarchive            Move messages back to inbox.
+  unstar               Remove star from messages.

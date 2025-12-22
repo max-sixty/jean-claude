@@ -1,0 +1,6 @@
+Usage: jean-claude gmail unstar [OPTIONS] MESSAGE_IDS...
+
+  Remove star from messages.
+
+Options:
+  --help  Show this message and exit.

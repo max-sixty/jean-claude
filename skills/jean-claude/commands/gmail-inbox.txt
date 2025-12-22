@@ -1,0 +1,9 @@
+Usage: jean-claude gmail inbox [OPTIONS]
+
+  List messages in inbox (shortcut for search "in:inbox").
+
+Options:
+  -n, --max-results INTEGER  Maximum results
+  --unread                   Only show unread messages
+  --page-token TEXT          Token for next page of results
+  --help                     Show this message and exit.

@@ -1,0 +1,10 @@
+Usage: jean-claude gmail search [OPTIONS] QUERY
+
+  Search Gmail messages.
+
+  QUERY: Gmail search query (e.g., 'is:unread', 'from:someone@example.com')
+
+Options:
+  -n, --max-results INTEGER  Maximum results
+  --page-token TEXT          Token for next page of results
+  --help                     Show this message and exit.

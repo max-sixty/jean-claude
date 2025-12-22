@@ -1,0 +1,7 @@
+Usage: jean-claude gdrive get [OPTIONS] FILE_ID
+
+  Get file metadata.
+
+Options:
+  --json  Output as JSON
+  --help  Show this message and exit.

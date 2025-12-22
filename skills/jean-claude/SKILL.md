@@ -138,7 +138,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude completions fish | source
 1. **List/search** returns compact JSON with summaries and file paths
 2. **Read the file** if you need the full body
 
-**Search response JSON schema:**
+**Search/Inbox response schema:**
 
 ```json
 {
@@ -178,7 +178,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "is:unread" -n 5
 # Inbox emails from a sender
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:inbox from:someone@example.com"
 
-# Limit results (-n or --max-results)
+# Limit results with -n
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "from:newsletter@example.com" -n 10
 
 # Unread inbox emails
@@ -188,6 +188,9 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:inbox is:unr
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox --unread
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox -n 5
+
+# Inbox also supports pagination
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox --unread -n 50 --page-token "TOKEN"
 ```
 
 Common Gmail search operators: `in:inbox`, `is:unread`, `is:starred`, `from:`,
@@ -234,24 +237,30 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft delete DRAFT_ID
 
 ### Manage Messages
 
-```bash
-# All these commands accept multiple IDs for batch efficiency
-# Star/unstar
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail star MSG_ID1 [MSG_ID2 ...]
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unstar MSG_ID1 [MSG_ID2 ...]
+All message management commands accept multiple IDs for batch efficiency.
 
-# Archive/unarchive
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive MSG_ID1 [MSG_ID2 ...]
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive --query "from:newsletter@example.com"
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unarchive MESSAGE_ID
+```bash
+# Star/unstar
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail star MSG_ID1 MSG_ID2 MSG_ID3
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unstar MSG_ID1 MSG_ID2
+
+# Archive/unarchive - archive also supports query-based bulk operations
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive MSG_ID1 MSG_ID2 MSG_ID3
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive --query "from:newsletter@example.com" -n 50
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unarchive MSG_ID1 MSG_ID2 MSG_ID3
 
 # Mark read/unread
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-read MSG_ID1 [MSG_ID2 ...]
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-unread MSG_ID1 [MSG_ID2 ...]
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-read MSG_ID1 MSG_ID2
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-unread MSG_ID1 MSG_ID2
 
 # Trash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail trash MSG_ID1 [MSG_ID2 ...]
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail trash MSG_ID1 MSG_ID2 MSG_ID3
 ```
+
+**Batch operation guidelines:**
+- Use multiple IDs when you have a specific list of messages
+- Use `--query` for pattern-based operations (archive supports this)
+- Limit query results with `-n` to avoid accidentally affecting too many messages
 
 ### Attachments
 
@@ -277,7 +286,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --days 7
 # Date range
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --from 2025-01-15 --to 2025-01-20
 
-# JSON output for parsing
+# JSON output - use when you need to parse results programmatically
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --json
 ```
 

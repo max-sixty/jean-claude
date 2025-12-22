@@ -1,0 +1,17 @@
+Usage: jean-claude gdrive [OPTIONS] COMMAND [ARGS]...
+
+  Google Drive CLI - list, search, and manage files.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  download  Download a file.
+  get       Get file metadata.
+  list      List files in a folder.
+  mkdir     Create a folder.
+  search    Search for files.
+  share     Share a file or folder.
+  trash     Move a file to trash.
+  untrash   Restore a file from trash.
+  upload    Upload a file.

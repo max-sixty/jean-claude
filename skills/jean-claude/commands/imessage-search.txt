@@ -1,0 +1,15 @@
+Usage: jean-claude imessage search [OPTIONS] [QUERY]
+
+  Search message history (requires Full Disk Access).
+
+  Searches the local Messages database. Your terminal app must have Full Disk
+  Access in System Preferences > Privacy & Security.
+
+  QUERY: Search term (searches message text)
+
+  Examples:     jean-claude imessage search "dinner plans"     jean-claude
+  imessage search -n 50
+
+Options:
+  -n, --max-results INTEGER  Maximum messages to return
+  --help                     Show this message and exit.

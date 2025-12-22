@@ -1,0 +1,13 @@
+Usage: jean-claude auth [OPTIONS]
+
+  Authenticate with Google APIs.
+
+  By default, requests full access (read, send, modify). Use --readonly to
+  request only read access to Gmail, Calendar, and Drive.
+
+  Use --logout to remove stored credentials.
+
+Options:
+  --readonly  Request read-only access (no send/modify)
+  --logout    Remove stored credentials and log out
+  --help      Show this message and exit.

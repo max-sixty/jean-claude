@@ -673,13 +673,21 @@ def archive(message_ids: tuple[str, ...], query: str | None, max_results: int):
 
 
 @cli.command()
-@click.argument("message_id")
-def unarchive(message_id: str):
-    """Move a message back to inbox."""
-    get_gmail().users().messages().modify(
-        userId="me", id=message_id, body={"addLabelIds": ["INBOX"]}
-    ).execute()
-    click.echo(f"Moved to inbox: {message_id}", err=True)
+@click.argument("message_ids", nargs=-1, required=True)
+def unarchive(message_ids: tuple[str, ...]):
+    """Move messages back to inbox."""
+    service = get_gmail()
+    batch = service.new_batch_http_request(callback=_raise_on_error)
+    for msg_id in message_ids:
+        batch.add(
+            service.users()
+            .messages()
+            .modify(userId="me", id=msg_id, body={"addLabelIds": ["INBOX"]})
+        )
+    batch.execute()
+
+    n = len(message_ids)
+    click.echo(f"Moved {n} message{'s' if n != 1 else ''} to inbox", err=True)
 
 
 @cli.command("mark-read")

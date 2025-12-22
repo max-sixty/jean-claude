@@ -1,0 +1,10 @@
+Usage: jean-claude gcal search [OPTIONS] QUERY
+
+  Search calendar events.
+
+  QUERY: Text to search for in event titles/descriptions
+
+Options:
+  --days INTEGER  Days to search (default: 30)
+  --json          Output as JSON
+  --help          Show this message and exit.

@@ -1,0 +1,6 @@
+Usage: jean-claude gmail trash [OPTIONS] MESSAGE_IDS...
+
+  Move messages to trash.
+
+Options:
+  --help  Show this message and exit.

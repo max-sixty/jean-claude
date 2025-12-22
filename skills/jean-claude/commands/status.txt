@@ -1,0 +1,6 @@
+Usage: jean-claude status [OPTIONS]
+
+  Show authentication status and API availability.
+
+Options:
+  --help  Show this message and exit.

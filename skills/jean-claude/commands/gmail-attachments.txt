@@ -1,0 +1,8 @@
+Usage: jean-claude gmail attachments [OPTIONS] MESSAGE_ID
+
+  List attachments for a message.
+
+  Example:     jean-claude gmail attachments MSG_ID
+
+Options:
+  --help  Show this message and exit.

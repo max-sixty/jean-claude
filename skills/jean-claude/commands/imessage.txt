@@ -1,0 +1,19 @@
+Usage: jean-claude imessage [OPTIONS] COMMAND [ARGS]...
+
+  iMessage CLI - send messages and list chats.
+
+  Send via AppleScript (always works). Reading message history requires Full
+  Disk Access for the terminal app to query ~/Library/Messages/chat.db.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  chats         List available iMessage chats.
+  history       Get message history for a specific chat (requires Full...
+  open          Open a chat in Messages.app (marks messages as read).
+  participants  List participants of a group chat.
+  search        Search message history (requires Full Disk Access).
+  send          Send an iMessage to a phone number or chat ID.
+  send-file     Send a file attachment via iMessage.
+  unread        List unread messages (requires Full Disk Access).

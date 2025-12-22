@@ -1,0 +1,15 @@
+Usage: jean-claude [OPTIONS] COMMAND [ARGS]...
+
+  jean-claude: Gmail, Calendar, Drive, and iMessage integration.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  auth         Authenticate with Google APIs.
+  completions  Generate shell completion script.
+  gcal         Google Calendar CLI - list, create, and search events.
+  gdrive       Google Drive CLI - list, search, and manage files.
+  gmail        Gmail CLI - search, draft, and send emails.
+  imessage     iMessage CLI - send messages and list chats.
+  status       Show authentication status and API availability.
