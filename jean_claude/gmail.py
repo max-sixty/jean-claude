@@ -45,11 +45,15 @@ Search operations:
 
 Error Handling
 --------------
-Rate limit errors (rare with batchModify) include:
+Rate limit errors (429) are automatically retried with exponential backoff:
+    - Retry schedule: 2s, 4s, 8s (max 3 retries, total 14s wait)
+    - User feedback during retry via stderr
+    - If retries exhausted, provides actionable recovery guidance
+
+Rate limit error output includes:
     - Progress tracking (how many messages succeeded)
     - Partial completion (remaining message IDs for retry)
     - Actionable guidance (specific commands to run)
-    - Automatic delays between chunks
 
 Troubleshooting Rate Limits
 ----------------------------
@@ -119,6 +123,9 @@ def _batch_modify_labels(
     Example: 1000 messages = 50 units (single API call)
     See module docstring for detailed analysis
 
+    Rate limit handling: Automatically retries with exponential backoff (2s, 4s, 8s)
+    before failing. Most rate limits resolve within a few seconds.
+
     Args:
         service: Gmail API service instance
         message_ids: List of message IDs to process (up to 1000 per call)
@@ -132,6 +139,7 @@ def _batch_modify_labels(
 
     # batchModify supports up to 1000 messages per call
     chunk_size = 1000
+    max_retries = 3
     processed_count = 0
 
     for i in range(0, len(message_ids), chunk_size):
@@ -142,48 +150,61 @@ def _batch_modify_labels(
         if remove_label_ids:
             body["removeLabelIds"] = remove_label_ids
 
-        try:
-            service.users().messages().batchModify(userId="me", body=body).execute()
-            processed_count += len(chunk)
-        except HttpError as e:
-            if e.resp.status == 429:
-                remaining = message_ids[i:]
-                raise click.ClickException(
-                    f"Gmail API rate limit exceeded.\n\n"
-                    f"Progress: Successfully processed {processed_count} of {len(message_ids)} messages.\n"
-                    f"Remaining: {len(remaining)} messages still need processing.\n\n"
-                    f"Action required:\n"
-                    f"1. Wait 5-10 seconds for rate limit to reset\n"
-                    f"2. Retry with the remaining {len(remaining)} message IDs:\n"
-                    f"   {' '.join(remaining[:10])}{'...' if len(remaining) > 10 else ''}\n\n"
-                    f"Note: Using batchModify (50 units per 1000 messages). "
-                    f"See module docstring (help jean_claude.gmail) for details."
-                )
-            elif e.resp.status == 404:
-                remaining = message_ids[i:]
-                raise click.ClickException(
-                    f"One or more message IDs not found.\n\n"
-                    f"Progress: Successfully processed {processed_count} of {len(message_ids)} messages.\n"
-                    f"Failed batch: {' '.join(chunk[:10])}{'...' if len(chunk) > 10 else ''}\n\n"
-                    f"Possible causes:\n"
-                    f"- Message(s) were deleted\n"
-                    f"- Invalid message ID format\n"
-                    f"- Message belongs to a different account\n\n"
-                    f"Action required: Verify the message IDs and retry with valid IDs only."
-                )
-            elif e.resp.status in (401, 403):
-                raise click.ClickException(
-                    f"Gmail API authentication failed (HTTP {e.resp.status}).\n\n"
-                    f"Possible causes:\n"
-                    f"- Credentials expired or revoked\n"
-                    f"- Insufficient permissions for this operation\n"
-                    f"- API not enabled in Google Cloud project\n\n"
-                    f"Action required:\n"
-                    f"1. Check authentication: jean-claude status\n"
-                    f"2. Re-authenticate if needed: jean-claude auth\n"
-                    f"3. Verify required scopes are granted"
-                )
-            raise
+        # Retry loop with exponential backoff for rate limits
+        for attempt in range(max_retries + 1):
+            try:
+                service.users().messages().batchModify(userId="me", body=body).execute()
+                processed_count += len(chunk)
+                break  # Success - exit retry loop
+            except HttpError as e:
+                if e.resp.status == 429:
+                    if attempt < max_retries:
+                        delay = 2 ** (attempt + 1)  # 2s, 4s, 8s
+                        click.echo(
+                            f"Rate limited, retrying in {delay}s... "
+                            f"(attempt {attempt + 1}/{max_retries})",
+                            err=True,
+                        )
+                        time.sleep(delay)
+                        continue
+                    # Exhausted retries
+                    remaining = message_ids[i:]
+                    raise click.ClickException(
+                        f"Gmail API rate limit exceeded after {max_retries} retries.\n\n"
+                        f"Progress: Successfully processed {processed_count} of {len(message_ids)} messages.\n"
+                        f"Remaining: {len(remaining)} messages still need processing.\n\n"
+                        f"Action required:\n"
+                        f"1. Wait 30-60 seconds for rate limit to reset\n"
+                        f"2. Retry with the remaining {len(remaining)} message IDs:\n"
+                        f"   {' '.join(remaining[:10])}{'...' if len(remaining) > 10 else ''}\n\n"
+                        f"Note: Using batchModify (50 units per 1000 messages). "
+                        f"See module docstring (help jean_claude.gmail) for details."
+                    )
+                elif e.resp.status == 404:
+                    remaining = message_ids[i:]
+                    raise click.ClickException(
+                        f"One or more message IDs not found.\n\n"
+                        f"Progress: Successfully processed {processed_count} of {len(message_ids)} messages.\n"
+                        f"Failed batch: {' '.join(chunk[:10])}{'...' if len(chunk) > 10 else ''}\n\n"
+                        f"Possible causes:\n"
+                        f"- Message(s) were deleted\n"
+                        f"- Invalid message ID format\n"
+                        f"- Message belongs to a different account\n\n"
+                        f"Action required: Verify the message IDs and retry with valid IDs only."
+                    )
+                elif e.resp.status in (401, 403):
+                    raise click.ClickException(
+                        f"Gmail API authentication failed (HTTP {e.resp.status}).\n\n"
+                        f"Possible causes:\n"
+                        f"- Credentials expired or revoked\n"
+                        f"- Insufficient permissions for this operation\n"
+                        f"- API not enabled in Google Cloud project\n\n"
+                        f"Action required:\n"
+                        f"1. Check authentication: jean-claude status\n"
+                        f"2. Re-authenticate if needed: jean-claude auth\n"
+                        f"3. Verify required scopes are granted"
+                    )
+                raise
 
         # Add small delay between 1000-message chunks (only needed for 1000+ messages)
         if i + chunk_size < len(message_ids):
