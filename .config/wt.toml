@@ -1,0 +1,6 @@
+# Post-merge hooks
+# These run in the main worktree after successful merge and push
+# Available template variables: {{ repo }}, {{ branch }}, {{ worktree }}, {{ repo_root }}, {{ target }}
+[post-merge]
+sync = 'if [ "{{ target }}" = "main" ]; then git pull && git push; fi'
+plugin = 'claude plugin marketplace update jean-claude'
