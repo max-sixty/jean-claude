@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 import click
 
@@ -11,10 +12,24 @@ from .gcal import cli as gcal_cli
 from .gdrive import cli as gdrive_cli
 from .gmail import cli as gmail_cli
 from .imessage import cli as imessage_cli
-from .logging import configure_logging
+from .logging import JeanClaudeError, configure_logging, get_logger
+
+logger = get_logger(__name__)
 
 
-@click.group()
+class ErrorHandlingGroup(click.Group):
+    """Click group that handles JeanClaudeError with clean output."""
+
+    def invoke(self, ctx: click.Context):
+        try:
+            return super().invoke(ctx)
+        except JeanClaudeError as e:
+            logger.error(str(e))
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+
+
+@click.group(cls=ErrorHandlingGroup)
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging to stderr")
 @click.option(
     "--json-log",
@@ -218,7 +233,7 @@ def completions(shell: str):
 
     comp_cls = get_completion_class(shell)
     if comp_cls is None:
-        raise click.ClickException(f"Unsupported shell: {shell}")
+        raise JeanClaudeError(f"Unsupported shell: {shell}")
 
     comp = comp_cls(cli, {}, "jean-claude", "_JEAN_CLAUDE_COMPLETE")
     click.echo(comp.source())

@@ -10,6 +10,9 @@ import click
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
 from .auth import build_service
+from .logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def get_drive():
@@ -73,7 +76,7 @@ def list_files(folder: str | None, max_results: int, as_json: bool):
         if as_json:
             click.echo(json.dumps([]))
         else:
-            click.echo("No files found.", err=True)
+            logger.info("No files found")
         return
 
     if as_json:
@@ -117,7 +120,7 @@ def search(query: str, max_results: int, as_json: bool):
         if as_json:
             click.echo(json.dumps([]))
         else:
-            click.echo("No files found.", err=True)
+            logger.info("No files found")
         return
 
     if as_json:

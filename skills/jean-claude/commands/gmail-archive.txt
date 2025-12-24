@@ -1,8 +1,12 @@
 Usage: jean-claude gmail archive [OPTIONS] [MESSAGE_IDS]...
 
-  Archive messages (remove from inbox).
+  Archive threads (remove from inbox).
 
-  Can archive by ID(s) or by query. Query automatically filters to inbox.
+  Archives entire threads, matching Gmail UI behavior. When you archive a
+  conversation in Gmail, all messages in that thread are archived together.
+
+  Can archive by message ID(s) or by query. Query automatically filters to
+  inbox.
 
   Examples:     jean-claude gmail archive MSG_ID1 MSG_ID2     jean-claude
   gmail archive --query "from:newsletter@example.com"

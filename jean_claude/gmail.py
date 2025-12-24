@@ -82,7 +82,7 @@ from pathlib import Path
 import click
 
 from .auth import build_service
-from .logging import get_logger
+from .logging import JeanClaudeError, get_logger
 
 logger = get_logger(__name__)
 
@@ -106,6 +106,42 @@ def _raise_on_error(_request_id, _response, exception):
     """Batch callback that only raises exceptions (ignores responses)."""
     if exception:
         raise exception
+
+
+def _retry_on_rate_limit(func, max_retries: int = 3):
+    """Execute a function with exponential backoff retry on rate limits.
+
+    Args:
+        func: Callable that executes a Gmail API request (must call .execute())
+        max_retries: Maximum retry attempts (default 3, giving 2s, 4s, 8s delays)
+
+    Returns:
+        The result of func() on success
+
+    Raises:
+        JeanClaudeError: If rate limit persists after all retries
+        HttpError: For non-rate-limit errors
+    """
+    from googleapiclient.errors import HttpError
+
+    for attempt in range(max_retries + 1):
+        try:
+            return func()
+        except HttpError as e:
+            if e.resp.status == 429:
+                if attempt < max_retries:
+                    delay = 2 ** (attempt + 1)  # 2s, 4s, 8s
+                    logger.warning(
+                        f"Rate limited, retrying in {delay}s",
+                        attempt=attempt + 1,
+                        max_retries=max_retries,
+                    )
+                    time.sleep(delay)
+                    continue
+                raise JeanClaudeError(
+                    f"Gmail API rate limit exceeded after {max_retries} retries."
+                )
+            raise
 
 
 def _batch_modify_labels(
@@ -167,16 +203,17 @@ def _batch_modify_labels(
                 if e.resp.status == 429:
                     if attempt < max_retries:
                         delay = 2 ** (attempt + 1)  # 2s, 4s, 8s
-                        click.echo(
-                            f"Rate limited, retrying in {delay}s... "
-                            f"(attempt {attempt + 1}/{max_retries})",
-                            err=True,
+                        logger.warning(
+                            f"Rate limited, retrying in {delay}s",
+                            attempt=attempt + 1,
+                            max_retries=max_retries,
+                            delay=delay,
                         )
                         time.sleep(delay)
                         continue
                     # Exhausted retries
                     remaining = message_ids[i:]
-                    raise click.ClickException(
+                    raise JeanClaudeError(
                         f"Gmail API rate limit exceeded after {max_retries} retries.\n\n"
                         f"Progress: Successfully processed {processed_count} of {len(message_ids)} messages.\n"
                         f"Remaining: {len(remaining)} messages still need processing.\n\n"
@@ -188,7 +225,7 @@ def _batch_modify_labels(
                         f"See module docstring (help jean_claude.gmail) for details."
                     )
                 elif e.resp.status == 404:
-                    raise click.ClickException(
+                    raise JeanClaudeError(
                         f"One or more message IDs not found.\n\n"
                         f"Progress: Successfully processed {processed_count} of {len(message_ids)} messages.\n"
                         f"Failed batch: {' '.join(chunk[:10])}{'...' if len(chunk) > 10 else ''}\n\n"
@@ -199,7 +236,7 @@ def _batch_modify_labels(
                         f"Action required: Verify the message IDs and retry with valid IDs only."
                     )
                 elif e.resp.status in (401, 403):
-                    raise click.ClickException(
+                    raise JeanClaudeError(
                         f"Gmail API authentication failed (HTTP {e.resp.status}).\n\n"
                         f"Possible causes:\n"
                         f"- Credentials expired or revoked\n"
@@ -215,6 +252,79 @@ def _batch_modify_labels(
         # Add small delay between 1000-message chunks (only needed for 1000+ messages)
         if i + chunk_size < len(message_ids):
             time.sleep(0.5)
+
+
+def _modify_thread_labels(
+    service,
+    thread_ids: list[str],
+    add_label_ids: list[str] | None = None,
+    remove_label_ids: list[str] | None = None,
+):
+    """Modify labels on entire threads using Gmail's threads.modify API.
+
+    This modifies all messages in each thread atomically, matching Gmail UI behavior.
+    When you archive a thread in Gmail's UI, all messages in that thread are archived.
+
+    Args:
+        service: Gmail API service instance
+        thread_ids: List of thread IDs to process
+        add_label_ids: Label IDs to add (e.g., ["STARRED", "INBOX"])
+        remove_label_ids: Label IDs to remove (e.g., ["INBOX"])
+    """
+    if not thread_ids:
+        return
+
+    logger.info(
+        f"Modifying labels on {len(thread_ids)} threads",
+        add_labels=add_label_ids,
+        remove_labels=remove_label_ids,
+    )
+
+    for thread_id in thread_ids:
+        body = {}
+        if add_label_ids:
+            body["addLabelIds"] = add_label_ids
+        if remove_label_ids:
+            body["removeLabelIds"] = remove_label_ids
+
+        _retry_on_rate_limit(
+            lambda tid=thread_id, b=body: service.users()
+            .threads()
+            .modify(userId="me", id=tid, body=b)
+            .execute()
+        )
+        logger.debug(f"Modified thread {thread_id}")
+
+
+def _get_thread_ids_for_messages(service, message_ids: list[str]) -> list[str]:
+    """Get unique thread IDs for a list of message IDs."""
+    if not message_ids:
+        return []
+
+    thread_ids = set()
+    responses = {}
+
+    # Batch fetch message metadata to get threadIds
+    chunk_size = 50
+    for i in range(0, len(message_ids), chunk_size):
+        chunk = message_ids[i : i + chunk_size]
+        batch = service.new_batch_http_request(callback=_batch_callback(responses))
+        for msg_id in chunk:
+            batch.add(
+                service.users()
+                .messages()
+                .get(userId="me", id=msg_id, format="minimal"),
+                request_id=msg_id,
+            )
+        batch.execute()
+        if i + chunk_size < len(message_ids):
+            time.sleep(0.3)
+
+    for msg_id in message_ids:
+        if msg_id in responses:
+            thread_ids.add(responses[msg_id]["threadId"])
+
+    return list(thread_ids)
 
 
 def _strip_html(html: str) -> str:
@@ -362,6 +472,71 @@ def extract_message_summary(msg: dict) -> dict:
     return result
 
 
+def extract_thread_summary(thread: dict) -> dict:
+    """Extract essential fields from a thread for compact output.
+
+    Returns info about the thread with the latest message's details.
+    Gmail UI shows threads, not individual messages, so this matches that view.
+    """
+    messages = thread["messages"]
+    if not messages:
+        return {"threadId": thread["id"], "messageCount": 0}
+
+    # Get the latest message for display
+    latest_msg = messages[-1]
+    headers = latest_msg.get("payload", {}).get("headers", [])
+
+    # Aggregate labels across all messages in thread
+    all_labels = set()
+    unread_count = 0
+    for msg in messages:
+        labels = msg.get("labelIds", [])
+        all_labels.update(labels)
+        if "UNREAD" in labels:
+            unread_count += 1
+
+    result = {
+        "threadId": thread["id"],
+        "messageCount": len(messages),
+        "unreadCount": unread_count,
+        "latestMessageId": latest_msg["id"],
+        "from": get_header(headers, "From"),
+        "to": get_header(headers, "To"),
+        "subject": get_header(headers, "Subject"),
+        "date": get_header(headers, "Date"),
+        "snippet": latest_msg.get("snippet", ""),
+        "labels": sorted(all_labels),
+    }
+    if cc := get_header(headers, "Cc"):
+        result["cc"] = cc
+
+    # Write latest message body to .tmp/
+    payload = latest_msg.get("payload", {})
+    body = decode_body(payload)
+    html_body = extract_html_body(payload)
+
+    tmp_dir = Path(".tmp")
+    tmp_dir.mkdir(exist_ok=True)
+
+    file_path = tmp_dir / f"thread-{thread['id']}.txt"
+    with open(file_path, "w") as f:
+        f.write(f"From: {result['from']}\n")
+        f.write(f"To: {result['to']}\n")
+        f.write(f"Cc: {result.get('cc', '')}\n")
+        f.write(f"Subject: {result['subject']}\n")
+        f.write(f"Date: {result['date']}\n")
+        f.write(f"\n{body}")
+    result["file"] = str(file_path)
+
+    if html_body:
+        html_path = tmp_dir / f"thread-{thread['id']}.html"
+        with open(html_path, "w") as f:
+            f.write(html_body)
+        result["htmlFile"] = str(html_path)
+
+    return result
+
+
 def extract_draft_summary(draft: dict) -> dict:
     """Extract essential fields from a draft for compact output."""
     msg = draft.get("message", {})
@@ -390,14 +565,18 @@ def cli():
 
 @cli.command()
 @click.option("-n", "--max-results", default=100, help="Maximum results")
-@click.option("--unread", is_flag=True, help="Only show unread messages")
+@click.option("--unread", is_flag=True, help="Only show unread threads")
 @click.option("--page-token", help="Token for next page of results")
 def inbox(max_results: int, unread: bool, page_token: str | None):
-    """List messages in inbox (shortcut for search "in:inbox")."""
+    """List threads in inbox.
+
+    Returns threads (conversations) matching Gmail UI behavior.
+    A thread shows as unread if ANY message in it is unread.
+    """
     query = "in:inbox"
     if unread:
         query += " is:unread"
-    _search_messages(query, max_results, page_token)
+    _search_threads(query, max_results, page_token)
 
 
 @cli.command()
@@ -462,6 +641,57 @@ def _search_messages(query: str, max_results: int, page_token: str | None = None
     click.echo(json.dumps(output, indent=2))
 
 
+def _search_threads(query: str, max_results: int, page_token: str | None = None):
+    """Search for threads, returning thread-level summaries.
+
+    This matches Gmail UI behavior where conversations (threads) are shown,
+    not individual messages. A thread appears in inbox if ANY message has
+    INBOX label, and shows as unread if ANY message is unread.
+    """
+    logger.info(f"Searching threads: {query}", max_results=max_results)
+    service = get_gmail()
+    list_kwargs = {"userId": "me", "q": query, "maxResults": max_results}
+    if page_token:
+        list_kwargs["pageToken"] = page_token
+    results = service.users().threads().list(**list_kwargs).execute()
+    threads = results.get("threads", [])
+    next_page_token = results.get("nextPageToken")
+    logger.debug(f"Found {len(threads)} threads")
+
+    if not threads:
+        output: dict = {"threads": []}
+        if next_page_token:
+            output["nextPageToken"] = next_page_token
+        click.echo(json.dumps(output, indent=2))
+        return
+
+    # Fetch full thread details
+    responses = {}
+    chunk_size = 10  # threads.get is heavier than messages.get
+
+    for i in range(0, len(threads), chunk_size):
+        chunk = threads[i : i + chunk_size]
+        batch = service.new_batch_http_request(callback=_batch_callback(responses))
+        for t in chunk:
+            batch.add(
+                service.users().threads().get(userId="me", id=t["id"], format="full"),
+                request_id=t["id"],
+            )
+        batch.execute()
+        if i + chunk_size < len(threads):
+            time.sleep(0.3)
+
+    detailed = [
+        extract_thread_summary(responses[t["id"]])
+        for t in threads
+        if t["id"] in responses
+    ]
+    output = {"threads": detailed}
+    if next_page_token:
+        output["nextPageToken"] = next_page_token
+    click.echo(json.dumps(output, indent=2))
+
+
 # Draft command group
 @cli.group()
 def draft():
@@ -499,8 +729,7 @@ def draft_create():
         .create(userId="me", body={"message": {"raw": raw}})
         .execute()
     )
-    click.echo(f"Draft created: {result['id']}", err=True)
-    click.echo(f"View: {draft_url(result)}", err=True)
+    logger.info(f"Draft created: {result['id']}", url=draft_url(result))
 
 
 @draft.command("send")
@@ -514,7 +743,7 @@ def draft_send(draft_id: str):
     result = (
         get_gmail().users().drafts().send(userId="me", body={"id": draft_id}).execute()
     )
-    click.echo(f"Sent: {result['id']}", err=True)
+    logger.info(f"Sent: {result['id']}")
 
 
 def _create_reply_draft(
@@ -637,8 +866,7 @@ def draft_reply(message_id: str):
         raise click.UsageError("Missing required field: body")
 
     draft_id, url = _create_reply_draft(message_id, data["body"], include_cc=False)
-    click.echo(f"Reply draft created: {draft_id}", err=True)
-    click.echo(f"View: {url}", err=True)
+    logger.info(f"Reply draft created: {draft_id}", url=url)
 
 
 @draft.command("reply-all")
@@ -658,8 +886,7 @@ def draft_reply_all(message_id: str):
         raise click.UsageError("Missing required field: body")
 
     draft_id, url = _create_reply_draft(message_id, data["body"], include_cc=True)
-    click.echo(f"Reply-all draft created: {draft_id}", err=True)
-    click.echo(f"View: {url}", err=True)
+    logger.info(f"Reply-all draft created: {draft_id}", url=url)
 
 
 @draft.command("forward")
@@ -713,8 +940,7 @@ def draft_forward(message_id: str):
         .create(userId="me", body={"message": {"raw": raw}})
         .execute()
     )
-    click.echo(f"Forward draft created: {result['id']}", err=True)
-    click.echo(f"View: {draft_url(result)}", err=True)
+    logger.info(f"Forward draft created: {result['id']}", url=draft_url(result))
 
 
 @draft.command("list")
@@ -794,7 +1020,7 @@ def draft_delete(draft_id: str):
         jean-claude gmail draft delete r-123456789
     """
     get_gmail().users().drafts().delete(userId="me", id=draft_id).execute()
-    click.echo(f"Deleted: {draft_id}", err=True)
+    logger.info(f"Deleted draft: {draft_id}")
 
 
 @cli.command()
@@ -803,8 +1029,7 @@ def star(message_ids: tuple[str, ...]):
     """Star messages."""
     service = get_gmail()
     _batch_modify_labels(service, list(message_ids), add_label_ids=["STARRED"])
-    n = len(message_ids)
-    click.echo(f"Starred {n} message{'s' if n != 1 else ''}", err=True)
+    logger.info(f"Starred {len(message_ids)} messages", count=len(message_ids))
 
 
 @cli.command()
@@ -813,8 +1038,7 @@ def unstar(message_ids: tuple[str, ...]):
     """Remove star from messages."""
     service = get_gmail()
     _batch_modify_labels(service, list(message_ids), remove_label_ids=["STARRED"])
-    n = len(message_ids)
-    click.echo(f"Unstarred {n} message{'s' if n != 1 else ''}", err=True)
+    logger.info(f"Unstarred {len(message_ids)} messages", count=len(message_ids))
 
 
 @cli.command()
@@ -831,9 +1055,12 @@ def unstar(message_ids: tuple[str, ...]):
     help="Max messages to archive when using --query",
 )
 def archive(message_ids: tuple[str, ...], query: str | None, max_results: int):
-    """Archive messages (remove from inbox).
+    """Archive threads (remove from inbox).
 
-    Can archive by ID(s) or by query. Query automatically filters to inbox.
+    Archives entire threads, matching Gmail UI behavior. When you archive a
+    conversation in Gmail, all messages in that thread are archived together.
+
+    Can archive by message ID(s) or by query. Query automatically filters to inbox.
 
     Examples:
         jean-claude gmail archive MSG_ID1 MSG_ID2
@@ -845,37 +1072,40 @@ def archive(message_ids: tuple[str, ...], query: str | None, max_results: int):
     service = get_gmail()
 
     if query:
+        # Use threads.list to get threads matching query
         full_query = f"in:inbox {query}"
         results = (
             service.users()
-            .messages()
+            .threads()
             .list(userId="me", q=full_query, maxResults=max_results)
             .execute()
         )
-        ids_to_archive = (
-            [m["id"] for m in results["messages"]] if "messages" in results else []
+        thread_ids = (
+            [t["id"] for t in results["threads"]] if "threads" in results else []
         )
     else:
-        ids_to_archive = list(message_ids)
+        # Get thread IDs for the given message IDs
+        thread_ids = _get_thread_ids_for_messages(service, list(message_ids))
 
-    if not ids_to_archive:
-        click.echo("No messages to archive.", err=True)
+    if not thread_ids:
+        logger.info("No threads to archive")
         return
 
-    _batch_modify_labels(service, ids_to_archive, remove_label_ids=["INBOX"])
-
-    n = len(ids_to_archive)
-    click.echo(f"Archived {n} message{'s' if n != 1 else ''}", err=True)
+    _modify_thread_labels(service, thread_ids, remove_label_ids=["INBOX"])
+    logger.info(f"Archived {len(thread_ids)} threads", count=len(thread_ids))
 
 
 @cli.command()
 @click.argument("message_ids", nargs=-1, required=True)
 def unarchive(message_ids: tuple[str, ...]):
-    """Move messages back to inbox."""
+    """Move threads back to inbox."""
     service = get_gmail()
-    _batch_modify_labels(service, list(message_ids), add_label_ids=["INBOX"])
-    n = len(message_ids)
-    click.echo(f"Moved {n} message{'s' if n != 1 else ''} to inbox", err=True)
+    thread_ids = _get_thread_ids_for_messages(service, list(message_ids))
+    if not thread_ids:
+        logger.info("No threads to unarchive")
+        return
+    _modify_thread_labels(service, thread_ids, add_label_ids=["INBOX"])
+    logger.info(f"Moved {len(thread_ids)} threads to inbox", count=len(thread_ids))
 
 
 @cli.command("mark-read")
@@ -884,8 +1114,7 @@ def mark_read(message_ids: tuple[str, ...]):
     """Mark messages as read."""
     service = get_gmail()
     _batch_modify_labels(service, list(message_ids), remove_label_ids=["UNREAD"])
-    n = len(message_ids)
-    click.echo(f"Marked {n} message{'s' if n != 1 else ''} read", err=True)
+    logger.info(f"Marked {len(message_ids)} messages read", count=len(message_ids))
 
 
 @cli.command("mark-unread")
@@ -894,8 +1123,7 @@ def mark_unread(message_ids: tuple[str, ...]):
     """Mark messages as unread."""
     service = get_gmail()
     _batch_modify_labels(service, list(message_ids), add_label_ids=["UNREAD"])
-    n = len(message_ids)
-    click.echo(f"Marked {n} message{'s' if n != 1 else ''} unread", err=True)
+    logger.info(f"Marked {len(message_ids)} messages unread", count=len(message_ids))
 
 
 @cli.command()
@@ -921,7 +1149,7 @@ def trash(message_ids: tuple[str, ...]):
             time.sleep(0.3)
 
     n = len(message_ids)
-    click.echo(f"Trashed {n} message{'s' if n != 1 else ''}", err=True)
+    logger.info(f"Trashed {n} messages", count=n)
 
 
 def _extract_attachments(parts: list, attachments: list) -> None:
@@ -968,7 +1196,7 @@ def attachments(message_id: str):
         _extract_attachments(payload["parts"], attachment_list)
 
     if not attachment_list:
-        click.echo("No attachments found.", err=True)
+        logger.info("No attachments found")
         return
 
     click.echo(json.dumps(attachment_list, indent=2))
@@ -999,4 +1227,4 @@ def attachment_download(message_id: str, attachment_id: str, output: str):
 
     data = base64.urlsafe_b64decode(attachment["data"])
     Path(output).write_bytes(data)
-    click.echo(f"Downloaded: {output} ({len(data):,} bytes)", err=True)
+    logger.info(f"Downloaded: {output}", bytes=len(data))

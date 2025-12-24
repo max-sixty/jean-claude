@@ -58,6 +58,41 @@ uv run jean-claude gmail --help
 
 For interactive testing with Claude, use the installed plugin version or test locally by temporarily modifying `~/.claude/plugins/marketplaces/jean-claude` to point to your development directory.
 
+## Output & Logging
+
+Two output mechanisms:
+
+- **`click.echo()`** — JSON data to stdout only
+  - `click.echo(json.dumps(output))`
+
+- **`logger`** (structlog) — All other output to stderr
+  - `logger.info("Archived 5 threads", count=5)` — progress/status (shown by default)
+  - `logger.debug("detail", context=data)` — debug info (shown with --verbose)
+  - `logger.warning("Rate limited", delay=2)` — warnings
+  - `logger.error("Failed to connect")` — errors
+
+Console level is INFO by default, DEBUG with --verbose. All logs also go to
+JSON file at `~/Library/Logs/jean-claude/jean-claude.log`.
+
+Import: `from jean_claude.logging import get_logger; logger = get_logger(__name__)`
+
+## Error Handling
+
+Use `JeanClaudeError` for expected errors (invalid input, API failures, etc.):
+
+```python
+from jean_claude.logging import JeanClaudeError
+
+raise JeanClaudeError("Event not found: abc123")
+```
+
+The CLI entry point catches these, logs them, and shows a clean message:
+```
+Error: Event not found: abc123
+```
+
+Unexpected errors propagate with full traceback for debugging.
+
 ## iMessage Safety Principles
 
 When adding or modifying iMessage features:

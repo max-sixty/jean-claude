@@ -1,6 +1,6 @@
 Usage: jean-claude gmail unarchive [OPTIONS] MESSAGE_IDS...
 
-  Move messages back to inbox.
+  Move threads back to inbox.
 
 Options:
   --help  Show this message and exit.

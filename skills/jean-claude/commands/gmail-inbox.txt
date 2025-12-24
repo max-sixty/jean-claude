@@ -1,9 +1,12 @@
 Usage: jean-claude gmail inbox [OPTIONS]
 
-  List messages in inbox (shortcut for search "in:inbox").
+  List threads in inbox.
+
+  Returns threads (conversations) matching Gmail UI behavior. A thread shows
+  as unread if ANY message in it is unread.
 
 Options:
   -n, --max-results INTEGER  Maximum results
-  --unread                   Only show unread messages
+  --unread                   Only show unread threads
   --page-token TEXT          Token for next page of results
   --help                     Show this message and exit.

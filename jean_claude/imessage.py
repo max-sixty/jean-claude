@@ -9,6 +9,10 @@ from pathlib import Path
 
 import click
 
+from .logging import JeanClaudeError, get_logger
+
+logger = get_logger(__name__)
+
 DB_PATH = Path.home() / "Library" / "Messages" / "chat.db"
 # Apple's Cocoa epoch (2001-01-01) offset from Unix epoch (1970-01-01)
 APPLE_EPOCH_OFFSET = 978307200
@@ -23,20 +27,20 @@ def run_applescript(script: str, *args: str) -> str:
         text=True,
     )
     if result.returncode != 0:
-        raise click.ClickException(f"AppleScript error: {result.stderr.strip()}")
+        raise JeanClaudeError(f"AppleScript error: {result.stderr.strip()}")
     return result.stdout.strip()
 
 
 def get_db_connection() -> sqlite3.Connection:
     """Get a read-only connection to the Messages database."""
     if not DB_PATH.exists():
-        raise click.ClickException(f"Messages database not found at {DB_PATH}")
+        raise JeanClaudeError(f"Messages database not found at {DB_PATH}")
     try:
         conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
         return conn
     except sqlite3.OperationalError as e:
         if "unable to open" in str(e):
-            raise click.ClickException(
+            raise JeanClaudeError(
                 "Cannot access Messages database. Grant Full Disk Access to your terminal:\n"
                 "  System Preferences > Privacy & Security > Full Disk Access\n"
                 "  Then add and enable your terminal app (Terminal, iTerm2, Ghostty, etc.)"
@@ -226,9 +230,7 @@ def resolve_contact_to_phone(name: str) -> str:
     contacts = search_contacts_by_name(name)
 
     if not contacts:
-        raise click.ClickException(
-            f"No contact found matching '{name}' with a phone number"
-        )
+        raise JeanClaudeError(f"No contact found matching '{name}' with a phone number")
 
     # Build list of contacts with their valid phones
     # [(contact_name, [raw_phone, ...]), ...]
@@ -240,14 +242,12 @@ def resolve_contact_to_phone(name: str) -> str:
             contacts_with_phones.append((contact_name, valid_phones))
 
     if not contacts_with_phones:
-        raise click.ClickException(
-            f"No contact found matching '{name}' with a phone number"
-        )
+        raise JeanClaudeError(f"No contact found matching '{name}' with a phone number")
 
     # Check for ambiguity: multiple contacts
     if len(contacts_with_phones) > 1:
         matches = "\n".join(f"  - {c[0]}: {c[1][0]}" for c in contacts_with_phones)
-        raise click.ClickException(
+        raise JeanClaudeError(
             f"Multiple contacts match '{name}':\n{matches}\n"
             "Use a more specific name or send directly to the phone number."
         )
@@ -256,14 +256,14 @@ def resolve_contact_to_phone(name: str) -> str:
     contact_name, valid_phones = contacts_with_phones[0]
     if len(valid_phones) > 1:
         phones_list = "\n".join(f"  - {p}" for p in valid_phones)
-        raise click.ClickException(
+        raise JeanClaudeError(
             f"Contact '{contact_name}' has multiple phone numbers:\n{phones_list}\n"
             "Send directly to the phone number to avoid ambiguity."
         )
 
     # Exactly one contact with exactly one phone - return raw format
     raw_phone = valid_phones[0]
-    click.echo(f"Found: {contact_name} ({raw_phone})", err=True)
+    logger.info(f"Found: {contact_name} ({raw_phone})")
     return raw_phone
 
 
@@ -416,7 +416,7 @@ end tell"""
 
     output = run_applescript(script)
     if not output:
-        click.echo("No chats found.", err=True)
+        logger.info("No chats found")
         return
 
     items = output.split(", ")
@@ -483,7 +483,7 @@ end run"""
 
     output = run_applescript(script, chat_id)
     if not output:
-        click.echo("No participants found or not a group chat.", err=True)
+        logger.info("No participants found or not a group chat")
         return
 
     for item in output.split(", "):
@@ -553,7 +553,7 @@ def unread(max_results: int):
     conn.close()
 
     if not rows:
-        click.echo("No unread messages.", err=True)
+        logger.info("No unread messages")
         return
 
     for date, sender, text, attributed_body, display_name in rows:
@@ -621,7 +621,7 @@ def search(query: str | None, max_results: int):
     conn.close()
 
     if not rows:
-        click.echo("No messages found.", err=True)
+        logger.info("No messages found")
         return
 
     for date, sender, text, attributed_body in rows:
@@ -649,7 +649,7 @@ def history(chat_id: str | None, max_results: int, name: str | None):
         raw_phone = resolve_contact_to_phone(name)
         messages_chat_id = get_chat_id_for_phone(raw_phone)
         if not messages_chat_id:
-            raise click.ClickException(
+            raise JeanClaudeError(
                 f"No message history found for '{name}' ({raw_phone})"
             )
         # Extract identifier from chat ID (e.g., "any;-;+16467194457" -> "+16467194457")
@@ -687,7 +687,7 @@ def history(chat_id: str | None, max_results: int, name: str | None):
     conn.close()
 
     if not rows:
-        click.echo("No messages found for this chat.", err=True)
+        logger.info("No messages found for this chat")
         return
 
     # Reverse to show oldest first

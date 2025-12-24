@@ -10,6 +10,9 @@ from zoneinfo import ZoneInfo
 import click
 
 from .auth import build_service
+from .logging import JeanClaudeError, get_logger
+
+logger = get_logger(__name__)
 
 
 # Auto-detect timezone from system
@@ -27,9 +30,7 @@ def _get_local_timezone() -> str:
     except Exception:
         pass
     # Fallback with warning
-    click.echo(
-        "Warning: Could not detect timezone, using America/Los_Angeles", err=True
-    )
+    logger.warning("Could not detect timezone, using America/Los_Angeles")
     return "America/Los_Angeles"
 
 
@@ -326,19 +327,15 @@ def respond(event_id: str, response: str, notify: bool):
         event = service.events().get(calendarId="primary", eventId=event_id).execute()
     except HttpError as e:
         if e.resp.status == 404:
-            click.echo(f"Error: Event not found: {event_id}", err=True)
-        else:
-            click.echo(f"Error: {e.reason}", err=True)
-        raise SystemExit(1)
+            raise JeanClaudeError(f"Event not found: {event_id}")
+        raise JeanClaudeError(f"Calendar API error: {e.reason}")
 
     # Find the user's attendee entry and update their response
     attendees = event.get("attendees", [])
     if not attendees:
-        click.echo(
-            "Error: This event has no attendees. You can only respond to invitations.",
-            err=True,
+        raise JeanClaudeError(
+            "This event has no attendees. You can only respond to invitations."
         )
-        raise SystemExit(1)
 
     user_found = False
     for attendee in attendees:
@@ -348,8 +345,7 @@ def respond(event_id: str, response: str, notify: bool):
             break
 
     if not user_found:
-        click.echo("Error: You are not an attendee of this event.", err=True)
-        raise SystemExit(1)
+        raise JeanClaudeError("You are not an attendee of this event.")
 
     # Update the event with new response status
     send_updates = "all" if notify else "none"
@@ -361,8 +357,7 @@ def respond(event_id: str, response: str, notify: bool):
             sendUpdates=send_updates,
         ).execute()
     except HttpError as e:
-        click.echo(f"Error updating response: {e.reason}", err=True)
-        raise SystemExit(1)
+        raise JeanClaudeError(f"Error updating response: {e.reason}")
 
     response_text = {
         "accepted": "accepted",

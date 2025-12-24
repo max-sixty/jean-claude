@@ -57,7 +57,7 @@ def configure_logging(
     """Configure structlog for the application.
 
     Args:
-        verbose: If True, enables DEBUG level console output. Otherwise WARNING.
+        verbose: If True, enables DEBUG level console output. Otherwise INFO.
         json_log: Path to JSON log file. Use "-" for stdout, "auto" for default path,
                   None to disable file logging.
     """
@@ -65,7 +65,7 @@ def configure_logging(
 
     # Console handler for user-visible output
     console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setLevel(logging.DEBUG if verbose else logging.WARNING)
+    console_handler.setLevel(logging.DEBUG if verbose else logging.INFO)
     console_handler.setFormatter(_get_console_formatter())
     handlers.append(console_handler)
 
@@ -195,6 +195,24 @@ def get_logger(name: str) -> structlog.stdlib.BoundLogger:
         logger.info("operation started", operation="search", query="foo")
     """
     return structlog.get_logger(name)
+
+
+class JeanClaudeError(Exception):
+    """Expected error that should be shown to the user with a clean message.
+
+    Raise this instead of click.ClickException or SystemExit for errors that:
+    - Are expected (invalid input, API errors, etc.)
+    - Should show a clean message without traceback
+    - Should be logged for debugging
+
+    The CLI entry point catches these, logs them, and exits with code 1.
+
+    Usage:
+        from jean_claude.logging import JeanClaudeError
+        raise JeanClaudeError("Event not found: abc123")
+    """
+
+    pass
 
 
 class LoggingHttp:
