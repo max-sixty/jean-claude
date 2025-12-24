@@ -14,5 +14,6 @@ Commands:
   gcal         Google Calendar CLI - list, create, and search events.
   gdrive       Google Drive CLI - list, search, and manage files.
   gmail        Gmail CLI - search, draft, and send emails.
+  gsheets      Google Sheets CLI - read and write spreadsheet data.
   imessage     iMessage CLI - send messages and list chats.
   status       Show authentication status and API availability.

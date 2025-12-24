@@ -1,0 +1,14 @@
+Usage: jean-claude gsheets [OPTIONS] COMMAND [ARGS]...
+
+  Google Sheets CLI - read and write spreadsheet data.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  append  Append rows to a spreadsheet.
+  clear   Clear data from a range (keeps formatting).
+  create  Create a new spreadsheet.
+  info    Get spreadsheet metadata.
+  read    Read data from a spreadsheet.
+  write   Write data to a specific range.

@@ -1,0 +1,15 @@
+Usage: jean-claude gsheets append [OPTIONS] SPREADSHEET_ID
+
+  Append rows to a spreadsheet. Reads JSON array from stdin.
+
+  SPREADSHEET_ID: The spreadsheet ID (from the URL)
+
+  Input format: JSON array of rows, where each row is an array of cell values.
+
+  Examples:     echo '[["Alice", 100], ["Bob", 200]]' | jean-claude gsheets
+  append SPREADSHEET_ID     cat data.json | jean-claude gsheets append
+  SPREADSHEET_ID --sheet 'Data'
+
+Options:
+  --sheet TEXT  Sheet name (default: Sheet1)
+  --help        Show this message and exit.

@@ -1,12 +1,12 @@
 ---
 name: jean-claude
-description: "This skill should be used when the user asks to search/send/draft email, check calendar, create events, schedule meetings, find/upload/share Drive files, send texts/iMessages, or check messages. Manages Gmail, Google Calendar, Google Drive, and iMessage."
+description: "This skill should be used when the user asks to search/send/draft email, check calendar, create events, schedule meetings, find/upload/share Drive files, read spreadsheet data, send texts/iMessages, or check messages. Manages Gmail, Google Calendar, Google Drive, Google Sheets, and iMessage."
 ---
 
-# jean-claude - Gmail, Calendar, Drive & iMessage
+# jean-claude - Gmail, Calendar, Drive, Sheets & iMessage
 
-Manage Gmail, Google Calendar, Google Drive, and iMessage using the CLI tools
-in this plugin.
+Manage Gmail, Google Calendar, Google Drive, Google Sheets, and iMessage using
+the CLI tools in this plugin.
 
 **Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude `
 
@@ -427,6 +427,63 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive untrash FILE_ID
 
 # Get file metadata
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive get FILE_ID
+```
+
+## Sheets
+
+Read and write Google Sheets data directly without downloading files.
+
+The spreadsheet ID is in the URL:
+`https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit`
+
+### Create Spreadsheet
+
+```bash
+# Create a new spreadsheet
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets create "My Spreadsheet"
+
+# With custom initial sheet name
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets create "Budget 2025" --sheet "January"
+```
+
+### Read Data
+
+```bash
+# Read entire first sheet
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets read SPREADSHEET_ID
+
+# Read specific range
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets read SPREADSHEET_ID --range 'Sheet1!A1:D10'
+
+# Read specific sheet
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets read SPREADSHEET_ID --sheet 'Data'
+
+# Output as JSON
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets read SPREADSHEET_ID --json
+```
+
+### Write Data
+
+All write commands read JSON from stdin (array of rows, each row is array of cells).
+
+```bash
+# Append rows to end of sheet
+echo '[["Alice", 100], ["Bob", 200]]' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets append SPREADSHEET_ID
+echo '[["New row"]]' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets append SPREADSHEET_ID --sheet 'Data'
+
+# Write to specific range (overwrites existing data)
+echo '[["Name", "Score"], ["Alice", 100]]' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets write SPREADSHEET_ID 'Sheet1!A1:B2'
+
+# Clear a range (keeps formatting)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets clear SPREADSHEET_ID 'Sheet1!A2:Z1000'
+```
+
+### Get Spreadsheet Info
+
+```bash
+# Get metadata (title, sheet names, dimensions)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets info SPREADSHEET_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets info SPREADSHEET_ID --json
 ```
 
 ## iMessage

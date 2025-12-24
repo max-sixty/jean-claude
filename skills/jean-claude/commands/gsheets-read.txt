@@ -1,0 +1,16 @@
+Usage: jean-claude gsheets read [OPTIONS] SPREADSHEET_ID
+
+  Read data from a spreadsheet.
+
+  SPREADSHEET_ID: The spreadsheet ID (from the URL)
+
+  Examples:     jean-claude gsheets read
+  1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms     jean-claude gsheets read
+  1BxiM... --range 'Sheet1!A1:D10'     jean-claude gsheets read 1BxiM...
+  --sheet 'Data' --json
+
+Options:
+  --range TEXT  A1 notation range (e.g., 'Sheet1!A1:D10')
+  --sheet TEXT  Sheet name (default: first sheet)
+  --json        Output as JSON
+  --help        Show this message and exit.

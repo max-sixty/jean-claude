@@ -11,6 +11,7 @@ from .auth import SCOPES_FULL, SCOPES_READONLY, TOKEN_FILE, run_auth
 from .gcal import cli as gcal_cli
 from .gdrive import cli as gdrive_cli
 from .gmail import cli as gmail_cli
+from .gsheets import cli as gsheets_cli
 from .imessage import cli as imessage_cli
 from .logging import JeanClaudeError, configure_logging, get_logger
 
@@ -48,6 +49,7 @@ def cli(verbose: bool, json_log: str):
 cli.add_command(gmail_cli, name="gmail")
 cli.add_command(gcal_cli, name="gcal")
 cli.add_command(gdrive_cli, name="gdrive")
+cli.add_command(gsheets_cli, name="gsheets")
 cli.add_command(imessage_cli, name="imessage")
 
 
@@ -145,6 +147,18 @@ def _check_google_apis() -> None:
         click.echo("  Drive: " + click.style("OK", fg="green"))
     except HttpError as e:
         _print_api_error("Drive", e)
+
+    # Check Sheets - test with Google's public sample spreadsheet
+    # (Sample Spreadsheet from Google Sheets API quickstart)
+    try:
+        sheets = build_service("sheets", "v4")
+        sheets.spreadsheets().get(
+            spreadsheetId="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+            fields="spreadsheetId",
+        ).execute()
+        click.echo("  Sheets: " + click.style("OK", fg="green"))
+    except HttpError as e:
+        _print_api_error("Sheets", e)
 
 
 def _check_imessage_status() -> None:

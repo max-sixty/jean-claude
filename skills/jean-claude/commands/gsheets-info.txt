@@ -1,0 +1,9 @@
+Usage: jean-claude gsheets info [OPTIONS] SPREADSHEET_ID
+
+  Get spreadsheet metadata.
+
+  SPREADSHEET_ID: The spreadsheet ID (from the URL)
+
+Options:
+  --json  Output as JSON
+  --help  Show this message and exit.

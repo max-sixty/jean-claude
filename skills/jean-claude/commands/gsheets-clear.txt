@@ -1,0 +1,12 @@
+Usage: jean-claude gsheets clear [OPTIONS] SPREADSHEET_ID RANGE_
+
+  Clear data from a range (keeps formatting).
+
+  SPREADSHEET_ID: The spreadsheet ID (from the URL) RANGE: A1 notation range
+  (e.g., 'Sheet1!A1:C10')
+
+  Examples:     jean-claude gsheets clear SPREADSHEET_ID 'Sheet1!A2:Z1000'
+  jean-claude gsheets clear SPREADSHEET_ID 'Data!A:Z'
+
+Options:
+  --help  Show this message and exit.
