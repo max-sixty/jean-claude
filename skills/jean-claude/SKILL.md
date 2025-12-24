@@ -140,6 +140,11 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude completions fish | source
 
 ### Reading Emails
 
+**Default behavior:** List both read and unread messages, not just unread. Showing
+all messages provides conversation context and catches recently-read messages
+that may still need action. Prioritize unread when relevant (e.g., triaging new
+mail). User skills may override this behavior.
+
 1. **List/search** returns compact JSON with summaries and file paths
 2. **Read the file** if you need the full body
 
