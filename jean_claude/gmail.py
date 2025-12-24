@@ -73,7 +73,6 @@ from __future__ import annotations
 
 import base64
 import json
-import logging
 import sys
 import time
 from email.mime.text import MIMEText
@@ -81,17 +80,15 @@ from email.utils import formataddr, getaddresses, parseaddr
 from pathlib import Path
 
 import click
-from googleapiclient.discovery import build
 
-from .auth import get_credentials
+from .auth import build_service
+from .logging import get_logger
 
-# Silence noisy HTTP logging by default
-logging.getLogger("googleapiclient.discovery").setLevel(logging.WARNING)
-logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.WARNING)
+logger = get_logger(__name__)
 
 
 def get_gmail():
-    return build("gmail", "v1", credentials=get_credentials())
+    return build_service("gmail", "v1")
 
 
 def _batch_callback(responses: dict):
@@ -137,6 +134,12 @@ def _batch_modify_labels(
     if not message_ids:
         return
 
+    logger.info(
+        f"Modifying labels on {len(message_ids)} messages",
+        add_labels=add_label_ids,
+        remove_labels=remove_label_ids,
+    )
+
     # batchModify supports up to 1000 messages per call
     chunk_size = 1000
     max_retries = 3
@@ -155,6 +158,10 @@ def _batch_modify_labels(
             try:
                 service.users().messages().batchModify(userId="me", body=body).execute()
                 processed_count += len(chunk)
+                logger.debug(
+                    f"Processed {processed_count}/{len(message_ids)} messages",
+                    chunk_size=len(chunk),
+                )
                 break  # Success - exit retry loop
             except HttpError as e:
                 if e.resp.status == 429:
@@ -181,7 +188,6 @@ def _batch_modify_labels(
                         f"See module docstring (help jean_claude.gmail) for details."
                     )
                 elif e.resp.status == 404:
-                    remaining = message_ids[i:]
                     raise click.ClickException(
                         f"One or more message IDs not found.\n\n"
                         f"Progress: Successfully processed {processed_count} of {len(message_ids)} messages.\n"
@@ -339,11 +345,8 @@ def draft_url(draft_result: dict) -> str:
 
 
 @click.group()
-@click.option("--verbose", is_flag=True, help="Enable verbose logging")
-def cli(verbose: bool):
+def cli():
     """Gmail CLI - search, draft, and send emails."""
-    if verbose:
-        logging.getLogger("googleapiclient.discovery").setLevel(logging.INFO)
 
 
 @cli.command()
@@ -372,6 +375,7 @@ def search(query: str, max_results: int, page_token: str | None):
 
 def _search_messages(query: str, max_results: int, page_token: str | None = None):
     """Shared search implementation."""
+    logger.info(f"Searching messages: {query}", max_results=max_results)
     service = get_gmail()
     list_kwargs = {"userId": "me", "q": query, "maxResults": max_results}
     if page_token:
@@ -379,6 +383,7 @@ def _search_messages(query: str, max_results: int, page_token: str | None = None
     results = service.users().messages().list(**list_kwargs).execute()
     messages = results.get("messages", [])
     next_page_token = results.get("nextPageToken")
+    logger.debug(f"Found {len(messages)} messages")
 
     if not messages:
         output: dict = {"messages": []}

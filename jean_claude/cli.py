@@ -6,16 +6,28 @@ import json
 
 import click
 
-from .auth import SCOPES_FULL, SCOPES_READONLY, TOKEN_FILE, get_credentials, run_auth
+from .auth import SCOPES_FULL, SCOPES_READONLY, TOKEN_FILE, run_auth
 from .gcal import cli as gcal_cli
 from .gdrive import cli as gdrive_cli
 from .gmail import cli as gmail_cli
 from .imessage import cli as imessage_cli
+from .logging import configure_logging
 
 
 @click.group()
-def cli():
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging to stderr")
+@click.option(
+    "--json-log",
+    metavar="FILE",
+    envvar="JEAN_CLAUDE_LOG",
+    default="auto",
+    help='JSON log file path (default: auto, "-" for stdout, "none" to disable)',
+)
+def cli(verbose: bool, json_log: str):
     """jean-claude: Gmail, Calendar, Drive, and iMessage integration."""
+    # Allow "none" to disable file logging
+    log_file = None if json_log == "none" else json_log
+    configure_logging(verbose=verbose, json_log=log_file)
 
 
 cli.add_command(gmail_cli, name="gmail")
@@ -80,24 +92,24 @@ def status():
 
             # Check API availability
             try:
-                creds = get_credentials()
-                _check_google_apis(creds)
+                _check_google_apis()
             except Exception as e:
-                click.echo(f"  Error getting credentials: {e}")
+                click.echo(f"  Error checking APIs: {e}")
 
     # iMessage status (doesn't require Google auth)
     click.echo()
     _check_imessage_status()
 
 
-def _check_google_apis(creds) -> None:
+def _check_google_apis() -> None:
     """Check Google API availability."""
-    from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
+
+    from .auth import build_service
 
     # Check Gmail
     try:
-        gmail = build("gmail", "v1", credentials=creds)
+        gmail = build_service("gmail", "v1")
         gmail.users().getProfile(userId="me").execute()
         click.echo("  Gmail: " + click.style("OK", fg="green"))
     except HttpError as e:
@@ -105,7 +117,7 @@ def _check_google_apis(creds) -> None:
 
     # Check Calendar
     try:
-        cal = build("calendar", "v3", credentials=creds)
+        cal = build_service("calendar", "v3")
         cal.calendarList().list(maxResults=1).execute()
         click.echo("  Calendar: " + click.style("OK", fg="green"))
     except HttpError as e:
@@ -113,7 +125,7 @@ def _check_google_apis(creds) -> None:
 
     # Check Drive
     try:
-        drive = build("drive", "v3", credentials=creds)
+        drive = build_service("drive", "v3")
         drive.about().get(fields="user").execute()
         click.echo("  Drive: " + click.style("OK", fg="green"))
     except HttpError as e:

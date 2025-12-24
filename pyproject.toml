@@ -13,6 +13,8 @@ dependencies = [
     "click",
     "google-api-python-client",
     "google-auth-oauthlib",
+    "platformdirs",
+    "structlog",
 ]
 
 [project.scripts]

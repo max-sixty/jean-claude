@@ -7,14 +7,13 @@ import json
 from pathlib import Path
 
 import click
-from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
-from .auth import get_credentials
+from .auth import build_service
 
 
 def get_drive():
-    return build("drive", "v3", credentials=get_credentials())
+    return build_service("drive", "v3")
 
 
 def format_file(f: dict) -> str:

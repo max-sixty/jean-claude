@@ -8,9 +8,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import click
-from googleapiclient.discovery import build
 
-from .auth import get_credentials
+from .auth import build_service
 
 
 # Auto-detect timezone from system
@@ -39,7 +38,7 @@ LOCAL_TZ = ZoneInfo(TIMEZONE)
 
 
 def get_calendar():
-    return build("calendar", "v3", credentials=get_credentials())
+    return build_service("calendar", "v3")
 
 
 def parse_datetime(s: str) -> datetime:
