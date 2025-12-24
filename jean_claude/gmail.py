@@ -279,6 +279,35 @@ def decode_body(payload: dict) -> str:
     return ""
 
 
+def extract_html_body(payload: dict) -> str | None:
+    """Extract raw HTML body from message payload, if present."""
+    # Handle simple HTML-only emails (no parts)
+    if payload.get("mimeType") == "text/html":
+        if payload.get("body", {}).get("data"):
+            return base64.urlsafe_b64decode(payload["body"]["data"]).decode(
+                "utf-8", errors="replace"
+            )
+    if "parts" in payload:
+        for part in payload["parts"]:
+            if part["mimeType"] == "text/html" and part["body"].get("data"):
+                return base64.urlsafe_b64decode(part["body"]["data"]).decode(
+                    "utf-8", errors="replace"
+                )
+            if part["mimeType"].startswith("multipart/"):
+                if result := extract_html_body(part):
+                    return result
+                # Check nested parts for HTML (like decode_body does)
+                if "parts" in part:
+                    for subpart in part["parts"]:
+                        if subpart["mimeType"] == "text/html" and subpart["body"].get(
+                            "data"
+                        ):
+                            return base64.urlsafe_b64decode(
+                                subpart["body"]["data"]
+                            ).decode("utf-8", errors="replace")
+    return None
+
+
 def get_header(headers: list, name: str) -> str:
     for h in headers:
         if h["name"].lower() == name.lower():
@@ -289,7 +318,7 @@ def get_header(headers: list, name: str) -> str:
 def extract_message_summary(msg: dict) -> dict:
     """Extract essential fields from a message for compact output.
 
-    Writes full decoded message to .tmp/ and includes path in result.
+    Writes full decoded message to .tmp/ (both .txt and .html when HTML exists).
     """
     headers = msg.get("payload", {}).get("headers", [])
     result = {
@@ -305,11 +334,15 @@ def extract_message_summary(msg: dict) -> dict:
     if cc := get_header(headers, "Cc"):
         result["cc"] = cc
 
-    body = decode_body(msg.get("payload", {}))
+    payload = msg.get("payload", {})
+    body = decode_body(payload)
+    html_body = extract_html_body(payload)
+
     tmp_dir = Path(".tmp")
     tmp_dir.mkdir(exist_ok=True)
-    file_path = tmp_dir / f"email-{msg['id']}.txt"
 
+    # Write plain text file
+    file_path = tmp_dir / f"email-{msg['id']}.txt"
     with open(file_path, "w") as f:
         f.write(f"From: {result['from']}\n")
         f.write(f"To: {result['to']}\n")
@@ -317,8 +350,14 @@ def extract_message_summary(msg: dict) -> dict:
         f.write(f"Subject: {result['subject']}\n")
         f.write(f"Date: {result['date']}\n")
         f.write(f"\n{body}")
-
     result["file"] = str(file_path)
+
+    # Write HTML file if HTML content exists
+    if html_body:
+        html_path = tmp_dir / f"email-{msg['id']}.html"
+        with open(html_path, "w") as f:
+            f.write(html_body)
+        result["htmlFile"] = str(html_path)
 
     return result
 

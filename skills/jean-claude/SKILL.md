@@ -153,12 +153,16 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude completions fish | source
       "date": "Tue, 16 Dec 2025 21:12:21 +0000",
       "snippet": "First ~200 chars of body...",
       "labels": ["INBOX", "UNREAD"],
-      "file": ".tmp/email-19b29039fd36d1c1.txt"
+      "file": ".tmp/email-19b29039fd36d1c1.txt",
+      "htmlFile": ".tmp/email-19b29039fd36d1c1.html"
     }
   ],
   "nextPageToken": "abc123..."
 }
 ```
+
+The `htmlFile` field is present when the email has HTML content. Use it to find
+links (like unsubscribe URLs) that aren't in the plain text version.
 
 The `nextPageToken` field is only present when more results are available. Use
 `--page-token` to fetch the next page:
@@ -271,6 +275,29 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail attachments MESSAGE_ID
 # Download an attachment
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail attachment-download MESSAGE_ID ATTACHMENT_ID ./output.pdf
 ```
+
+### Unsubscribing from Newsletters
+
+Read the `htmlFile` (not `file`) to find unsubscribe links — they're in the HTML,
+not the plain text.
+
+```bash
+# Search HTML file for unsubscribe links
+grep -oE 'https?://[^"<>]+unsubscribe[^"<>]*' .tmp/email-MESSAGE_ID.html
+```
+
+**Decoding tracking URLs:** Newsletters often wrap links in tracking redirects.
+URL-decode to get the actual destination:
+
+```python
+import urllib.parse
+print(urllib.parse.unquote(encoded_url))
+```
+
+**Completing the unsubscribe:**
+- Mailchimp, Mailgun, and similar services work with browser automation
+- Cloudflare-protected sites (Coinbase, etc.) block automated requests — provide
+  the decoded URL to the user to click manually
 
 ## Calendar
 

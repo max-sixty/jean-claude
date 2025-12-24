@@ -3,8 +3,7 @@ Usage: jean-claude gmail [OPTIONS] COMMAND [ARGS]...
   Gmail CLI - search, draft, and send emails.
 
 Options:
-  --verbose  Enable verbose logging
-  --help     Show this message and exit.
+  --help  Show this message and exit.
 
 Commands:
   archive              Archive messages (remove from inbox).
