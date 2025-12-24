@@ -158,16 +158,16 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude completions fish | source
       "date": "Tue, 16 Dec 2025 21:12:21 +0000",
       "snippet": "First ~200 chars of body...",
       "labels": ["INBOX", "UNREAD"],
-      "file": ".tmp/email-19b29039fd36d1c1.txt",
-      "htmlFile": ".tmp/email-19b29039fd36d1c1.html"
+      "file": ".tmp/email-19b29039fd36d1c1.json"
     }
   ],
   "nextPageToken": "abc123..."
 }
 ```
 
-The `htmlFile` field is present when the email has HTML content. Use it to find
-links (like unsubscribe URLs) that aren't in the plain text version.
+The `file` field points to a self-contained JSON file with the full body. Use
+`jq .body` to extract just the body, or `jq .html_body` for HTML content (when
+present). HTML content contains links like unsubscribe URLs.
 
 The `nextPageToken` field is only present when more results are available. Use
 `--page-token` to fetch the next page:
@@ -283,12 +283,12 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail attachment-download MES
 
 ### Unsubscribing from Newsletters
 
-Read the `htmlFile` (not `file`) to find unsubscribe links — they're in the HTML,
-not the plain text.
+Extract the `html_body` from the JSON file to find unsubscribe links — they're
+in the HTML, not the plain text.
 
 ```bash
-# Search HTML file for unsubscribe links
-grep -oE 'https?://[^"<>]+unsubscribe[^"<>]*' .tmp/email-MESSAGE_ID.html
+# Search HTML body for unsubscribe links
+jq -r '.html_body' .tmp/email-MESSAGE_ID.json | grep -oE 'https?://[^"<>]+unsubscribe[^"<>]*'
 ```
 
 **Decoding tracking URLs:** Newsletters often wrap links in tracking redirects.

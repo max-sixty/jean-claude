@@ -425,10 +425,30 @@ def get_header(headers: list, name: str) -> str:
     return ""
 
 
+def _write_email_json(
+    prefix: str, id_: str, summary: dict, body: str, html_body: str | None
+) -> str:
+    """Write email data to .tmp/ as JSON, return file path.
+
+    Creates a self-contained JSON file with the full body instead of snippet.
+    """
+    tmp_dir = Path(".tmp")
+    tmp_dir.mkdir(exist_ok=True)
+
+    file_data = {k: v for k, v in summary.items() if k != "snippet"}
+    file_data["body"] = body
+    if html_body:
+        file_data["html_body"] = html_body
+
+    file_path = tmp_dir / f"{prefix}-{id_}.json"
+    file_path.write_text(json.dumps(file_data, indent=2))
+    return str(file_path)
+
+
 def extract_message_summary(msg: dict) -> dict:
     """Extract essential fields from a message for compact output.
 
-    Writes full decoded message to .tmp/ (both .txt and .html when HTML exists).
+    Writes self-contained JSON to .tmp/ with full body (and html_body when present).
     """
     headers = msg.get("payload", {}).get("headers", [])
     result = {
@@ -448,27 +468,7 @@ def extract_message_summary(msg: dict) -> dict:
     body = decode_body(payload)
     html_body = extract_html_body(payload)
 
-    tmp_dir = Path(".tmp")
-    tmp_dir.mkdir(exist_ok=True)
-
-    # Write plain text file
-    file_path = tmp_dir / f"email-{msg['id']}.txt"
-    with open(file_path, "w") as f:
-        f.write(f"From: {result['from']}\n")
-        f.write(f"To: {result['to']}\n")
-        f.write(f"Cc: {result.get('cc', '')}\n")
-        f.write(f"Subject: {result['subject']}\n")
-        f.write(f"Date: {result['date']}\n")
-        f.write(f"\n{body}")
-    result["file"] = str(file_path)
-
-    # Write HTML file if HTML content exists
-    if html_body:
-        html_path = tmp_dir / f"email-{msg['id']}.html"
-        with open(html_path, "w") as f:
-            f.write(html_body)
-        result["htmlFile"] = str(html_path)
-
+    result["file"] = _write_email_json("email", msg["id"], result, body, html_body)
     return result
 
 
@@ -510,29 +510,11 @@ def extract_thread_summary(thread: dict) -> dict:
     if cc := get_header(headers, "Cc"):
         result["cc"] = cc
 
-    # Write latest message body to .tmp/
     payload = latest_msg.get("payload", {})
     body = decode_body(payload)
     html_body = extract_html_body(payload)
 
-    tmp_dir = Path(".tmp")
-    tmp_dir.mkdir(exist_ok=True)
-
-    file_path = tmp_dir / f"thread-{thread['id']}.txt"
-    with open(file_path, "w") as f:
-        f.write(f"From: {result['from']}\n")
-        f.write(f"To: {result['to']}\n")
-        f.write(f"Cc: {result.get('cc', '')}\n")
-        f.write(f"Subject: {result['subject']}\n")
-        f.write(f"Date: {result['date']}\n")
-        f.write(f"\n{body}")
-    result["file"] = str(file_path)
-
-    if html_body:
-        html_path = tmp_dir / f"thread-{thread['id']}.html"
-        with open(html_path, "w") as f:
-            f.write(html_body)
-        result["htmlFile"] = str(html_path)
+    result["file"] = _write_email_json("thread", thread["id"], result, body, html_body)
 
     return result
 
