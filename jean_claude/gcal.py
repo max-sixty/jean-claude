@@ -205,10 +205,18 @@ def search(query: str, days: int):
 @click.option(
     "--days", type=int, help="Limit to events within N days (default: no limit)"
 )
-def invitations(days: int | None):
+@click.option(
+    "--expand",
+    is_flag=True,
+    help="Show all instances instead of collapsing recurring events",
+)
+def invitations(days: int | None, expand: bool):
     """List pending calendar invitations. Returns JSON array.
 
     Shows all future events where you are an attendee and haven't responded yet.
+    Recurring events are collapsed into a single entry with instanceCount.
+    Use the parent ID to respond to all instances at once.
+    Use --expand to see all individual instances.
     """
     time_min = datetime.now(LOCAL_TZ)
 
@@ -233,7 +241,52 @@ def invitations(days: int | None):
                 pending.append(event)
                 break
 
-    click.echo(json.dumps(pending, indent=2))
+    # If --expand, return all instances without collapsing
+    if expand:
+        click.echo(json.dumps(pending, indent=2))
+        return
+
+    # Collapse recurring events into single entries
+    recurring_groups: dict[str, list[dict]] = {}
+    standalone = []
+
+    for event in pending:
+        parent_id = event.get("recurringEventId")
+        if parent_id:
+            if parent_id not in recurring_groups:
+                recurring_groups[parent_id] = []
+            recurring_groups[parent_id].append(event)
+        else:
+            standalone.append(event)
+
+    # Build output: standalone events + collapsed recurring series
+    output = []
+
+    # Add standalone events (sorted by start time, which they already are)
+    for event in standalone:
+        modified = event.copy()
+        modified["recurring"] = False
+        output.append(modified)
+
+    # Add collapsed recurring series
+    for parent_id, instances in recurring_groups.items():
+        # Use first instance as template, but replace ID with parent ID
+        first = instances[0].copy()
+        first["id"] = parent_id
+        first["recurring"] = True
+        first["instanceCount"] = len(instances)
+        # Remove instance-specific fields
+        first.pop("recurringEventId", None)
+        first.pop("originalStartTime", None)
+        output.append(first)
+
+    # Sort by start time
+    def get_start(e: dict) -> str:
+        return e.get("start", {}).get("dateTime", e.get("start", {}).get("date", ""))
+
+    output.sort(key=get_start)
+
+    click.echo(json.dumps(output, indent=2))
 
 
 @cli.command()

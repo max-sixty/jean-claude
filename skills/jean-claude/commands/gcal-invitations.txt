@@ -3,7 +3,11 @@ Usage: jean-claude gcal invitations [OPTIONS]
   List pending calendar invitations. Returns JSON array.
 
   Shows all future events where you are an attendee and haven't responded yet.
+  Recurring events are collapsed into a single entry with instanceCount. Use
+  the parent ID to respond to all instances at once. Use --expand to see all
+  individual instances.
 
 Options:
   --days INTEGER  Limit to events within N days (default: no limit)
+  --expand        Show all instances instead of collapsing recurring events
   --help          Show this message and exit.

@@ -330,6 +330,15 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal delete EVENT_ID --notify
 
 List and respond to calendar invitations (events you've been invited to).
 
+**Recurring events:** The invitations command collapses recurring event
+instances into a single entry. Each collapsed entry includes:
+- `recurring: true` - indicates this is a recurring series
+- `instanceCount: N` - number of pending instances
+- `id` - the parent event ID (use this to respond to all instances at once)
+
+Responding to a parent ID accepts/declines all instances in the series.
+Responding to an instance ID (if you have one) affects only that instance.
+
 ```bash
 # List all pending invitations (no time limit by default)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal invitations
@@ -337,7 +346,10 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal invitations
 # Limit to next 7 days
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal invitations --days 7
 
-# Accept an invitation
+# Show all individual instances (don't collapse recurring events)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal invitations --expand
+
+# Accept an invitation (or all instances if recurring)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal respond EVENT_ID --accept
 
 # Decline an invitation
