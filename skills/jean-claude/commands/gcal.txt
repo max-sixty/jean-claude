@@ -6,8 +6,10 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  create  Create a calendar event.
-  delete  Delete/cancel a calendar event.
-  list    List calendar events.
-  search  Search calendar events.
-  update  Update/modify an existing calendar event.
+  create       Create a calendar event.
+  delete       Delete/cancel a calendar event.
+  invitations  List pending calendar invitations.
+  list         List calendar events.
+  respond      Respond to a calendar invitation.
+  search       Search calendar events.
+  update       Update/modify an existing calendar event.

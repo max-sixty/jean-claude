@@ -16,6 +16,11 @@ def get_help(command_parts: list[str]) -> str:
     return result.stdout
 
 
+def ensure_trailing_newline(text: str) -> str:
+    """Ensure text ends with exactly one newline."""
+    return text.rstrip() + "\n"
+
+
 def parse_commands(help_text: str) -> list[str]:
     """Extract command names from help output."""
     commands = []
@@ -45,7 +50,7 @@ def generate_reference(output_dir: Path) -> None:
 
     # Main help
     main_help = get_help([])
-    (output_dir / "main.txt").write_text(main_help)
+    (output_dir / "main.txt").write_text(ensure_trailing_newline(main_help))
     print(f"Generated {output_dir / 'main.txt'}")
 
     # Top-level commands
@@ -56,7 +61,7 @@ def generate_reference(output_dir: Path) -> None:
 
         # Write top-level command help
         cmd_file = output_dir / f"{cmd}.txt"
-        cmd_file.write_text(cmd_help)
+        cmd_file.write_text(ensure_trailing_newline(cmd_help))
         print(f"Generated {cmd_file}")
 
         # Check for subcommands
@@ -79,12 +84,12 @@ def generate_reference(output_dir: Path) -> None:
                     )
 
                 subcmd_file = output_dir / f"{cmd}-{subcmd}.txt"
-                subcmd_file.write_text("\n".join(content))
+                subcmd_file.write_text(ensure_trailing_newline("\n".join(content)))
                 print(f"Generated {subcmd_file}")
             else:
                 # Simple subcommand - just write its help
                 subcmd_file = output_dir / f"{cmd}-{subcmd}.txt"
-                subcmd_file.write_text(subcmd_help)
+                subcmd_file.write_text(ensure_trailing_newline(subcmd_help))
                 print(f"Generated {subcmd_file}")
 
 

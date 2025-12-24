@@ -1,0 +1,9 @@
+Usage: jean-claude gcal invitations [OPTIONS]
+
+  List pending calendar invitations. Returns JSON array.
+
+  Shows all future events where you are an attendee and haven't responded yet.
+
+Options:
+  --days INTEGER  Limit to events within N days (default: no limit)
+  --help          Show this message and exit.

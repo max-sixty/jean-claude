@@ -274,6 +274,8 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail attachment-download MES
 
 ## Calendar
 
+All calendar commands return JSON.
+
 ### List Events
 
 ```bash
@@ -285,9 +287,6 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --days 7
 
 # Date range
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --from 2025-01-15 --to 2025-01-20
-
-# JSON output - use when you need to parse results programmatically
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --json
 ```
 
 ### Create Events
@@ -316,15 +315,39 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Vacation" \
 ### Search & Manage Events
 
 ```bash
-# Search (default: 30 days)
+# Search (default: 30 days ahead)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal search "standup"
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal search "standup" --days 90 --json
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal search "standup" --days 90
 
 # Update
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal update EVENT_ID --start "2025-01-16 14:00"
 
 # Delete
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal delete EVENT_ID --notify
+```
+
+### Invitations
+
+List and respond to calendar invitations (events you've been invited to).
+
+```bash
+# List all pending invitations (no time limit by default)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal invitations
+
+# Limit to next 7 days
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal invitations --days 7
+
+# Accept an invitation
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal respond EVENT_ID --accept
+
+# Decline an invitation
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal respond EVENT_ID --decline
+
+# Tentatively accept
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal respond EVENT_ID --tentative
+
+# Respond without notifying organizer
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal respond EVENT_ID --accept --no-notify
 ```
 
 ## Drive

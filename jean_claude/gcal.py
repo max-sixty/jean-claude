@@ -52,50 +52,6 @@ def parse_datetime(s: str) -> datetime:
     raise click.BadParameter(f"Cannot parse datetime: {s}")
 
 
-def format_event(event: dict) -> str:
-    """Format a calendar event for display."""
-    start = event["start"].get("dateTime", event["start"].get("date", ""))
-    end = event["end"].get("dateTime", event["end"].get("date", ""))
-
-    # Parse and format times
-    if "T" in start:
-        start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
-        start_str = start_dt.strftime("%Y-%m-%d %H:%M")
-    else:
-        start_str = start
-
-    if "T" in end:
-        end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
-        end_str = end_dt.strftime("%H:%M")
-    else:
-        end_str = end
-
-    summary = event.get("summary", "(no title)")
-    lines = [
-        click.style(f"ID: {event['id']}", dim=True),
-        f"Time: {start_str} - {end_str}",
-        click.style(f"Event: {summary}", bold=True),
-    ]
-
-    if location := event.get("location"):
-        lines.append(f"Location: {location}")
-
-    if attendees := event.get("attendees"):
-        names = [a.get("email", "") for a in attendees[:5]]
-        if len(attendees) > 5:
-            names.append(f"...and {len(attendees) - 5} more")
-        lines.append(f"Attendees: {', '.join(names)}")
-
-    if desc := event.get("description"):
-        lines.append(
-            f"Description: {desc[:100]}..."
-            if len(desc) > 100
-            else f"Description: {desc}"
-        )
-
-    return "\n".join(lines)
-
-
 @click.group()
 def cli():
     """Google Calendar CLI - list, create, and search events."""
@@ -106,9 +62,8 @@ def cli():
 @click.option("--days", default=1, help="Number of days to show (default: 1)")
 @click.option("--from", "from_date", help="Start date (YYYY-MM-DD)")
 @click.option("--to", "to_date", help="End date (YYYY-MM-DD)")
-@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def list_events(days: int, from_date: str, to_date: str, as_json: bool):
-    """List calendar events."""
+def list_events(days: int, from_date: str, to_date: str):
+    """List calendar events. Returns JSON array of events."""
     if from_date:
         time_min = parse_datetime(from_date).replace(tzinfo=LOCAL_TZ)
     else:
@@ -136,22 +91,7 @@ def list_events(days: int, from_date: str, to_date: str, as_json: bool):
         .execute()
     )
 
-    events = result.get("items", [])
-
-    if not events:
-        if as_json:
-            click.echo(json.dumps([]))
-        else:
-            click.echo("No events found.", err=True)
-        return
-
-    if as_json:
-        click.echo(json.dumps(events, indent=2))
-    else:
-        for i, event in enumerate(events):
-            if i > 0:
-                click.echo("\n" + "─" * 40 + "\n")
-            click.echo(format_event(event))
+    click.echo(json.dumps(result.get("items", []), indent=2))
 
 
 @cli.command()
@@ -237,9 +177,8 @@ def create(
 @cli.command()
 @click.argument("query")
 @click.option("--days", default=30, help="Days to search (default: 30)")
-@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def search(query: str, days: int, as_json: bool):
-    """Search calendar events.
+def search(query: str, days: int):
+    """Search calendar events. Returns JSON array of matching events.
 
     QUERY: Text to search for in event titles/descriptions
     """
@@ -260,22 +199,129 @@ def search(query: str, days: int, as_json: bool):
         .execute()
     )
 
-    events = result.get("items", [])
+    click.echo(json.dumps(result.get("items", []), indent=2))
 
-    if not events:
-        if as_json:
-            click.echo(json.dumps([]))
+
+@cli.command()
+@click.option(
+    "--days", type=int, help="Limit to events within N days (default: no limit)"
+)
+def invitations(days: int | None):
+    """List pending calendar invitations. Returns JSON array.
+
+    Shows all future events where you are an attendee and haven't responded yet.
+    """
+    time_min = datetime.now(LOCAL_TZ)
+
+    service = get_calendar()
+    params = {
+        "calendarId": "primary",
+        "timeMin": time_min.isoformat(),
+        "singleEvents": True,
+        "orderBy": "startTime",
+    }
+    if days is not None:
+        params["timeMax"] = (time_min + timedelta(days=days)).isoformat()
+
+    result = service.events().list(**params).execute()
+
+    # Filter to events where user is attendee with needsAction status
+    pending = []
+    for event in result.get("items", []):
+        attendees = event.get("attendees", [])
+        for attendee in attendees:
+            if attendee.get("self") and attendee.get("responseStatus") == "needsAction":
+                pending.append(event)
+                break
+
+    click.echo(json.dumps(pending, indent=2))
+
+
+@cli.command()
+@click.argument("event_id")
+@click.option(
+    "--accept", "response", flag_value="accepted", help="Accept the invitation"
+)
+@click.option(
+    "--decline", "response", flag_value="declined", help="Decline the invitation"
+)
+@click.option(
+    "--tentative", "response", flag_value="tentative", help="Tentatively accept"
+)
+@click.option(
+    "--notify/--no-notify", default=True, help="Notify organizer (default: notify)"
+)
+def respond(event_id: str, response: str, notify: bool):
+    """Respond to a calendar invitation.
+
+    EVENT_ID: The event ID (from invitations or list output)
+
+    \b
+    Examples:
+        jean-claude gcal respond EVENT_ID --accept
+        jean-claude gcal respond EVENT_ID --decline --no-notify
+        jean-claude gcal respond EVENT_ID --tentative
+    """
+    from googleapiclient.errors import HttpError
+
+    if not response:
+        raise click.UsageError("Must specify --accept, --decline, or --tentative")
+
+    service = get_calendar()
+
+    # Get the event
+    try:
+        event = service.events().get(calendarId="primary", eventId=event_id).execute()
+    except HttpError as e:
+        if e.resp.status == 404:
+            click.echo(f"Error: Event not found: {event_id}", err=True)
         else:
-            click.echo("No events found.", err=True)
-        return
+            click.echo(f"Error: {e.reason}", err=True)
+        raise SystemExit(1)
 
-    if as_json:
-        click.echo(json.dumps(events, indent=2))
-    else:
-        for i, event in enumerate(events):
-            if i > 0:
-                click.echo("\n" + "─" * 40 + "\n")
-            click.echo(format_event(event))
+    # Find the user's attendee entry and update their response
+    attendees = event.get("attendees", [])
+    if not attendees:
+        click.echo(
+            "Error: This event has no attendees. You can only respond to invitations.",
+            err=True,
+        )
+        raise SystemExit(1)
+
+    user_found = False
+    for attendee in attendees:
+        if attendee.get("self"):
+            attendee["responseStatus"] = response
+            user_found = True
+            break
+
+    if not user_found:
+        click.echo("Error: You are not an attendee of this event.", err=True)
+        raise SystemExit(1)
+
+    # Update the event with new response status
+    send_updates = "all" if notify else "none"
+    try:
+        service.events().patch(
+            calendarId="primary",
+            eventId=event_id,
+            body={"attendees": attendees},
+            sendUpdates=send_updates,
+        ).execute()
+    except HttpError as e:
+        click.echo(f"Error updating response: {e.reason}", err=True)
+        raise SystemExit(1)
+
+    response_text = {
+        "accepted": "accepted",
+        "declined": "declined",
+        "tentative": "tentatively accepted",
+    }
+    click.echo(
+        f"Invitation {response_text[response]}: {event.get('summary', '(no title)')}"
+    )
+    if notify:
+        click.echo("Organizer has been notified.")
 
 
 @cli.command()

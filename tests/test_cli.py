@@ -132,3 +132,60 @@ def test_imessage_help():
     assert result.exit_code == 0
     assert "send" in result.output
     assert "chats" in result.output
+
+
+def test_command_reference_up_to_date(tmp_path):
+    """Test that command reference files are up-to-date.
+
+    This test generates command reference to a temp directory and compares
+    it to the committed files. Fails if they differ, indicating someone
+    forgot to run: uv run python scripts/generate-command-reference.py
+    """
+    from pathlib import Path
+    import sys
+
+    # Import the generation script
+    repo_root = Path(__file__).parent.parent
+    sys.path.insert(0, str(repo_root / "scripts"))
+    from importlib import import_module
+
+    generate_module = import_module("generate-command-reference")
+
+    # Generate to temp directory
+    generate_module.generate_reference(tmp_path)
+
+    # Compare with existing files
+    existing_dir = repo_root / "skills" / "jean-claude" / "commands"
+
+    # Get all generated files
+    generated_files = sorted(tmp_path.glob("*.txt"))
+    existing_files = sorted(existing_dir.glob("*.txt"))
+
+    # Check same number of files
+    generated_names = {f.name for f in generated_files}
+    existing_names = {f.name for f in existing_files}
+
+    missing = generated_names - existing_names
+    extra = existing_names - generated_names
+
+    errors = []
+    if missing:
+        errors.append(f"Missing files in commands/: {missing}")
+    if extra:
+        errors.append(f"Extra files in commands/ (should be removed): {extra}")
+
+    # Compare content of each file
+    for gen_file in generated_files:
+        existing_file = existing_dir / gen_file.name
+        if existing_file.exists():
+            gen_content = gen_file.read_text()
+            exist_content = existing_file.read_text()
+            if gen_content != exist_content:
+                errors.append(f"Content mismatch: {gen_file.name}")
+
+    if errors:
+        error_msg = "\n".join(errors)
+        raise AssertionError(
+            f"Command reference files are out of date:\n{error_msg}\n\n"
+            "Run: uv run python scripts/generate-command-reference.py"
+        )

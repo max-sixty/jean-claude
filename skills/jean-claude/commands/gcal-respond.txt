@@ -1,0 +1,17 @@
+Usage: jean-claude gcal respond [OPTIONS] EVENT_ID
+
+  Respond to a calendar invitation.
+
+  EVENT_ID: The event ID (from invitations or list output)
+
+  Examples:
+      jean-claude gcal respond EVENT_ID --accept
+      jean-claude gcal respond EVENT_ID --decline --no-notify
+      jean-claude gcal respond EVENT_ID --tentative
+
+Options:
+  --accept                Accept the invitation
+  --decline               Decline the invitation
+  --tentative             Tentatively accept
+  --notify / --no-notify  Notify organizer (default: notify)
+  --help                  Show this message and exit.

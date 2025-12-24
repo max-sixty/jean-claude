@@ -1,10 +1,9 @@
 Usage: jean-claude gcal list [OPTIONS]
 
-  List calendar events.
+  List calendar events. Returns JSON array of events.
 
 Options:
   --days INTEGER  Number of days to show (default: 1)
   --from TEXT     Start date (YYYY-MM-DD)
   --to TEXT       End date (YYYY-MM-DD)
-  --json          Output as JSON
   --help          Show this message and exit.

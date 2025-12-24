@@ -2,5 +2,8 @@ Usage: jean-claude gmail trash [OPTIONS] MESSAGE_IDS...
 
   Move messages to trash.
 
+  Note: Uses individual trash operations (no batchTrash API exists). For bulk
+  operations, consider using archive instead.
+
 Options:
   --help  Show this message and exit.
