@@ -82,10 +82,11 @@ def configure_logging(
         force=True,
     )
 
-    # Silence noisy third-party loggers
+    # Silence noisy third-party loggers (show only warnings/errors)
     logging.getLogger("googleapiclient.discovery").setLevel(logging.WARNING)
     logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.WARNING)
     logging.getLogger("google.auth.transport.requests").setLevel(logging.WARNING)
+    logging.getLogger("google_auth_httplib2").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
     # Configure structlog
@@ -218,9 +219,15 @@ class JeanClaudeError(Exception):
 class LoggingHttp:
     """HTTP wrapper that logs all API requests.
 
-    Wraps an AuthorizedHttp instance and logs all requests (method + URI)
-    before delegating to the wrapped http object. Response bodies are not
-    logged to avoid huge log files and sensitive data exposure.
+    Wraps an AuthorizedHttp instance and logs all requests with structured
+    metadata (API, resource, operation, body size, etc.) before delegating
+    to the wrapped http object.
+
+    Response/request bodies are not logged to avoid huge log files and
+    sensitive data exposure (email content, message bodies, etc.).
+
+    TODO: If metadata proves insufficient for debugging, consider adding
+    opt-in body logging with redaction of sensitive fields.
 
     Usage:
         from jean_claude.logging import LoggingHttp
@@ -232,6 +239,49 @@ class LoggingHttp:
         self._http = http
         self._logger = get_logger("jean_claude.api")
 
+    def _parse_uri_metadata(self, uri: str, method: str) -> dict:
+        """Extract structured metadata from Google API URIs.
+
+        URIs look like:
+        - https://gmail.googleapis.com/gmail/v1/users/me/messages/abc123
+        - https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify
+        - https://www.googleapis.com/calendar/v3/calendars/primary/events
+        """
+        extra: dict = {}
+        path = uri.split("?")[0]
+        parts = path.split("/")
+
+        # Extract API name (gmail, calendar, drive)
+        for api in ("gmail", "calendar", "drive"):
+            if f"/{api}/" in path or f"{api}.googleapis.com" in path:
+                extra["api"] = api
+                break
+
+        # Extract resource type and operation from path
+        # Look for known resource types
+        resources = ("messages", "threads", "drafts", "labels", "events", "files")
+        for i, part in enumerate(parts):
+            if part in resources:
+                extra["resource"] = part
+                # Next part might be an ID or operation
+                if i + 1 < len(parts):
+                    next_part = parts[i + 1]
+                    # Operations are lowercase words, IDs have mixed case/numbers
+                    if next_part.islower() and next_part.isalpha():
+                        extra["operation"] = next_part
+                    elif next_part and next_part not in ("me", "primary"):
+                        extra["resource_id"] = next_part
+                        # Check for operation after ID
+                        if i + 2 < len(parts) and parts[i + 2]:
+                            extra["operation"] = parts[i + 2]
+                break
+
+        # For batch endpoints, mark as batch operation
+        if "/batch" in path:
+            extra["operation"] = "batch"
+
+        return extra
+
     def request(
         self,
         uri: str,
@@ -241,9 +291,28 @@ class LoggingHttp:
         **kwargs,
     ):
         """Make an HTTP request, logging the operation."""
-        # Extract path without query string for cleaner logs
-        path = uri.split("?")[0]
-        self._logger.info(f"{method} {path}")
+        extra = self._parse_uri_metadata(uri, method)
+
+        # Include content-type for debugging
+        if headers:
+            content_type = headers.get("content-type") or headers.get("Content-Type")
+            if content_type:
+                # Just the type, not boundary params
+                extra["content_type"] = content_type.split(";")[0]
+
+        # Include body size for debugging
+        if body:
+            body_bytes = body if isinstance(body, bytes) else body.encode()
+            extra["body_bytes"] = len(body_bytes)
+
+            # For batch requests, count operations by counting MIME multipart boundaries
+            # Google API uses boundaries like --===============<numbers>==
+            # N requests produce N+1 boundaries (N separators + 1 final marker)
+            if "/batch" in uri and b"--=====" in body_bytes:
+                boundary_count = body_bytes.count(b"--=====")
+                extra["batch_operations"] = max(1, boundary_count - 1)
+
+        self._logger.debug(f"{method} {uri}", **extra)
 
         return self._http.request(
             uri, method=method, body=body, headers=headers, **kwargs
