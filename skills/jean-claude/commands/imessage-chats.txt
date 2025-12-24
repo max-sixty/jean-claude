@@ -2,7 +2,8 @@ Usage: jean-claude imessage chats [OPTIONS]
 
   List available iMessage chats.
 
-  Shows chat name (if any) and chat ID. Use chat ID to send to groups.
+  Shows chat name (or contact name for 1:1 chats) and chat ID. Use chat ID to
+  send to groups.
 
   Example:     jean-claude imessage chats
 

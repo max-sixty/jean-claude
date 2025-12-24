@@ -1,11 +1,15 @@
-Usage: jean-claude imessage history [OPTIONS] CHAT_ID
+Usage: jean-claude imessage history [OPTIONS] [CHAT_ID]
 
   Get message history for a specific chat (requires Full Disk Access).
 
-  CHAT_ID: The chat ID (e.g., any;-;+12025551234 or any;+;chat123...)
+  CHAT_ID: The chat ID or phone number (e.g., any;-;+12025551234 or
+  +12025551234)
 
-  Example:     jean-claude imessage history "any;-;+12025551234" -n 10
+  Examples:     jean-claude imessage history "any;-;+12025551234" -n 10
+  jean-claude imessage history --name "Kevin Seals"     jean-claude imessage
+  history "+12025551234"
 
 Options:
   -n, --max-results INTEGER  Maximum messages to return
+  --name TEXT                Contact name to search for (instead of chat ID)
   --help                     Show this message and exit.

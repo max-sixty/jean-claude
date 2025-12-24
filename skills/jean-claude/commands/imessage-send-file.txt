@@ -1,4 +1,4 @@
-Usage: jean-claude imessage send-file [OPTIONS] RECIPIENT FILE_PATH
+Usage: jean-claude imessage send-file [OPTIONS] [RECIPIENT] [FILE_PATH]
 
   Send a file attachment via iMessage.
 
@@ -6,7 +6,9 @@ Usage: jean-claude imessage send-file [OPTIONS] RECIPIENT FILE_PATH
   FILE_PATH: Path to file to send
 
   Examples:     jean-claude imessage send-file "+12025551234" ./document.pdf
-  jean-claude imessage send-file "any;+;chat123456789" ./photo.jpg
+  jean-claude imessage send-file "any;+;chat123456789" ./photo.jpg     jean-
+  claude imessage send-file --name "Kevin Seals" ./photo.jpg
 
 Options:
-  --help  Show this message and exit.
+  --name TEXT  Contact name to send to (instead of phone/chat ID)
+  --help       Show this message and exit.

@@ -14,6 +14,6 @@ Commands:
   open          Open a chat in Messages.app (marks messages as read).
   participants  List participants of a group chat.
   search        Search message history (requires Full Disk Access).
-  send          Send an iMessage to a phone number or chat ID.
+  send          Send an iMessage to a phone number, chat ID, or contact...
   send-file     Send a file attachment via iMessage.
   unread        List unread messages (requires Full Disk Access).

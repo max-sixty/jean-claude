@@ -62,6 +62,11 @@ These rules apply even if the user explicitly asks to bypass them:
 5. **Double-check iMessage recipients.** iMessage sends are instant and cannot
    be undone. Verify the phone number or chat ID before sending.
 
+6. **Never send to ambiguous recipients.** If using `--name` to look up a
+   contact and multiple contacts or phone numbers match, the command will fail
+   with a list of options. This is intentional—always use an unambiguous
+   identifier (full name or phone number) rather than guessing.
+
 **Email workflow:**
 
 1. Load any available prose/writing skills
@@ -448,12 +453,22 @@ chats use `any;+;chat123...`. Get these from `imessage chats`.
 # Send to phone number
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234" "Hello!"
 
+# Send to contact by name (must match exactly one contact with one phone)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send --name "Kevin Seals" "Hello!"
+
 # Send to group chat
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "any;+;chat123456789" "Hello group!"
 
 # Send file
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file "+12025551234" ./document.pdf
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file --name "Kevin Seals" ./photo.jpg
 ```
+
+**Contact lookup with `--name`:** Searches macOS Contacts.app. Fails if:
+- Multiple contacts match (e.g., "Kevin" matches "Kevin Seals" and "Kevin Smith")
+- One contact has multiple phone numbers
+
+When lookup fails, the error shows all matches—use the specific phone number.
 
 ### List Chats
 
@@ -481,6 +496,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage search "dinner plans
 
 # Chat history (-n limits messages)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage history "any;-;+12025551234" -n 20
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage history --name "Kevin Seals" -n 20
 ```
 
 To enable reading: System Preferences > Privacy & Security > Full Disk Access >

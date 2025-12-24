@@ -57,3 +57,17 @@ uv run jean-claude gmail --help
 ```
 
 For interactive testing with Claude, use the installed plugin version or test locally by temporarily modifying `~/.claude/plugins/marketplaces/jean-claude` to point to your development directory.
+
+## iMessage Safety Principles
+
+When adding or modifying iMessage features:
+
+**Never send to ambiguous recipients.** Any code that resolves names to phone
+numbers must fail if there's ambiguity:
+
+- Multiple contacts match a name → fail, list all matches
+- One contact has multiple phone numbers → fail, list all numbers
+- Never pick "the first one" or guess — require explicit disambiguation
+
+Sending a message to the wrong person is worse than not sending. Fail loudly
+and show options rather than silently picking one.

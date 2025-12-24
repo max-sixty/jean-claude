@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -133,6 +134,139 @@ def get_message_text(text: str | None, attributed_body: bytes | None) -> str | N
     return extract_text_from_attributed_body(attributed_body)
 
 
+def get_chat_id_for_phone(phone: str) -> str | None:
+    """Get the Messages.app chat ID for a phone number.
+
+    Uses AppleScript to let Messages.app handle phone number normalization.
+    Returns the chat ID (e.g., "any;-;+16467194457") or None if not found.
+    """
+    script = """on run {phoneNumber}
+tell application "Messages"
+    set targetService to 1st service whose service type = iMessage
+    try
+        set targetBuddy to buddy phoneNumber of targetService
+        set chatList to every chat whose participants contains targetBuddy
+        repeat with c in chatList
+            return id of c
+        end repeat
+    end try
+end tell
+return ""
+end run"""
+    result = run_applescript(script, phone)
+    return result if result else None
+
+
+def search_contacts_by_name(name: str) -> list[tuple[str, list[str]]]:
+    """Search Contacts.app for people matching the given name.
+
+    Returns list of (full_name, [phone_numbers]) tuples.
+    Only returns contacts that have at least one phone number.
+    """
+    script = """use framework "Foundation"
+
+on run {searchName}
+tell application "Contacts"
+    set foundPeople to every person whose name contains searchName
+    set contactList to current application's NSMutableArray's new()
+
+    repeat with p in foundPeople
+        try
+            set pName to name of p
+            set phoneValues to current application's NSMutableArray's new()
+            repeat with ph in phones of p
+                set phoneVal to value of ph as text
+                phoneValues's addObject:phoneVal
+            end repeat
+
+            -- Only include contacts with at least one phone
+            if (phoneValues's |count|()) > 0 then
+                set contactDict to current application's NSMutableDictionary's new()
+                contactDict's setValue:pName forKey:"name"
+                contactDict's setValue:phoneValues forKey:"phones"
+                contactList's addObject:contactDict
+            end if
+        end try
+    end repeat
+end tell
+
+set jsonData to current application's NSJSONSerialization's dataWithJSONObject:contactList options:0 |error|:(missing value)
+set jsonString to current application's NSString's alloc()'s initWithData:jsonData encoding:(current application's NSUTF8StringEncoding)
+return jsonString as text
+end run"""
+
+    output = run_applescript(script, name)
+    if not output:
+        return []
+
+    contacts_data = json.loads(output)
+    return [(c["name"], c["phones"]) for c in contacts_data]
+
+
+def resolve_recipient(recipient: str | None, name: str | None) -> str:
+    """Resolve recipient to phone/chat ID from direct value or contact name.
+
+    Raises UsageError if neither is provided.
+    Raises ClickException if contact name doesn't resolve.
+    """
+    if name:
+        return resolve_contact_to_phone(name)
+
+    if recipient:
+        return recipient
+
+    raise click.UsageError("Provide either RECIPIENT or --name")
+
+
+def resolve_contact_to_phone(name: str) -> str:
+    """Resolve a contact name to a phone number (raw format from Contacts.app).
+
+    Raises ClickException if no match found or ambiguous.
+    """
+    contacts = search_contacts_by_name(name)
+
+    if not contacts:
+        raise click.ClickException(
+            f"No contact found matching '{name}' with a phone number"
+        )
+
+    # Build list of contacts with their valid phones
+    # [(contact_name, [raw_phone, ...]), ...]
+    contacts_with_phones: list[tuple[str, list[str]]] = []
+    for contact_name, phones in contacts:
+        # Filter to phones that have at least one digit
+        valid_phones = [p for p in phones if any(c.isdigit() for c in p)]
+        if valid_phones:
+            contacts_with_phones.append((contact_name, valid_phones))
+
+    if not contacts_with_phones:
+        raise click.ClickException(
+            f"No contact found matching '{name}' with a phone number"
+        )
+
+    # Check for ambiguity: multiple contacts
+    if len(contacts_with_phones) > 1:
+        matches = "\n".join(f"  - {c[0]}: {c[1][0]}" for c in contacts_with_phones)
+        raise click.ClickException(
+            f"Multiple contacts match '{name}':\n{matches}\n"
+            "Use a more specific name or send directly to the phone number."
+        )
+
+    # Single contact - check for multiple phones
+    contact_name, valid_phones = contacts_with_phones[0]
+    if len(valid_phones) > 1:
+        phones_list = "\n".join(f"  - {p}" for p in valid_phones)
+        raise click.ClickException(
+            f"Contact '{contact_name}' has multiple phone numbers:\n{phones_list}\n"
+            "Send directly to the phone number to avoid ambiguity."
+        )
+
+    # Exactly one contact with exactly one phone - return raw format
+    raw_phone = valid_phones[0]
+    click.echo(f"Found: {contact_name} ({raw_phone})", err=True)
+    return raw_phone
+
+
 @click.group()
 def cli():
     """iMessage CLI - send messages and list chats.
@@ -143,10 +277,11 @@ def cli():
 
 
 @cli.command()
-@click.argument("recipient")
-@click.argument("message")
-def send(recipient: str, message: str):
-    """Send an iMessage to a phone number or chat ID.
+@click.argument("recipient", required=False)
+@click.argument("message", required=False)
+@click.option("--name", help="Contact name to send to (instead of phone/chat ID)")
+def send(recipient: str | None, message: str | None, name: str | None):
+    """Send an iMessage to a phone number, chat ID, or contact name.
 
     RECIPIENT: Phone number (+1234567890) or chat ID (any;+;chat123...)
     MESSAGE: The message text to send
@@ -154,7 +289,18 @@ def send(recipient: str, message: str):
     Examples:
         jean-claude imessage send "+12025551234" "Hello!"
         jean-claude imessage send "any;+;chat123456789" "Hello group!"
+        jean-claude imessage send --name "Kevin Seals" "Hello!"
     """
+    # When --name is used, recipient slot contains the message
+    if name and recipient and not message:
+        message = recipient
+        recipient = None
+
+    if not message:
+        raise click.UsageError("MESSAGE is required")
+
+    recipient = resolve_recipient(recipient, name)
+
     if recipient.startswith("any;"):
         # Chat ID - send directly to chat
         script = """on run {chatId, msg}
@@ -178,9 +324,12 @@ end run"""
 
 
 @cli.command()
-@click.argument("recipient")
-@click.argument("file_path", type=click.Path(exists=True, path_type=Path))
-def send_file(recipient: str, file_path: Path):
+@click.argument("recipient", required=False)
+@click.argument(
+    "file_path", required=False, type=click.Path(exists=True, path_type=Path)
+)
+@click.option("--name", help="Contact name to send to (instead of phone/chat ID)")
+def send_file(recipient: str | None, file_path: Path | None, name: str | None):
     """Send a file attachment via iMessage.
 
     RECIPIENT: Phone number (+1234567890) or chat ID (any;+;chat123...)
@@ -189,7 +338,19 @@ def send_file(recipient: str, file_path: Path):
     Examples:
         jean-claude imessage send-file "+12025551234" ./document.pdf
         jean-claude imessage send-file "any;+;chat123456789" ./photo.jpg
+        jean-claude imessage send-file --name "Kevin Seals" ./photo.jpg
     """
+    # When --name is used, recipient slot contains the file path
+    if name and recipient and not file_path:
+        file_path = Path(recipient)
+        if not file_path.exists():
+            raise click.UsageError(f"File not found: {recipient}")
+        recipient = None
+
+    if not file_path:
+        raise click.UsageError("FILE_PATH is required")
+
+    recipient = resolve_recipient(recipient, name)
     abs_path = str(file_path.resolve())
 
     if recipient.startswith("any;"):
@@ -219,20 +380,35 @@ end run"""
 def chats(max_results: int):
     """List available iMessage chats.
 
-    Shows chat name (if any) and chat ID. Use chat ID to send to groups.
+    Shows chat name (or contact name for 1:1 chats) and chat ID.
+    Use chat ID to send to groups.
 
     Example:
         jean-claude imessage chats
     """
+    # Get chats with participant names resolved by Messages.app
     script = """tell application "Messages"
   set chatInfo to {}
   repeat with c in chats
     try
       set chatName to name of c
+      set chatId to id of c as text
+
+      -- For 1:1 chats without a name, try to get participant's contact name
       if chatName is missing value then
         set chatName to ""
+        set pList to participants of c
+        if (count of pList) = 1 then
+          try
+            set pName to full name of item 1 of pList
+            if pName is not missing value then
+              set chatName to pName
+            end if
+          end try
+        end if
       end if
-      set end of chatInfo to chatName & "||" & (id of c as text)
+
+      set end of chatInfo to chatName & "||" & chatId
     end try
   end repeat
   return chatInfo
@@ -255,12 +431,16 @@ end tell"""
         name, chat_id = item.split("||", 1)
         name = name.strip()
         chat_id = chat_id.strip()
+        identifier = _extract_identifier(chat_id)
 
         if name:
             click.echo(f"{click.style(name, bold=True)}")
+            if name != identifier:
+                # Show phone/identifier if different from name
+                click.echo(f"  {click.style(identifier, dim=True)}")
             click.echo(f"  {click.style(chat_id, dim=True)}")
         else:
-            identifier = _extract_identifier(chat_id)
+            # No name resolved - show identifier
             click.echo(f"{identifier}")
             click.echo(f"  {click.style(chat_id, dim=True)}")
 
@@ -451,19 +631,34 @@ def search(query: str | None, max_results: int):
 
 
 @cli.command()
-@click.argument("chat_id")
+@click.argument("chat_id", required=False)
 @click.option("-n", "--max-results", default=20, help="Maximum messages to return")
-def history(chat_id: str, max_results: int):
+@click.option("--name", help="Contact name to search for (instead of chat ID)")
+def history(chat_id: str | None, max_results: int, name: str | None):
     """Get message history for a specific chat (requires Full Disk Access).
 
-    CHAT_ID: The chat ID (e.g., any;-;+12025551234 or any;+;chat123...)
+    CHAT_ID: The chat ID or phone number (e.g., any;-;+12025551234 or +12025551234)
 
-    Example:
+    Examples:
         jean-claude imessage history "any;-;+12025551234" -n 10
+        jean-claude imessage history --name "Kevin Seals"
+        jean-claude imessage history "+12025551234"
     """
-    # Extract chat identifier for database lookup
-    # Chat IDs from AppleScript look like "any;-;+16467194457" or "any;+;chat123..."
-    chat_identifier = chat_id.split(";")[-1] if ";" in chat_id else chat_id
+    if name:
+        # Get raw phone from Contacts, then use Messages.app to get normalized chat ID
+        raw_phone = resolve_contact_to_phone(name)
+        messages_chat_id = get_chat_id_for_phone(raw_phone)
+        if not messages_chat_id:
+            raise click.ClickException(
+                f"No message history found for '{name}' ({raw_phone})"
+            )
+        # Extract identifier from chat ID (e.g., "any;-;+16467194457" -> "+16467194457")
+        chat_identifier = messages_chat_id.split(";")[-1]
+    elif chat_id:
+        # Use provided chat ID directly
+        chat_identifier = chat_id.split(";")[-1] if ";" in chat_id else chat_id
+    else:
+        raise click.UsageError("Provide either CHAT_ID or --name")
 
     conn = get_db_connection()
     cursor = conn.cursor()
