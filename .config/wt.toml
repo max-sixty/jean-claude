@@ -3,4 +3,4 @@
 # Available template variables: {{ repo }}, {{ branch }}, {{ worktree }}, {{ repo_root }}, {{ target }}
 [post-merge]
 sync = 'if [ "{{ target }}" = "main" ]; then git pull && git push; fi'
-plugin = 'claude plugin marketplace update jean-claude'
+plugin = 'claude plugin marketplace update jean-claude && claude plugin install jean-claude@jean-claude'
