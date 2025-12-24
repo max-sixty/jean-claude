@@ -74,6 +74,65 @@ def _extract_identifier(chat_id: str) -> str:
     return chat_id
 
 
+def extract_text_from_attributed_body(data: bytes | None) -> str | None:
+    """Extract text from NSAttributedString streamtyped binary.
+
+    Modern macOS stores iMessage text in attributedBody (binary plist) rather
+    than the text column. The format is a streamtyped NSAttributedString where
+    the actual string follows this structure:
+
+        ... | b"NSString" | 5-byte preamble | length | content | ...
+
+    The 5-byte preamble is always b"\\x01\\x94\\x84\\x01+".
+
+    Length encoding:
+    - If first byte is 0x81 (129): length is next 2 bytes, little-endian
+    - Otherwise: length is just that single byte
+
+    Based on LangChain's iMessage loader implementation.
+    """
+    if not data:
+        return None
+
+    try:
+        # Find NSString marker and skip past it + 5-byte preamble
+        parts = data.split(b"NSString")
+        if len(parts) < 2:
+            return None
+
+        content = parts[1][5:]  # Skip 5-byte preamble after NSString
+        if not content:
+            return None
+
+        # Parse variable-length encoding
+        length = content[0]
+        start = 1
+
+        if length == 0x81:  # Multi-byte length indicator
+            # Length is next 2 bytes in little-endian
+            if len(content) < 3:
+                return None
+            length = int.from_bytes(content[1:3], "little")
+            start = 3
+
+        if len(content) < start + length:
+            return None
+
+        text = content[start : start + length].decode("utf-8", errors="replace")
+        return text.strip() if text else None
+
+    except (UnicodeDecodeError, IndexError, ValueError):
+        # Expected failures from malformed binary data
+        return None
+
+
+def get_message_text(text: str | None, attributed_body: bytes | None) -> str | None:
+    """Get message text from text column or attributedBody fallback."""
+    if text:
+        return text
+    return extract_text_from_attributed_body(attributed_body)
+
+
 @click.group()
 def cli():
     """iMessage CLI - send messages and list chats.
@@ -295,6 +354,7 @@ def unread(max_results: int):
             datetime(m.date/1000000000 + {APPLE_EPOCH_OFFSET}, 'unixepoch', 'localtime') as date,
             COALESCE(h.id, c.chat_identifier, 'unknown') as sender,
             m.text,
+            m.attributedBody,
             c.display_name
         FROM message m
         LEFT JOIN handle h ON m.handle_id = h.ROWID
@@ -302,8 +362,7 @@ def unread(max_results: int):
         LEFT JOIN chat c ON cmj.chat_id = c.ROWID
         WHERE m.is_read = 0
           AND m.is_from_me = 0
-          AND m.text IS NOT NULL
-          AND m.text != ''
+          AND (m.text IS NOT NULL OR m.attributedBody IS NOT NULL)
         ORDER BY m.date DESC
         LIMIT ?
         """,
@@ -317,7 +376,11 @@ def unread(max_results: int):
         click.echo("No unread messages.", err=True)
         return
 
-    for date, sender, text, display_name in rows:
+    for date, sender, text, attributed_body, display_name in rows:
+        msg_text = get_message_text(text, attributed_body)
+        if not msg_text:
+            continue
+
         if display_name:
             click.echo(
                 f"{click.style(date, dim=True)} {click.style(sender, bold=True)} "
@@ -327,7 +390,7 @@ def unread(max_results: int):
             click.echo(
                 f"{click.style(date, dim=True)} {click.style(sender, bold=True)}"
             )
-        click.echo(f"  {truncate_text(text)}")
+        click.echo(f"  {truncate_text(msg_text)}")
         click.echo()
 
 
@@ -353,15 +416,17 @@ def search(query: str | None, max_results: int):
         SELECT
             datetime(m.date/1000000000 + {APPLE_EPOCH_OFFSET}, 'unixepoch', 'localtime') as date,
             COALESCE(h.id, c.chat_identifier, 'unknown') as sender,
-            m.text
+            m.text,
+            m.attributedBody
         FROM message m
         LEFT JOIN handle h ON m.handle_id = h.ROWID
         LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
         LEFT JOIN chat c ON cmj.chat_id = c.ROWID
-        WHERE m.text IS NOT NULL AND m.text != ''
+        WHERE (m.text IS NOT NULL OR m.attributedBody IS NOT NULL)
     """
 
     if query:
+        # Search in text column - attributedBody search would require extraction
         cursor.execute(
             base_query + " AND m.text LIKE ? ORDER BY m.date DESC LIMIT ?",
             (f"%{query}%", max_results),
@@ -379,8 +444,10 @@ def search(query: str | None, max_results: int):
         click.echo("No messages found.", err=True)
         return
 
-    for date, sender, text in rows:
-        format_message_row(date, sender, text)
+    for date, sender, text, attributed_body in rows:
+        msg_text = get_message_text(text, attributed_body)
+        if msg_text:
+            format_message_row(date, sender, msg_text)
 
 
 @cli.command()
@@ -407,13 +474,14 @@ def history(chat_id: str, max_results: int):
             datetime(m.date/1000000000 + {APPLE_EPOCH_OFFSET}, 'unixepoch', 'localtime') as date,
             CASE WHEN m.is_from_me = 1 THEN 'me' ELSE COALESCE(h.id, 'unknown') END as sender,
             m.text,
+            m.attributedBody,
             m.is_from_me
         FROM message m
         LEFT JOIN handle h ON m.handle_id = h.ROWID
         LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
         LEFT JOIN chat c ON cmj.chat_id = c.ROWID
         WHERE (c.chat_identifier = ? OR h.id = ?)
-          AND m.text IS NOT NULL AND m.text != ''
+          AND (m.text IS NOT NULL OR m.attributedBody IS NOT NULL)
         ORDER BY m.date DESC
         LIMIT ?
         """,
@@ -428,5 +496,7 @@ def history(chat_id: str, max_results: int):
         return
 
     # Reverse to show oldest first
-    for date, sender, text, is_from_me in reversed(rows):
-        format_message_row(date, sender, text, is_from_me)
+    for date, sender, text, attributed_body, is_from_me in reversed(rows):
+        msg_text = get_message_text(text, attributed_body)
+        if msg_text:
+            format_message_row(date, sender, msg_text, is_from_me)
