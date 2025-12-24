@@ -121,21 +121,6 @@ user limit), download your OAuth JSON from Google Cloud Console and save it as
 `~/.config/jean-claude/client_secret.json` before running the auth script. See
 README for detailed setup steps.
 
-### Shell Completions
-
-Enable tab completion for the jean-claude CLI:
-
-```bash
-# Bash (~/.bashrc)
-eval "$(uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude completions bash)"
-
-# Zsh (~/.zshrc)
-eval "$(uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude completions zsh)"
-
-# Fish (~/.config/fish/config.fish)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude completions fish | source
-```
-
 ## Gmail
 
 ### Reading Emails

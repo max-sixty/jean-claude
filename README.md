@@ -157,6 +157,23 @@ uv run jean-claude imessage --help  # macOS only
 
 </details>
 
+### Shell Completions
+
+Enable tab completion for the CLI:
+
+```bash
+cd ~/.claude/plugins/marketplaces/jean-claude
+
+# Bash (~/.bashrc)
+eval "$(uv run jean-claude completions bash)"
+
+# Zsh (~/.zshrc)
+eval "$(uv run jean-claude completions zsh)"
+
+# Fish (~/.config/fish/config.fish)
+uv run jean-claude completions fish | source
+```
+
 ## Features
 
 ### Gmail
