@@ -1,6 +1,6 @@
-Usage: jean-claude gmail mark-unread [OPTIONS] MESSAGE_IDS...
+Usage: jean-claude gmail mark-unread [OPTIONS] THREAD_IDS...
 
-  Mark messages as unread.
+  Mark threads as unread.
 
 Options:
   --help  Show this message and exit.

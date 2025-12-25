@@ -7,65 +7,47 @@ Gmail API enforces per-user quota limits: 15,000 units/minute (≈250 units/seco
 
 Quota Costs
 -----------
+- threads.modify: 5 units per thread
+- threads.trash: 5 units per thread
 - messages.batchModify: 50 units (up to 1000 messages)
-- messages.modify: 5 units per message
 - messages.get: 5 units per message
-- messages.trash: 5 units per message
 - messages.send: 100 units per message
 
 jean-claude Batching Strategy
 ------------------------------
 
-Label operations (star, archive, mark-read, mark-unread, unarchive):
+Thread operations (archive, mark-read, mark-unread, unarchive, trash):
+    Uses threads.modify or threads.trash API
+    - Cost: 5 units per thread
+    - Processes threads individually with rate limit retry
+    - Matches Gmail UI behavior (operates on entire conversations)
+
+Message operations (star, unstar):
     Uses messages.batchModify API
     - Processes up to 1000 messages per API call
     - Cost: 50 units per call regardless of message count
-    - Chunk size: 1000 messages
-    - Delay between chunks: 0.5 seconds (only for 1000+ messages)
-    - Rate limits virtually impossible to hit with normal usage
-
-    Examples:
-        - Archive 50 messages = 50 units (one API call)
-        - Archive 1000 messages = 50 units (one API call)
-        - Archive 2500 messages = 150 units (three API calls)
-
-Trash operations:
-    Uses individual messages.trash calls (no batchTrash API)
-    - Batch HTTP requests with 50 messages per batch
-    - Cost: 5 units per message
-    - Delay between batches: 0.3 seconds
-    - Throughput: ~833 messages/minute
-    - Note: Consider using archive instead for bulk inbox cleanup
 
 Search operations:
     Fetches message details in batches of 15
     - Cost: 5 units per message
     - Delay between batches: 0.3 seconds
-    - Throughput: ~50 messages/second
 
 Error Handling
 --------------
 Rate limit errors (429) are automatically retried with exponential backoff:
     - Retry schedule: 2s, 4s, 8s (max 3 retries, total 14s wait)
     - User feedback during retry via stderr
-    - If retries exhausted, provides actionable recovery guidance
-
-Rate limit error output includes:
-    - Progress tracking (how many messages succeeded)
-    - Partial completion (remaining message IDs for retry)
-    - Actionable guidance (specific commands to run)
 
 Troubleshooting Rate Limits
 ----------------------------
 If you encounter rate limits:
     1. Check concurrent clients: Other apps using Gmail API share your quota
     2. Wait between operations: Allow 5-10 seconds between large bulk operations
-    3. Use query filters: For archive/trash, use --query to filter server-side
-    4. Consider daily limits: Daily sending limits (500/2000) are separate from quota
+    3. Use query filters: For archive, use --query to filter server-side
 
 References
 ----------
-https://developers.google.com/gmail/api/reference/rest/v1/users.messages/batchModify
+https://developers.google.com/gmail/api/reference/rest/v1/users.threads/modify
 https://developers.google.com/workspace/gmail/api/reference/quota
 """
 
@@ -80,8 +62,10 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, getaddresses, parseaddr
 from pathlib import Path
+from typing import NoReturn
 
 import click
+from googleapiclient.errors import HttpError
 
 from .auth import build_service
 from .logging import JeanClaudeError, get_logger
@@ -134,21 +118,28 @@ def get_my_from_address(service=None) -> str:
     return my_email
 
 
+def _wrap_batch_error(request_id: str, exception: Exception) -> NoReturn:
+    """Raise a wrapped exception with context about which ID failed."""
+    if isinstance(exception, HttpError) and exception.resp.status == 404:
+        raise JeanClaudeError(f"Not found: {request_id}") from exception
+    raise JeanClaudeError(f"Error processing {request_id}: {exception}") from exception
+
+
 def _batch_callback(responses: dict):
     """Create a batch callback that stores responses by request_id."""
 
     def callback(request_id, response, exception):
         if exception:
-            raise exception
+            _wrap_batch_error(request_id, exception)
         responses[request_id] = response
 
     return callback
 
 
-def _raise_on_error(_request_id, _response, exception):
+def _raise_on_error(request_id, _response, exception):
     """Batch callback that only raises exceptions (ignores responses)."""
     if exception:
-        raise exception
+        _wrap_batch_error(request_id, exception)
 
 
 def _retry_on_rate_limit(func, max_retries: int = 3):
@@ -165,8 +156,6 @@ def _retry_on_rate_limit(func, max_retries: int = 3):
         JeanClaudeError: If rate limit persists after all retries
         HttpError: For non-rate-limit errors
     """
-    from googleapiclient.errors import HttpError
-
     for attempt in range(max_retries + 1):
         try:
             return func()
@@ -208,8 +197,6 @@ def _batch_modify_labels(
         add_label_ids: Label IDs to add (e.g., ["STARRED", "INBOX"])
         remove_label_ids: Label IDs to remove (e.g., ["UNREAD"])
     """
-    from googleapiclient.errors import HttpError
-
     if not message_ids:
         return
 
@@ -337,37 +324,6 @@ def _modify_thread_labels(
             .execute()
         )
         logger.debug(f"Modified thread {thread_id}")
-
-
-def _get_thread_ids_for_messages(service, message_ids: list[str]) -> list[str]:
-    """Get unique thread IDs for a list of message IDs."""
-    if not message_ids:
-        return []
-
-    thread_ids = set()
-    responses = {}
-
-    # Batch fetch message metadata to get threadIds
-    chunk_size = 50
-    for i in range(0, len(message_ids), chunk_size):
-        chunk = message_ids[i : i + chunk_size]
-        batch = service.new_batch_http_request(callback=_batch_callback(responses))
-        for msg_id in chunk:
-            batch.add(
-                service.users()
-                .messages()
-                .get(userId="me", id=msg_id, format="minimal"),
-                request_id=msg_id,
-            )
-        batch.execute()
-        if i + chunk_size < len(message_ids):
-            time.sleep(0.3)
-
-    for msg_id in message_ids:
-        if msg_id in responses:
-            thread_ids.add(responses[msg_id]["threadId"])
-
-    return list(thread_ids)
 
 
 def _strip_html(html: str) -> str:
@@ -1264,7 +1220,7 @@ def unstar(message_ids: tuple[str, ...]):
 
 
 @cli.command()
-@click.argument("message_ids", nargs=-1)
+@click.argument("thread_ids", nargs=-1)
 @click.option(
     "--query",
     "-q",
@@ -1274,27 +1230,26 @@ def unstar(message_ids: tuple[str, ...]):
     "-n",
     "--max-results",
     default=100,
-    help="Max messages to archive when using --query",
+    help="Max threads to archive when using --query",
 )
-def archive(message_ids: tuple[str, ...], query: str | None, max_results: int):
+def archive(thread_ids: tuple[str, ...], query: str | None, max_results: int):
     """Archive threads (remove from inbox).
 
     Archives entire threads, matching Gmail UI behavior. When you archive a
     conversation in Gmail, all messages in that thread are archived together.
 
-    Can archive by message ID(s) or by query. Query automatically filters to inbox.
+    Accepts thread IDs (from inbox/search output) or a query.
 
     Examples:
-        jean-claude gmail archive MSG_ID1 MSG_ID2
+        jean-claude gmail archive THREAD_ID1 THREAD_ID2
         jean-claude gmail archive --query "from:newsletter@example.com"
     """
-    if message_ids and query:
-        raise click.UsageError("Provide message IDs or --query, not both")
+    if thread_ids and query:
+        raise click.UsageError("Provide thread IDs or --query, not both")
 
     service = get_gmail()
 
     if query:
-        # Use threads.list to get threads matching query
         full_query = f"in:inbox {query}"
         results = (
             service.users()
@@ -1302,76 +1257,73 @@ def archive(message_ids: tuple[str, ...], query: str | None, max_results: int):
             .list(userId="me", q=full_query, maxResults=max_results)
             .execute()
         )
-        thread_ids = (
-            [t["id"] for t in results["threads"]] if "threads" in results else []
-        )
+        ids = [t["id"] for t in results["threads"]] if "threads" in results else []
     else:
-        # Get thread IDs for the given message IDs
-        thread_ids = _get_thread_ids_for_messages(service, list(message_ids))
+        ids = list(thread_ids)
 
-    if not thread_ids:
+    if not ids:
         logger.info("No threads to archive")
         return
 
-    _modify_thread_labels(service, thread_ids, remove_label_ids=["INBOX"])
-    logger.info(f"Archived {len(thread_ids)} threads", count=len(thread_ids))
+    _modify_thread_labels(service, ids, remove_label_ids=["INBOX"])
+    logger.info(f"Archived {len(ids)} threads", count=len(ids))
 
 
 @cli.command()
-@click.argument("message_ids", nargs=-1, required=True)
-def unarchive(message_ids: tuple[str, ...]):
+@click.argument("thread_ids", nargs=-1, required=True)
+def unarchive(thread_ids: tuple[str, ...]):
     """Move threads back to inbox."""
     service = get_gmail()
-    thread_ids = _get_thread_ids_for_messages(service, list(message_ids))
-    if not thread_ids:
+    ids = list(thread_ids)
+    if not ids:
         logger.info("No threads to unarchive")
         return
-    _modify_thread_labels(service, thread_ids, add_label_ids=["INBOX"])
-    logger.info(f"Moved {len(thread_ids)} threads to inbox", count=len(thread_ids))
+    _modify_thread_labels(service, ids, add_label_ids=["INBOX"])
+    logger.info(f"Moved {len(ids)} threads to inbox", count=len(ids))
 
 
 @cli.command("mark-read")
-@click.argument("message_ids", nargs=-1, required=True)
-def mark_read(message_ids: tuple[str, ...]):
-    """Mark messages as read."""
+@click.argument("thread_ids", nargs=-1, required=True)
+def mark_read(thread_ids: tuple[str, ...]):
+    """Mark threads as read (all messages in thread)."""
     service = get_gmail()
-    _batch_modify_labels(service, list(message_ids), remove_label_ids=["UNREAD"])
-    logger.info(f"Marked {len(message_ids)} messages read", count=len(message_ids))
+    ids = list(thread_ids)
+    _modify_thread_labels(service, ids, remove_label_ids=["UNREAD"])
+    logger.info(f"Marked {len(ids)} threads read", count=len(ids))
 
 
 @cli.command("mark-unread")
-@click.argument("message_ids", nargs=-1, required=True)
-def mark_unread(message_ids: tuple[str, ...]):
-    """Mark messages as unread."""
+@click.argument("thread_ids", nargs=-1, required=True)
+def mark_unread(thread_ids: tuple[str, ...]):
+    """Mark threads as unread."""
     service = get_gmail()
-    _batch_modify_labels(service, list(message_ids), add_label_ids=["UNREAD"])
-    logger.info(f"Marked {len(message_ids)} messages unread", count=len(message_ids))
+    ids = list(thread_ids)
+    _modify_thread_labels(service, ids, add_label_ids=["UNREAD"])
+    logger.info(f"Marked {len(ids)} threads unread", count=len(ids))
 
 
 @cli.command()
-@click.argument("message_ids", nargs=-1, required=True)
-def trash(message_ids: tuple[str, ...]):
-    """Move messages to trash.
-
-    Note: Uses individual trash operations (no batchTrash API exists).
-    For bulk operations, consider using archive instead.
-    """
+@click.argument("thread_ids", nargs=-1, required=True)
+def trash(thread_ids: tuple[str, ...]):
+    """Move threads to trash (all messages in thread)."""
     service = get_gmail()
+    ids = list(thread_ids)
 
-    # No batchTrash API - use batch HTTP requests (5 units per trash operation)
-    # Process in chunks to avoid overwhelming the API
-    chunk_size = 50  # Conservative for individual operations
-    for i in range(0, len(message_ids), chunk_size):
-        chunk = message_ids[i : i + chunk_size]
+    # Use threads.trash API (5 units per thread)
+    chunk_size = 50
+    for i in range(0, len(ids), chunk_size):
+        chunk = ids[i : i + chunk_size]
         batch = service.new_batch_http_request(callback=_raise_on_error)
-        for msg_id in chunk:
-            batch.add(service.users().messages().trash(userId="me", id=msg_id))
+        for tid in chunk:
+            batch.add(
+                service.users().threads().trash(userId="me", id=tid),
+                request_id=tid,
+            )
         batch.execute()
-        if i + chunk_size < len(message_ids):
+        if i + chunk_size < len(ids):
             time.sleep(0.3)
 
-    n = len(message_ids)
-    logger.info(f"Trashed {n} messages", count=n)
+    logger.info(f"Trashed {len(ids)} threads", count=len(ids))
 
 
 def _extract_attachments(parts: list, attachments: list) -> None:

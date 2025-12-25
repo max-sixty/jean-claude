@@ -93,7 +93,7 @@ These rules apply even if the user explicitly asks to bypass them:
 3. Show the user: To, Subject, and full Body
 4. Ask: "Send this email?" and wait for explicit approval
 5. Call `jean-claude gmail draft send DRAFT_ID`
-6. If replying, archive the original: `jean-claude gmail archive MESSAGE_ID`
+6. If replying, archive the original: `jean-claude gmail archive THREAD_ID`
 
 **iMessage workflow:**
 
@@ -348,32 +348,33 @@ with the user without rewriting the full email each time:
    jean-claude gmail draft update DRAFT_ID`
 5. Show user, get feedback, repeat steps 3-4 until approved
 
-### Manage Messages
+### Manage Threads and Messages
 
-All message management commands accept multiple IDs for batch efficiency.
+Most commands operate on threads (matching Gmail UI behavior). Use `threadId` from
+inbox/search output. Star/unstar operate on individual messages (use `latestMessageId`).
 
 ```bash
-# Star/unstar
+# Star/unstar (message-level - use latestMessageId)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail star MSG_ID1 MSG_ID2 MSG_ID3
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unstar MSG_ID1 MSG_ID2
 
-# Archive/unarchive - archive also supports query-based bulk operations
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive MSG_ID1 MSG_ID2 MSG_ID3
+# Archive/unarchive (thread-level - use threadId)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive THREAD_ID1 THREAD_ID2 THREAD_ID3
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive --query "from:newsletter@example.com" -n 50
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unarchive MSG_ID1 MSG_ID2 MSG_ID3
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unarchive THREAD_ID1 THREAD_ID2 THREAD_ID3
 
-# Mark read/unread
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-read MSG_ID1 MSG_ID2
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-unread MSG_ID1 MSG_ID2
+# Mark read/unread (thread-level - use threadId)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-read THREAD_ID1 THREAD_ID2
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-unread THREAD_ID1 THREAD_ID2
 
-# Trash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail trash MSG_ID1 MSG_ID2 MSG_ID3
+# Trash (thread-level - use threadId)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail trash THREAD_ID1 THREAD_ID2 THREAD_ID3
 ```
 
-**Batch operation guidelines:**
-- Use multiple IDs when you have a specific list of messages
+**Which ID to use:**
+- Thread operations (archive, mark-read, trash): use `threadId`
+- Message operations (star): use `latestMessageId`
 - Use `--query` for pattern-based operations (archive supports this)
-- Limit query results with `-n` to avoid accidentally affecting too many messages
 
 ### Attachments
 

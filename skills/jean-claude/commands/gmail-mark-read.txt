@@ -1,6 +1,6 @@
-Usage: jean-claude gmail mark-read [OPTIONS] MESSAGE_IDS...
+Usage: jean-claude gmail mark-read [OPTIONS] THREAD_IDS...
 
-  Mark messages as read.
+  Mark threads as read (all messages in thread).
 
 Options:
   --help  Show this message and exit.

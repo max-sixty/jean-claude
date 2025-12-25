@@ -1,9 +1,6 @@
-Usage: jean-claude gmail trash [OPTIONS] MESSAGE_IDS...
+Usage: jean-claude gmail trash [OPTIONS] THREAD_IDS...
 
-  Move messages to trash.
-
-  Note: Uses individual trash operations (no batchTrash API exists). For bulk
-  operations, consider using archive instead.
+  Move threads to trash (all messages in thread).
 
 Options:
   --help  Show this message and exit.

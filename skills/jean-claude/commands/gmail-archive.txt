@@ -1,18 +1,17 @@
-Usage: jean-claude gmail archive [OPTIONS] [MESSAGE_IDS]...
+Usage: jean-claude gmail archive [OPTIONS] [THREAD_IDS]...
 
   Archive threads (remove from inbox).
 
   Archives entire threads, matching Gmail UI behavior. When you archive a
   conversation in Gmail, all messages in that thread are archived together.
 
-  Can archive by message ID(s) or by query. Query automatically filters to
-  inbox.
+  Accepts thread IDs (from inbox/search output) or a query.
 
-  Examples:     jean-claude gmail archive MSG_ID1 MSG_ID2     jean-claude
-  gmail archive --query "from:newsletter@example.com"
+  Examples:     jean-claude gmail archive THREAD_ID1 THREAD_ID2     jean-
+  claude gmail archive --query "from:newsletter@example.com"
 
 Options:
   -q, --query TEXT           Archive all inbox messages matching query (e.g.,
                              'from:example.com')
-  -n, --max-results INTEGER  Max messages to archive when using --query
+  -n, --max-results INTEGER  Max threads to archive when using --query
   --help                     Show this message and exit.
