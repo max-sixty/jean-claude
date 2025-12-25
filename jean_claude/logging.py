@@ -16,9 +16,10 @@ from __future__ import annotations
 import logging
 import re
 import sys
+from collections.abc import MutableMapping
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from platformdirs import user_log_dir
@@ -109,15 +110,46 @@ def configure_logging(
 
 
 def _get_console_formatter() -> structlog.stdlib.ProcessorFormatter:
-    """Get a console formatter for human-readable output with structured context."""
+    """Get a console formatter for compact, agent-friendly output.
+
+    Format: [level] message key=value key=value
+    Example: [info] Archived 5 threads count=5
+    """
     return structlog.stdlib.ProcessorFormatter(
-        processor=structlog.dev.ConsoleRenderer(colors=False),
+        processor=_CompactConsoleRenderer(),
         foreign_pre_chain=[
-            structlog.stdlib.add_logger_name,
             structlog.stdlib.add_log_level,
-            structlog.processors.TimeStamper(fmt="iso"),
         ],
     )
+
+
+class _CompactConsoleRenderer:
+    """Compact console renderer for agent-friendly output.
+
+    Produces: [level] message key=value key=value
+    Omits timestamps (file log has them) and logger names (noise for agents).
+    """
+
+    # Keys added by structlog processors that we don't want in console output
+    _OMIT_KEYS = {"timestamp", "logger"}
+
+    def __call__(
+        self,
+        logger: Any,
+        method_name: str,
+        event_dict: MutableMapping[str, Any],
+    ) -> str:
+        level = event_dict.pop("level", method_name)
+        event = event_dict.pop("event", "")
+
+        # Format remaining keys compactly, omitting noisy structlog metadata
+        extras = " ".join(
+            f"{k}={v}" for k, v in event_dict.items() if k not in self._OMIT_KEYS
+        )
+
+        if extras:
+            return f"[{level}] {event} {extras}"
+        return f"[{level}] {event}"
 
 
 def _create_json_handler(json_log: str) -> logging.Handler | None:
