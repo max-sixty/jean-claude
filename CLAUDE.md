@@ -52,11 +52,12 @@ uv run jean-claude gmail --help
 
 ## Output Policy
 
-**All metadata is JSON.** No `--json` flags, no formatted display modes.
+**All data is JSON.** No `--json` flags, no formatted display modes.
 
-- **Metadata** (list, search, get, info, read) → JSON to stdout
+- **Queries** (list, search, get, read) → JSON to stdout
+- **Operations returning data** (create, update) → JSON to stdout (agent needs the ID/result)
+- **Operations with no result** (delete, star) → `logger.info()` only (exit code indicates success)
 - **File content** → Write to file (e.g., `gdrive download`)
-- **Operation status** → `logger.info()` to stderr + JSON result to stdout
 
 Two output mechanisms:
 
