@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import click
@@ -312,6 +313,133 @@ def resolve_contact_to_phone(name: str) -> str:
     return raw_phone
 
 
+# Group chat style constant (43 = iMessage group chat)
+IMESSAGE_GROUP_CHAT_STYLE = 43
+
+
+@dataclass
+class MessageQuery:
+    """Parameters for querying messages from the database."""
+
+    where_clause: str = ""
+    params: tuple = field(default_factory=tuple)
+    include_is_from_me: bool = False
+    reverse_order: bool = False
+    max_results: int = 20
+
+
+def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
+    """Fetch messages with full enrichment (names, group participants).
+
+    This is the central function for querying messages. It handles:
+    - Executing the query with common SELECT columns
+    - Identifying unnamed group chats and fetching their participants
+    - Resolving phone numbers to contact names
+    - Building consistent message dictionaries
+
+    Args:
+        conn: Database connection
+        query: MessageQuery specifying filters and options
+
+    Returns:
+        List of message dictionaries ready for JSON output.
+
+    Security Note:
+        The `where_clause` is interpolated directly into SQL. Only use hardcoded
+        SQL fragments with parameterized placeholders (?). User input must ONLY
+        go in `params`, never in `where_clause`. Current callers are safe.
+    """
+    cursor = conn.cursor()
+
+    # Build SELECT columns - include is_from_me only when needed
+    is_from_me_col = "m.is_from_me," if query.include_is_from_me else ""
+    sender_col = (
+        "CASE WHEN m.is_from_me = 1 THEN 'me' ELSE COALESCE(h.id, c.chat_identifier, 'unknown') END"
+        if query.include_is_from_me
+        else "COALESCE(h.id, c.chat_identifier, 'unknown')"
+    )
+
+    # Use subquery with GROUP_CONCAT to get group participants inline (avoids N+1 queries)
+    sql = f"""
+        SELECT
+            datetime(m.date/1000000000 + {APPLE_EPOCH_OFFSET}, 'unixepoch', 'localtime') as date,
+            {sender_col} as sender,
+            m.text,
+            m.attributedBody,
+            c.display_name,
+            c.style,
+            (SELECT GROUP_CONCAT(h2.id, '|')
+             FROM chat_handle_join chj2
+             JOIN handle h2 ON chj2.handle_id = h2.ROWID
+             WHERE chj2.chat_id = c.ROWID) as participants
+            {"," + is_from_me_col.rstrip(",") if is_from_me_col else ""}
+        FROM message m
+        LEFT JOIN handle h ON m.handle_id = h.ROWID
+        LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
+        LEFT JOIN chat c ON cmj.chat_id = c.ROWID
+        WHERE (m.text IS NOT NULL OR m.attributedBody IS NOT NULL)
+        {("AND " + query.where_clause) if query.where_clause else ""}
+        ORDER BY m.date DESC
+        LIMIT ?
+    """
+
+    cursor.execute(sql, (*query.params, query.max_results))
+    rows = cursor.fetchall()
+
+    if not rows:
+        return []
+
+    # Collect all phones to resolve: senders + group participants
+    all_phones: set[str] = set()
+    for row in rows:
+        sender, participants_str = row[1], row[6]
+        if sender and sender not in ("unknown", "me"):
+            all_phones.add(sender)
+        if participants_str:
+            all_phones.update(participants_str.split("|"))
+    phone_to_name = resolve_phones_to_names(list(all_phones))
+
+    # Build message dictionaries
+    messages = []
+    for row in rows:
+        date, sender, text, attributed_body, display_name, style, participants_str = (
+            row[:7]
+        )
+        is_from_me = row[7] if query.include_is_from_me else False
+
+        msg_text = get_message_text(text, attributed_body)
+        if not msg_text:
+            continue
+
+        contact_name = phone_to_name.get(sender)
+
+        # Determine group_name: use display_name, or build from participants for unnamed groups
+        if display_name:
+            group_name = display_name
+        elif style == IMESSAGE_GROUP_CHAT_STYLE and participants_str:
+            participants = participants_str.split("|")
+            participant_names = [phone_to_name.get(p, p) for p in participants]
+            group_name = ", ".join(participant_names)
+        else:
+            group_name = None
+
+        messages.append(
+            build_message_dict(
+                date=date,
+                sender=sender,
+                text=msg_text,
+                is_from_me=is_from_me,
+                contact_name=contact_name,
+                group_name=group_name,
+            )
+        )
+
+    if query.reverse_order:
+        messages.reverse()
+
+    return messages
+
+
 @click.group()
 def cli():
     """iMessage CLI - send messages and list chats.
@@ -574,66 +702,21 @@ def unread(max_results: int, include_spam: bool):
         jean-claude imessage unread -n 50
         jean-claude imessage unread --include-spam
     """
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
     # is_filtered: 0 = contacts, 1 = unknown senders, 2 = spam
-    # By default show 0 and 1; --include-spam adds 2
-    filter_clause = (
-        "" if include_spam else "AND (c.is_filtered IS NULL OR c.is_filtered < 2)"
+    spam_filter = (
+        "" if include_spam else "(c.is_filtered IS NULL OR c.is_filtered < 2) AND"
     )
+    where_clause = f"{spam_filter} m.is_read = 0 AND m.is_from_me = 0"
 
-    cursor.execute(
-        f"""
-        SELECT
-            datetime(m.date/1000000000 + {APPLE_EPOCH_OFFSET}, 'unixepoch', 'localtime') as date,
-            COALESCE(h.id, c.chat_identifier, 'unknown') as sender,
-            m.text,
-            m.attributedBody,
-            c.display_name,
-            COALESCE(c.is_filtered, 0) as is_filtered
-        FROM message m
-        LEFT JOIN handle h ON m.handle_id = h.ROWID
-        LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
-        LEFT JOIN chat c ON cmj.chat_id = c.ROWID
-        WHERE m.is_read = 0
-          AND m.is_from_me = 0
-          AND (m.text IS NOT NULL OR m.attributedBody IS NOT NULL)
-          {filter_clause}
-        ORDER BY c.is_filtered ASC, m.date DESC
-        LIMIT ?
-        """,
-        (max_results,),
+    conn = get_db_connection()
+    messages = fetch_messages(
+        conn,
+        MessageQuery(where_clause=where_clause, max_results=max_results),
     )
-
-    rows = cursor.fetchall()
     conn.close()
 
-    if not rows:
+    if not messages:
         logger.info("No unread messages")
-        click.echo(json.dumps({"messages": []}))
-        return
-
-    # Collect unique senders and resolve to contact names
-    unique_senders = {row[1] for row in rows if row[1] and row[1] != "unknown"}
-    phone_to_name = resolve_phones_to_names(list(unique_senders))
-
-    messages = []
-    for date, sender, text, attributed_body, group_name, is_filtered in rows:
-        msg_text = get_message_text(text, attributed_body)
-        if not msg_text:
-            continue
-
-        contact_name = phone_to_name.get(sender)
-        messages.append(
-            build_message_dict(
-                date=date,
-                sender=sender,
-                text=msg_text,
-                contact_name=contact_name,
-                group_name=group_name,
-            )
-        )
 
     click.echo(json.dumps({"messages": messages}, indent=2))
 
@@ -653,59 +736,19 @@ def search(query: str | None, max_results: int):
         jean-claude imessage search "dinner plans"
         jean-claude imessage search -n 50
     """
+    # Search in text column - attributedBody search would require extraction
+    where_clause = "m.text LIKE ?" if query else ""
+    params = (f"%{query}%",) if query else ()
+
     conn = get_db_connection()
-    cursor = conn.cursor()
-
-    base_query = f"""
-        SELECT
-            datetime(m.date/1000000000 + {APPLE_EPOCH_OFFSET}, 'unixepoch', 'localtime') as date,
-            COALESCE(h.id, c.chat_identifier, 'unknown') as sender,
-            m.text,
-            m.attributedBody
-        FROM message m
-        LEFT JOIN handle h ON m.handle_id = h.ROWID
-        LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
-        LEFT JOIN chat c ON cmj.chat_id = c.ROWID
-        WHERE (m.text IS NOT NULL OR m.attributedBody IS NOT NULL)
-    """
-
-    if query:
-        # Search in text column - attributedBody search would require extraction
-        cursor.execute(
-            base_query + " AND m.text LIKE ? ORDER BY m.date DESC LIMIT ?",
-            (f"%{query}%", max_results),
-        )
-    else:
-        cursor.execute(
-            base_query + " ORDER BY m.date DESC LIMIT ?",
-            (max_results,),
-        )
-
-    rows = cursor.fetchall()
+    messages = fetch_messages(
+        conn,
+        MessageQuery(where_clause=where_clause, params=params, max_results=max_results),
+    )
     conn.close()
 
-    if not rows:
+    if not messages:
         logger.info("No messages found")
-        click.echo(json.dumps({"messages": []}))
-        return
-
-    # Collect unique senders and resolve to contact names
-    unique_senders = {row[1] for row in rows if row[1] and row[1] != "unknown"}
-    phone_to_name = resolve_phones_to_names(list(unique_senders))
-
-    messages = []
-    for date, sender, text, attributed_body in rows:
-        msg_text = get_message_text(text, attributed_body)
-        if msg_text:
-            contact_name = phone_to_name.get(sender)
-            messages.append(
-                build_message_dict(
-                    date=date,
-                    sender=sender,
-                    text=msg_text,
-                    contact_name=contact_name,
-                )
-            )
 
     click.echo(json.dumps({"messages": messages}, indent=2))
 
@@ -741,56 +784,19 @@ def history(chat_id: str | None, max_results: int, name: str | None):
         raise click.UsageError("Provide either CHAT_ID or --name")
 
     conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        f"""
-        SELECT
-            datetime(m.date/1000000000 + {APPLE_EPOCH_OFFSET}, 'unixepoch', 'localtime') as date,
-            CASE WHEN m.is_from_me = 1 THEN 'me' ELSE COALESCE(h.id, 'unknown') END as sender,
-            m.text,
-            m.attributedBody,
-            m.is_from_me
-        FROM message m
-        LEFT JOIN handle h ON m.handle_id = h.ROWID
-        LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
-        LEFT JOIN chat c ON cmj.chat_id = c.ROWID
-        WHERE (c.chat_identifier = ? OR h.id = ?)
-          AND (m.text IS NOT NULL OR m.attributedBody IS NOT NULL)
-        ORDER BY m.date DESC
-        LIMIT ?
-        """,
-        (chat_identifier, chat_identifier, max_results),
+    messages = fetch_messages(
+        conn,
+        MessageQuery(
+            where_clause="(c.chat_identifier = ? OR h.id = ?)",
+            params=(chat_identifier, chat_identifier),
+            include_is_from_me=True,
+            reverse_order=True,
+            max_results=max_results,
+        ),
     )
-
-    rows = cursor.fetchall()
     conn.close()
 
-    if not rows:
+    if not messages:
         logger.info("No messages found for this chat")
-        click.echo(json.dumps({"messages": []}))
-        return
-
-    # Collect unique senders (excluding "me") and resolve to contact names
-    unique_senders = {
-        row[1] for row in rows if row[1] and row[1] not in ("unknown", "me")
-    }
-    phone_to_name = resolve_phones_to_names(list(unique_senders))
-
-    # Reverse to show oldest first
-    messages = []
-    for date, sender, text, attributed_body, is_from_me in reversed(rows):
-        msg_text = get_message_text(text, attributed_body)
-        if msg_text:
-            contact_name = phone_to_name.get(sender)
-            messages.append(
-                build_message_dict(
-                    date=date,
-                    sender=sender,
-                    text=msg_text,
-                    is_from_me=is_from_me,
-                    contact_name=contact_name,
-                )
-            )
 
     click.echo(json.dumps({"messages": messages}, indent=2))
