@@ -1,12 +1,12 @@
 ---
 name: jean-claude
-description: "This skill should be used when the user asks to search/send/draft email, check calendar, create events, schedule meetings, find/upload/share Drive files, read spreadsheet data, send texts/iMessages, or check messages. Manages Gmail, Google Calendar, Google Drive, Google Sheets, and iMessage."
+description: "This skill should be used when the user asks to search/send/draft email, check calendar, create events, schedule meetings, find/upload/share Drive files, read spreadsheet data, send texts/iMessages, send WhatsApp messages, or check messages. Manages Gmail, Google Calendar, Google Drive, Google Sheets, iMessage, and WhatsApp."
 ---
 
-# jean-claude - Gmail, Calendar, Drive, Sheets & iMessage
+# jean-claude - Gmail, Calendar, Drive, Sheets, iMessage & WhatsApp
 
-Manage Gmail, Google Calendar, Google Drive, Google Sheets, and iMessage using
-the CLI tools in this plugin.
+Manage Gmail, Google Calendar, Google Drive, Google Sheets, iMessage, and
+WhatsApp using the CLI tools in this plugin.
 
 **Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude `
 
@@ -67,6 +67,13 @@ These rules apply even if the user explicitly asks to bypass them:
    with a list of options. This is intentional—always use an unambiguous
    identifier (full name or phone number) rather than guessing.
 
+7. **Never send a WhatsApp message without explicit approval.** Show the full
+   message (recipient, body) to the user and receive explicit confirmation
+   before calling `jean-claude whatsapp send`.
+
+8. **Verify WhatsApp recipients carefully.** WhatsApp sends are instant and
+   cannot be undone. Always confirm the phone number before sending.
+
 **Email workflow:**
 
 1. Load any available prose/writing skills
@@ -83,6 +90,14 @@ These rules apply even if the user explicitly asks to bypass them:
 3. Show the user: Recipient (phone or chat name) and full message
 4. Ask: "Send this message?" and wait for explicit approval
 5. Call `jean-claude imessage send RECIPIENT MESSAGE`
+
+**WhatsApp workflow:**
+
+1. Load prose skills if composing a longer message
+2. Compose the message content
+3. Show the user: Recipient (phone number with country code) and full message
+4. Ask: "Send this WhatsApp message?" and wait for explicit approval
+5. Call `jean-claude whatsapp send PHONE MESSAGE`
 
 ## Setup
 
@@ -120,6 +135,30 @@ To use your own Google Cloud credentials instead (if default ones hit the 100
 user limit), download your OAuth JSON from Google Cloud Console and save it as
 `~/.config/jean-claude/client_secret.json` before running the auth script. See
 README for detailed setup steps.
+
+### WhatsApp
+
+WhatsApp requires a Go binary and QR code authentication. First-time setup:
+
+```bash
+# Build the Go CLI (requires Go installed)
+cd ${CLAUDE_PLUGIN_ROOT}/whatsapp && go build -o whatsapp-cli .
+
+# Authenticate with WhatsApp (scan QR code with your phone)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp auth
+
+# Check authentication status
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
+```
+
+The QR code will be displayed in the terminal and saved as a PNG file. Scan it
+with WhatsApp: Settings > Linked Devices > Link a Device.
+
+Credentials are stored in `~/.config/jean-claude/whatsapp/`. To log out:
+
+```bash
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp logout
+```
 
 ## Gmail
 
@@ -604,3 +643,61 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage history --name "Kevi
 
 To enable reading: System Preferences > Privacy & Security > Full Disk Access >
 add your terminal app.
+
+## WhatsApp
+
+Send and receive WhatsApp messages. Requires Go binary to be built and QR code
+authentication (see Setup section above).
+
+### Sync Messages
+
+WhatsApp messages are stored locally for fast access. Sync periodically to get
+new messages:
+
+```bash
+# Sync messages (also fetches chat names)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp sync
+```
+
+The sync command downloads new messages and automatically fetches names for
+chats that don't have them.
+
+### Send Messages
+
+```bash
+# Send to phone number (with country code)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp send "+12025551234" "Hello!"
+```
+
+### List Chats
+
+```bash
+# List recent chats
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp chats
+
+# Limit results
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp chats -n 10
+```
+
+### Read Messages
+
+```bash
+# Recent messages (from local database)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages -n 20
+
+# Messages from specific chat (use JID from chats command)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --chat "120363277025153496@g.us"
+```
+
+### Other Commands
+
+```bash
+# List contacts
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp contacts
+
+# Manually refresh chat names (usually not needed, sync does this)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp refresh
+
+# Check status
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp status
+```

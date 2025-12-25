@@ -1,0 +1,6 @@
+Usage: jean-claude whatsapp status [OPTIONS]
+
+  Show WhatsApp connection status.
+
+Options:
+  --help  Show this message and exit.

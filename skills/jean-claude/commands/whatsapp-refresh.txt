@@ -1,0 +1,9 @@
+Usage: jean-claude whatsapp refresh [OPTIONS]
+
+  Fetch chat and group names from WhatsApp.
+
+  Updates names for chats that don't have them. This is normally done
+  automatically during sync, but can be run manually if needed.
+
+Options:
+  --help  Show this message and exit.

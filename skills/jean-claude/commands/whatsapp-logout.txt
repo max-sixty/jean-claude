@@ -1,0 +1,6 @@
+Usage: jean-claude whatsapp logout [OPTIONS]
+
+  Log out and clear WhatsApp credentials.
+
+Options:
+  --help  Show this message and exit.

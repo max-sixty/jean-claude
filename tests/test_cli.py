@@ -12,11 +12,12 @@ def test_help():
     runner = CliRunner()
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
-    assert "Gmail, Calendar, Drive, and iMessage" in result.output
+    assert "Gmail, Calendar, Drive, iMessage, and WhatsApp" in result.output
     assert "gmail" in result.output
     assert "gcal" in result.output
     assert "gdrive" in result.output
     assert "imessage" in result.output
+    assert "whatsapp" in result.output
     assert "auth" in result.output
     assert "status" in result.output
 

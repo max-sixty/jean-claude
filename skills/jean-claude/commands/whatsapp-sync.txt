@@ -1,0 +1,9 @@
+Usage: jean-claude whatsapp sync [OPTIONS]
+
+  Sync messages from WhatsApp to local database.
+
+  Downloads new messages and updates chat names. Run periodically to keep the
+  local database current.
+
+Options:
+  --help  Show this message and exit.

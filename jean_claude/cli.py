@@ -16,6 +16,7 @@ from .gmail import cli as gmail_cli
 from .gsheets import cli as gsheets_cli
 from .imessage import cli as imessage_cli
 from .logging import JeanClaudeError, configure_logging, get_logger
+from .whatsapp import cli as whatsapp_cli
 
 logger = get_logger(__name__)
 
@@ -72,7 +73,7 @@ class ErrorHandlingGroup(click.Group):
     help='JSON log file path (default: auto, "-" for stdout, "none" to disable)',
 )
 def cli(verbose: bool, json_log: str):
-    """jean-claude: Gmail, Calendar, Drive, and iMessage integration."""
+    """jean-claude: Gmail, Calendar, Drive, iMessage, and WhatsApp integration."""
     # Allow "none" to disable file logging
     log_file = None if json_log == "none" else json_log
     configure_logging(verbose=verbose, json_log=log_file)
@@ -83,6 +84,7 @@ cli.add_command(gcal_cli, name="gcal")
 cli.add_command(gdrive_cli, name="gdrive")
 cli.add_command(gsheets_cli, name="gsheets")
 cli.add_command(imessage_cli, name="imessage")
+cli.add_command(whatsapp_cli, name="whatsapp")
 
 
 @cli.command()
@@ -148,6 +150,10 @@ def status():
     # iMessage status (doesn't require Google auth)
     click.echo()
     _check_imessage_status()
+
+    # WhatsApp status
+    click.echo()
+    _check_whatsapp_status()
 
 
 def _check_google_apis() -> None:
@@ -231,6 +237,33 @@ def _check_imessage_status() -> None:
                 click.echo("    Add and enable your terminal app")
             else:
                 click.echo("  Read: " + click.style(f"Error - {e}", fg="red"))
+
+
+def _check_whatsapp_status() -> None:
+    """Check WhatsApp CLI availability and authentication."""
+    from .whatsapp import WHATSAPP_CLI, _run_whatsapp_cli
+
+    click.echo("WhatsApp:")
+
+    # Check if CLI binary exists
+    if not WHATSAPP_CLI.exists():
+        click.echo("  CLI: " + click.style("Not built", fg="yellow"))
+        click.echo("    Build with: cd whatsapp && go build -o whatsapp-cli .")
+        return
+
+    click.echo("  CLI: " + click.style("OK", fg="green"))
+
+    # Check authentication status
+    try:
+        result = _run_whatsapp_cli("status")
+        if result and result.get("authenticated"):
+            phone = result.get("phone", "unknown")
+            click.echo("  Auth: " + click.style(f"Authenticated ({phone})", fg="green"))
+        else:
+            click.echo("  Auth: " + click.style("Not authenticated", fg="yellow"))
+            click.echo("    Run 'jean-claude whatsapp auth' to authenticate")
+    except Exception as e:
+        click.echo("  Auth: " + click.style(f"Error - {e}", fg="red"))
 
 
 def _print_api_error(api_name: str, error: Exception) -> None:

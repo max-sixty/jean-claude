@@ -1,0 +1,10 @@
+Usage: jean-claude whatsapp chats [OPTIONS]
+
+  List WhatsApp chats.
+
+  Shows recent chats with names (for groups and contacts) and last message
+  timestamps.
+
+Options:
+  -n, --max-results INTEGER  Maximum chats to return
+  --help                     Show this message and exit.

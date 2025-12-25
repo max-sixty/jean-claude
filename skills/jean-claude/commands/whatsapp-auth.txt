@@ -1,0 +1,9 @@
+Usage: jean-claude whatsapp auth [OPTIONS]
+
+  Authenticate with WhatsApp by scanning QR code.
+
+  Opens a QR code image and displays it in the terminal. Scan with WhatsApp on
+  your phone: Settings > Linked Devices > Link a Device.
+
+Options:
+  --help  Show this message and exit.

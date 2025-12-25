@@ -1,0 +1,6 @@
+Usage: jean-claude whatsapp contacts [OPTIONS]
+
+  List WhatsApp contacts from local database.
+
+Options:
+  --help  Show this message and exit.

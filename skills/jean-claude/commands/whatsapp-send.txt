@@ -1,0 +1,11 @@
+Usage: jean-claude whatsapp send [OPTIONS] RECIPIENT MESSAGE
+
+  Send a WhatsApp message.
+
+  RECIPIENT: Phone number with country code (e.g., +12025551234) MESSAGE: The
+  message text to send
+
+  Examples:     jean-claude whatsapp send "+12025551234" "Hello!"
+
+Options:
+  --help  Show this message and exit.
