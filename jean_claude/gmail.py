@@ -395,74 +395,84 @@ def _strip_html(html: str) -> str:
     return html.strip()
 
 
+def _decode_part(part: dict) -> str:
+    """Decode base64 body data from a MIME part."""
+    return base64.urlsafe_b64decode(part["body"]["data"]).decode(
+        "utf-8", errors="replace"
+    )
+
+
+def _find_body_parts(payload: dict) -> tuple[dict | None, dict | None]:
+    """Find text/plain and text/html parts in a single traversal.
+
+    Returns (text_part, html_part) - the raw part dicts, not decoded.
+    """
+    text_part: dict | None = None
+    html_part: dict | None = None
+
+    def traverse(part: dict) -> bool:
+        """Traverse MIME tree. Returns True to stop (found both)."""
+        nonlocal text_part, html_part
+        mime = part.get("mimeType", "")
+
+        if part.get("body", {}).get("data"):
+            # Treat missing/empty mimeType as text/plain (simple emails without parts)
+            if mime in ("text/plain", "") and text_part is None:
+                text_part = part
+            elif mime == "text/html" and html_part is None:
+                html_part = part
+
+            if text_part is not None and html_part is not None:
+                return True
+
+        for subpart in part.get("parts", []):
+            if traverse(subpart):
+                return True
+        return False
+
+    traverse(payload)
+    return text_part, html_part
+
+
 def decode_body(payload: dict) -> str:
     """Extract text body from message payload. Falls back to HTML if no plain text."""
-    if "body" in payload and payload["body"].get("data"):
-        data = base64.urlsafe_b64decode(payload["body"]["data"]).decode(
-            "utf-8", errors="replace"
-        )
-        # Strip HTML if this is an HTML-only email
-        if payload.get("mimeType") == "text/html":
-            return _strip_html(data)
-        return data
-    if "parts" in payload:
-        # First pass: look for text/plain
-        for part in payload["parts"]:
-            if part["mimeType"] == "text/plain" and part["body"].get("data"):
-                return base64.urlsafe_b64decode(part["body"]["data"]).decode(
-                    "utf-8", errors="replace"
-                )
-            if part["mimeType"].startswith("multipart/"):
-                if result := decode_body(part):
-                    return result
-        # Second pass: fall back to text/html
-        for part in payload["parts"]:
-            if part["mimeType"] == "text/html" and part["body"].get("data"):
-                html = base64.urlsafe_b64decode(part["body"]["data"]).decode(
-                    "utf-8", errors="replace"
-                )
-                return _strip_html(html)
-            if part["mimeType"].startswith("multipart/"):
-                # Check nested parts for HTML
-                if "parts" in part:
-                    for subpart in part["parts"]:
-                        if subpart["mimeType"] == "text/html" and subpart["body"].get(
-                            "data"
-                        ):
-                            html = base64.urlsafe_b64decode(
-                                subpart["body"]["data"]
-                            ).decode("utf-8", errors="replace")
-                            return _strip_html(html)
+    text_part, html_part = _find_body_parts(payload)
+    if text_part is not None:
+        return _decode_part(text_part)
+    if html_part is not None:
+        return _strip_html(_decode_part(html_part))
     return ""
 
 
 def extract_html_body(payload: dict) -> str | None:
     """Extract raw HTML body from message payload, if present."""
-    # Handle simple HTML-only emails (no parts)
-    if payload.get("mimeType") == "text/html":
-        if payload.get("body", {}).get("data"):
-            return base64.urlsafe_b64decode(payload["body"]["data"]).decode(
-                "utf-8", errors="replace"
-            )
-    if "parts" in payload:
-        for part in payload["parts"]:
-            if part["mimeType"] == "text/html" and part["body"].get("data"):
-                return base64.urlsafe_b64decode(part["body"]["data"]).decode(
-                    "utf-8", errors="replace"
-                )
-            if part["mimeType"].startswith("multipart/"):
-                if result := extract_html_body(part):
-                    return result
-                # Check nested parts for HTML (like decode_body does)
-                if "parts" in part:
-                    for subpart in part["parts"]:
-                        if subpart["mimeType"] == "text/html" and subpart["body"].get(
-                            "data"
-                        ):
-                            return base64.urlsafe_b64decode(
-                                subpart["body"]["data"]
-                            ).decode("utf-8", errors="replace")
+    _, html_part = _find_body_parts(payload)
+    if html_part is not None:
+        return _decode_part(html_part)
     return None
+
+
+def extract_body(payload: dict) -> tuple[str, str | None]:
+    """Extract text and HTML body from message payload in a single traversal.
+
+    Returns (text_body, html_body) where:
+    - text_body: Plain text for display (falls back to stripped HTML if no plain text)
+    - html_body: Raw HTML for reply quoting (None if no HTML part)
+    """
+    text_part, html_part = _find_body_parts(payload)
+
+    # Decode HTML first (needed for both html_body and potential fallback)
+    html = _decode_part(html_part) if html_part else None
+
+    # Build display text: prefer plain text, fall back to stripped HTML
+    if text_part is not None:
+        display_text = _decode_part(text_part)
+    elif html is not None:
+        display_text = _strip_html(html)
+    else:
+        display_text = ""
+
+    return display_text, html
 
 
 def _write_email_json(
@@ -505,9 +515,7 @@ def extract_message_summary(msg: dict) -> dict:
         result["cc"] = cc
 
     payload = msg.get("payload", {})
-    body = decode_body(payload)
-    html_body = extract_html_body(payload)
-
+    body, html_body = extract_body(payload)
     result["file"] = _write_email_json("email", msg["id"], result, body, html_body)
     return result
 
@@ -553,9 +561,7 @@ def extract_thread_summary(thread: dict) -> dict:
         result["cc"] = cc
 
     payload = latest_msg.get("payload", {})
-    body = decode_body(payload)
-    html_body = extract_html_body(payload)
-
+    body, html_body = extract_body(payload)
     result["file"] = _write_email_json("thread", thread["id"], result, body, html_body)
 
     return result
@@ -907,8 +913,7 @@ def _create_reply_draft(
 
     # Get original body for quoting (both plain text and HTML)
     payload = original.get("payload", {})
-    original_body = decode_body(payload)
-    original_html = extract_html_body(payload)
+    original_body, original_html = extract_body(payload)
 
     # Use SENT label to detect own messages (handles send-as aliases)
     labels = original.get("labelIds", [])

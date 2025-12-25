@@ -14,6 +14,7 @@ Architecture based on safety-net's logging approach:
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -260,6 +261,12 @@ class LoggingHttp:
         service = build("gmail", "v1", http=http)
     """
 
+    # Precompiled patterns for URI metadata extraction
+    _API_PATTERN = re.compile(r"(gmail|calendar|drive)")
+    _RESOURCE_PATTERN = re.compile(
+        r"/(messages|threads|drafts|labels|events|files)(?:/([^/]+)(?:/([^/]+))?)?"
+    )
+
     def __init__(self, http: AuthorizedHttp) -> None:
         self._http = http
         self._logger = get_logger("jean_claude.api")
@@ -274,34 +281,21 @@ class LoggingHttp:
         """
         extra: dict = {}
         path = uri.split("?")[0]
-        parts = path.split("/")
 
-        # Extract API name (gmail, calendar, drive)
-        for api in ("gmail", "calendar", "drive"):
-            if f"/{api}/" in path or f"{api}.googleapis.com" in path:
-                extra["api"] = api
-                break
+        if match := self._API_PATTERN.search(path):
+            extra["api"] = match.group(1)
 
-        # Extract resource type and operation from path
-        # Look for known resource types
-        resources = ("messages", "threads", "drafts", "labels", "events", "files")
-        for i, part in enumerate(parts):
-            if part in resources:
-                extra["resource"] = part
-                # Next part might be an ID or operation
-                if i + 1 < len(parts):
-                    next_part = parts[i + 1]
-                    # Operations are lowercase words, IDs have mixed case/numbers
-                    if next_part.islower() and next_part.isalpha():
-                        extra["operation"] = next_part
-                    elif next_part and next_part not in ("me", "primary"):
-                        extra["resource_id"] = next_part
-                        # Check for operation after ID
-                        if i + 2 < len(parts) and parts[i + 2]:
-                            extra["operation"] = parts[i + 2]
-                break
+        if match := self._RESOURCE_PATTERN.search(path):
+            extra["resource"] = match.group(1)
+            if next_part := match.group(2):
+                # Lowercase alphabetic = operation, otherwise = ID
+                if next_part.islower() and next_part.isalpha():
+                    extra["operation"] = next_part
+                else:
+                    extra["resource_id"] = next_part
+                    if op := match.group(3):
+                        extra["operation"] = op
 
-        # For batch endpoints, mark as batch operation
         if "/batch" in path:
             extra["operation"] = "batch"
 
