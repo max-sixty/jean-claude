@@ -169,6 +169,12 @@ all messages provides conversation context and catches recently-read messages
 that may still need action. Prioritize unread when relevant (e.g., triaging new
 mail). User skills may override this behavior.
 
+**Reviewing inbox:** When user asks what messages need review:
+1. Fetch unread inbox threads (`gmail inbox --unread`)
+2. Also fetch read inbox threads (`gmail search "in:inbox -is:unread"`)
+3. If ≤10 read threads, list them along with unread
+4. Otherwise, report the count (e.g., "plus 25 read threads in inbox")
+
 1. **List/search** returns compact JSON with summaries and file paths
 2. **Read the file** if you need the full body
 
