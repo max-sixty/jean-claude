@@ -315,20 +315,13 @@ def respond(event_id: str, response: str, notify: bool):
         jean-claude gcal respond EVENT_ID --decline --no-notify
         jean-claude gcal respond EVENT_ID --tentative
     """
-    from googleapiclient.errors import HttpError
-
     if not response:
         raise click.UsageError("Must specify --accept, --decline, or --tentative")
 
     service = get_calendar()
 
     # Get the event
-    try:
-        event = service.events().get(calendarId="primary", eventId=event_id).execute()
-    except HttpError as e:
-        if e.resp.status == 404:
-            raise JeanClaudeError(f"Event not found: {event_id}")
-        raise JeanClaudeError(f"Calendar API error: {e.reason}")
+    event = service.events().get(calendarId="primary", eventId=event_id).execute()
 
     # Find the user's attendee entry and update their response
     attendees = event.get("attendees", [])
@@ -349,15 +342,12 @@ def respond(event_id: str, response: str, notify: bool):
 
     # Update the event with new response status
     send_updates = "all" if notify else "none"
-    try:
-        service.events().patch(
-            calendarId="primary",
-            eventId=event_id,
-            body={"attendees": attendees},
-            sendUpdates=send_updates,
-        ).execute()
-    except HttpError as e:
-        raise JeanClaudeError(f"Error updating response: {e.reason}")
+    service.events().patch(
+        calendarId="primary",
+        eventId=event_id,
+        body={"attendees": attendees},
+        sendUpdates=send_updates,
+    ).execute()
 
     response_text = {
         "accepted": "accepted",

@@ -7,6 +7,8 @@ import sys
 
 import click
 
+from googleapiclient.errors import HttpError
+
 from .auth import SCOPES_FULL, SCOPES_READONLY, TOKEN_FILE, run_auth
 from .gcal import cli as gcal_cli
 from .gdrive import cli as gdrive_cli
@@ -19,11 +21,20 @@ logger = get_logger(__name__)
 
 
 class ErrorHandlingGroup(click.Group):
-    """Click group that handles JeanClaudeError with clean output."""
+    """Click group that handles errors with clean output."""
 
     def invoke(self, ctx: click.Context):
         try:
             return super().invoke(ctx)
+        except HttpError as e:
+            status = e.resp.status
+            if status == 404:
+                raise JeanClaudeError("Resource not found")
+            if status == 403:
+                raise JeanClaudeError("Permission denied. Check sharing settings.")
+            if status == 400:
+                raise JeanClaudeError(f"Invalid request: {e._get_reason()}")
+            raise JeanClaudeError(f"API error: {e._get_reason()}")
         except JeanClaudeError as e:
             logger.error(str(e))
             click.echo(f"Error: {e}", err=True)
@@ -120,45 +131,35 @@ def status():
 
 def _check_google_apis() -> None:
     """Check Google API availability."""
-    from googleapiclient.errors import HttpError
-
     from .auth import build_service
 
-    # Check Gmail
-    try:
-        gmail = build_service("gmail", "v1")
-        gmail.users().getProfile(userId="me").execute()
-        click.echo("  Gmail: " + click.style("OK", fg="green"))
-    except HttpError as e:
-        _print_api_error("Gmail", e)
+    def check_api(name: str, test_call):
+        try:
+            test_call()
+            click.echo(f"  {name}: " + click.style("OK", fg="green"))
+        except HttpError as e:
+            _print_api_error(name, e)
 
-    # Check Calendar
-    try:
-        cal = build_service("calendar", "v3")
-        cal.calendarList().list(maxResults=1).execute()
-        click.echo("  Calendar: " + click.style("OK", fg="green"))
-    except HttpError as e:
-        _print_api_error("Calendar", e)
+    gmail = build_service("gmail", "v1")
+    check_api("Gmail", lambda: gmail.users().getProfile(userId="me").execute())
 
-    # Check Drive
-    try:
-        drive = build_service("drive", "v3")
-        drive.about().get(fields="user").execute()
-        click.echo("  Drive: " + click.style("OK", fg="green"))
-    except HttpError as e:
-        _print_api_error("Drive", e)
+    cal = build_service("calendar", "v3")
+    check_api("Calendar", lambda: cal.calendarList().list(maxResults=1).execute())
 
-    # Check Sheets - test with Google's public sample spreadsheet
-    # (Sample Spreadsheet from Google Sheets API quickstart)
-    try:
-        sheets = build_service("sheets", "v4")
-        sheets.spreadsheets().get(
+    drive = build_service("drive", "v3")
+    check_api("Drive", lambda: drive.about().get(fields="user").execute())
+
+    # Sheets: test with Google's public sample spreadsheet
+    sheets = build_service("sheets", "v4")
+    check_api(
+        "Sheets",
+        lambda: sheets.spreadsheets()
+        .get(
             spreadsheetId="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
             fields="spreadsheetId",
-        ).execute()
-        click.echo("  Sheets: " + click.style("OK", fg="green"))
-    except HttpError as e:
-        _print_api_error("Sheets", e)
+        )
+        .execute(),
+    )
 
 
 def _check_imessage_status() -> None:

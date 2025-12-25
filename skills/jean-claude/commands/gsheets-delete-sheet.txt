@@ -1,0 +1,11 @@
+Usage: jean-claude gsheets delete-sheet [OPTIONS] SPREADSHEET_ID SHEET_NAME
+
+  Delete a sheet from a spreadsheet.
+
+  SPREADSHEET_ID: The spreadsheet ID (from the URL) SHEET_NAME: Name of the
+  sheet to delete
+
+  Examples:     jean-claude gsheets delete-sheet SPREADSHEET_ID "Old Data"
+
+Options:
+  --help  Show this message and exit.

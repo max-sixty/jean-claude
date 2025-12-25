@@ -85,6 +85,32 @@ Error: Event not found: abc123
 
 Unexpected errors propagate with full traceback for debugging.
 
+### API Error Handling
+
+All Google API errors (`HttpError`) are handled at the top-level CLI entry point
+in `cli.py`. Commands don't need try/except blocks — errors bubble up and get
+converted to user-friendly messages automatically.
+
+```python
+# In cli.py - handles all HttpError across all commands
+class ErrorHandlingGroup(click.Group):
+    def invoke(self, ctx):
+        try:
+            return super().invoke(ctx)
+        except HttpError as e:
+            # Convert to JeanClaudeError with user-friendly message
+            ...
+        except JeanClaudeError as e:
+            # Log and display clean error
+            ...
+
+# In command files - no try/except needed
+@cli.command()
+def read(spreadsheet_id: str):
+    result = service.spreadsheets().values().get(...).execute()
+    click.echo(json.dumps(result["values"]))
+```
+
 ## iMessage Safety Principles
 
 When adding or modifying iMessage features:

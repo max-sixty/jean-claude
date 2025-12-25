@@ -1,0 +1,17 @@
+Usage: jean-claude gsheets sort [OPTIONS] SPREADSHEET_ID RANGE_
+
+  Sort data in a range by one or more columns.
+
+  SPREADSHEET_ID: The spreadsheet ID (from the URL) RANGE: A1 notation range
+  (e.g., 'Sheet1!A1:D100')
+
+  Examples:     jean-claude gsheets sort SPREADSHEET_ID 'Sheet1!A1:D100' --by
+  A     jean-claude gsheets sort SPREADSHEET_ID 'Data!A1:Z50' --by B --by 'C
+  desc'     jean-claude gsheets sort SPREADSHEET_ID 'Sheet1!A1:D100' --by A
+  --header
+
+Options:
+  --by TEXT  Column to sort by (e.g., 'A', 'B desc'). Can be repeated.
+             [required]
+  --header   First row is header (exclude from sort)
+  --help     Show this message and exit.

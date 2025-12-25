@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 
 import click
-from googleapiclient.errors import HttpError
 
 from .auth import build_service
 from .logging import JeanClaudeError, get_logger
@@ -18,21 +18,6 @@ def get_sheets():
     return build_service("sheets", "v4")
 
 
-def _handle_sheets_error(e: HttpError, spreadsheet_id: str | None = None) -> None:
-    """Convert HttpError to JeanClaudeError with helpful message."""
-    status = e.resp.status
-    if status == 404:
-        if spreadsheet_id:
-            raise JeanClaudeError(f"Spreadsheet not found: {spreadsheet_id}")
-        raise JeanClaudeError("Spreadsheet or range not found")
-    if status == 403:
-        raise JeanClaudeError("Permission denied. Check spreadsheet sharing settings.")
-    if status == 400:
-        # Usually invalid range format
-        raise JeanClaudeError(f"Invalid request: {e._get_reason()}")
-    raise JeanClaudeError(f"Sheets API error: {e._get_reason()}")
-
-
 def _read_rows_from_stdin() -> list:
     """Read and validate JSON array of rows from stdin."""
     try:
@@ -42,6 +27,19 @@ def _read_rows_from_stdin() -> list:
     if not isinstance(rows, list):
         raise JeanClaudeError("Input must be a JSON array of rows")
     return rows
+
+
+def _get_sheet_id(service, spreadsheet_id: str, sheet_name: str) -> int:
+    """Get sheet ID from sheet name."""
+    meta = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
+        .execute()
+    )
+    for sheet in meta["sheets"]:
+        if sheet["properties"]["title"] == sheet_name:
+            return sheet["properties"]["sheetId"]
+    raise JeanClaudeError(f"Sheet not found: {sheet_name}")
 
 
 @click.group()
@@ -85,31 +83,24 @@ def read(spreadsheet_id: str, range_: str, sheet: str | None, as_json: bool):
         full_range = sheet
     else:
         # Get first sheet name
-        try:
-            meta = (
-                service.spreadsheets()
-                .get(spreadsheetId=spreadsheet_id, fields="sheets.properties.title")
-                .execute()
-            )
-        except HttpError as e:
-            _handle_sheets_error(e, spreadsheet_id)
-        sheets = meta.get("sheets", [])
-        if not sheets:
-            raise JeanClaudeError("Spreadsheet has no sheets")
-        full_range = sheets[0]["properties"]["title"]
-
-    try:
-        result = (
+        meta = (
             service.spreadsheets()
-            .values()
-            .get(
-                spreadsheetId=spreadsheet_id,
-                range=full_range,
-            )
+            .get(spreadsheetId=spreadsheet_id, fields="sheets.properties.title")
             .execute()
         )
-    except HttpError as e:
-        _handle_sheets_error(e, spreadsheet_id)
+        if not meta["sheets"]:
+            raise JeanClaudeError("Spreadsheet has no sheets")
+        full_range = meta["sheets"][0]["properties"]["title"]
+
+    result = (
+        service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=full_range,
+        )
+        .execute()
+    )
 
     values = result.get("values", [])
 
@@ -137,18 +128,14 @@ def info(spreadsheet_id: str, as_json: bool):
     SPREADSHEET_ID: The spreadsheet ID (from the URL)
     """
     service = get_sheets()
-
-    try:
-        result = (
-            service.spreadsheets()
-            .get(
-                spreadsheetId=spreadsheet_id,
-                fields="spreadsheetId,properties.title,sheets.properties",
-            )
-            .execute()
+    result = (
+        service.spreadsheets()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            fields="spreadsheetId,properties.title,sheets.properties",
         )
-    except HttpError as e:
-        _handle_sheets_error(e, spreadsheet_id)
+        .execute()
+    )
 
     if as_json:
         click.echo(json.dumps(result, indent=2))
@@ -177,20 +164,16 @@ def create(title: str, sheet: str):
         jean-claude gsheets create "Budget 2025" --sheet "January"
     """
     service = get_sheets()
-
-    try:
-        result = (
-            service.spreadsheets()
-            .create(
-                body={
-                    "properties": {"title": title},
-                    "sheets": [{"properties": {"title": sheet}}],
-                }
-            )
-            .execute()
+    result = (
+        service.spreadsheets()
+        .create(
+            body={
+                "properties": {"title": title},
+                "sheets": [{"properties": {"title": sheet}}],
+            }
         )
-    except HttpError as e:
-        _handle_sheets_error(e)
+        .execute()
+    )
 
     spreadsheet_id = result["spreadsheetId"]
     url = result["spreadsheetUrl"]
@@ -224,28 +207,31 @@ def append(spreadsheet_id: str, sheet: str):
     rows = _read_rows_from_stdin()
 
     service = get_sheets()
-    try:
-        result = (
-            service.spreadsheets()
-            .values()
-            .append(
-                spreadsheetId=spreadsheet_id,
-                range=sheet,
-                valueInputOption="USER_ENTERED",
-                insertDataOption="INSERT_ROWS",
-                body={"values": rows},
-            )
-            .execute()
+    result = (
+        service.spreadsheets()
+        .values()
+        .append(
+            spreadsheetId=spreadsheet_id,
+            range=sheet,
+            valueInputOption="USER_ENTERED",
+            insertDataOption="INSERT_ROWS",
+            body={"values": rows},
         )
-    except HttpError as e:
-        _handle_sheets_error(e, spreadsheet_id)
+        .execute()
+    )
 
-    updates = result.get("updates", {})
-    updated_rows = updates.get("updatedRows", 0)
-    updated_range = updates.get("updatedRange", "")
-
-    logger.info(f"Appended {updated_rows} rows", range=updated_range)
-    click.echo(json.dumps({"updatedRows": updated_rows, "updatedRange": updated_range}))
+    updates = result["updates"]
+    logger.info(
+        f"Appended {updates['updatedRows']} rows", range=updates["updatedRange"]
+    )
+    click.echo(
+        json.dumps(
+            {
+                "updatedRows": updates["updatedRows"],
+                "updatedRange": updates["updatedRange"],
+            }
+        )
+    )
 
 
 @cli.command()
@@ -267,33 +253,30 @@ def write(spreadsheet_id: str, range_: str):
     normalized_range = _normalize_range(range_)
 
     service = get_sheets()
-    try:
-        result = (
-            service.spreadsheets()
-            .values()
-            .update(
-                spreadsheetId=spreadsheet_id,
-                range=normalized_range,
-                valueInputOption="USER_ENTERED",
-                body={"values": rows},
-            )
-            .execute()
+    result = (
+        service.spreadsheets()
+        .values()
+        .update(
+            spreadsheetId=spreadsheet_id,
+            range=normalized_range,
+            valueInputOption="USER_ENTERED",
+            body={"values": rows},
         )
-    except HttpError as e:
-        _handle_sheets_error(e, spreadsheet_id)
+        .execute()
+    )
 
-    updated_rows = result.get("updatedRows", 0)
-    updated_cols = result.get("updatedColumns", 0)
-    updated_cells = result.get("updatedCells", 0)
-
-    logger.info(f"Updated {updated_cells} cells", rows=updated_rows, cols=updated_cols)
+    logger.info(
+        f"Updated {result['updatedCells']} cells",
+        rows=result["updatedRows"],
+        cols=result["updatedColumns"],
+    )
     click.echo(
         json.dumps(
             {
-                "updatedRange": result.get("updatedRange", ""),
-                "updatedRows": updated_rows,
-                "updatedColumns": updated_cols,
-                "updatedCells": updated_cells,
+                "updatedRange": result["updatedRange"],
+                "updatedRows": result["updatedRows"],
+                "updatedColumns": result["updatedColumns"],
+                "updatedCells": result["updatedCells"],
             }
         )
     )
@@ -315,20 +298,178 @@ def clear(spreadsheet_id: str, range_: str):
     normalized_range = _normalize_range(range_)
 
     service = get_sheets()
-    try:
-        result = (
-            service.spreadsheets()
-            .values()
-            .clear(
-                spreadsheetId=spreadsheet_id,
-                range=normalized_range,
-                body={},
-            )
-            .execute()
+    result = (
+        service.spreadsheets()
+        .values()
+        .clear(
+            spreadsheetId=spreadsheet_id,
+            range=normalized_range,
+            body={},
         )
-    except HttpError as e:
-        _handle_sheets_error(e, spreadsheet_id)
+        .execute()
+    )
 
-    cleared_range = result.get("clearedRange", normalized_range)
-    logger.info("Cleared range", range=cleared_range)
-    click.echo(json.dumps({"clearedRange": cleared_range}))
+    logger.info("Cleared range", range=result["clearedRange"])
+    click.echo(json.dumps({"clearedRange": result["clearedRange"]}))
+
+
+@cli.command("add-sheet")
+@click.argument("spreadsheet_id")
+@click.argument("sheet_name")
+@click.option("--index", type=int, help="Position to insert (0 = first)")
+def add_sheet(spreadsheet_id: str, sheet_name: str, index: int | None):
+    """Add a new sheet to a spreadsheet.
+
+    SPREADSHEET_ID: The spreadsheet ID (from the URL)
+    SHEET_NAME: Name for the new sheet
+
+    Examples:
+        jean-claude gsheets add-sheet SPREADSHEET_ID "February"
+        jean-claude gsheets add-sheet SPREADSHEET_ID "Summary" --index 0
+    """
+    service = get_sheets()
+
+    properties: dict = {"title": sheet_name}
+    if index is not None:
+        properties["index"] = index
+
+    result = (
+        service.spreadsheets()
+        .batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={"requests": [{"addSheet": {"properties": properties}}]},
+        )
+        .execute()
+    )
+
+    reply = result["replies"][0]["addSheet"]["properties"]
+    logger.info("Added sheet", title=reply["title"], sheetId=reply["sheetId"])
+    click.echo(
+        json.dumps(
+            {
+                "sheetId": reply["sheetId"],
+                "title": reply["title"],
+                "index": reply["index"],
+            }
+        )
+    )
+
+
+@cli.command("delete-sheet")
+@click.argument("spreadsheet_id")
+@click.argument("sheet_name")
+def delete_sheet(spreadsheet_id: str, sheet_name: str):
+    """Delete a sheet from a spreadsheet.
+
+    SPREADSHEET_ID: The spreadsheet ID (from the URL)
+    SHEET_NAME: Name of the sheet to delete
+
+    Examples:
+        jean-claude gsheets delete-sheet SPREADSHEET_ID "Old Data"
+    """
+    service = get_sheets()
+    sheet_id = _get_sheet_id(service, spreadsheet_id, sheet_name)
+
+    service.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id,
+        body={"requests": [{"deleteSheet": {"sheetId": sheet_id}}]},
+    ).execute()
+
+    logger.info("Deleted sheet", title=sheet_name)
+    click.echo(json.dumps({"deleted": sheet_name, "sheetId": sheet_id}))
+
+
+def _column_to_index(col: str) -> int:
+    """Convert column letter(s) to 0-based index. A=0, B=1, Z=25, AA=26."""
+    if not col or not col.isalpha():
+        raise JeanClaudeError(f"Invalid column: {col} (must be letters only)")
+    result = 0
+    for char in col.upper():
+        result = result * 26 + (ord(char) - ord("A") + 1)
+    return result - 1
+
+
+@cli.command()
+@click.argument("spreadsheet_id")
+@click.argument("range_")
+@click.option(
+    "--by",
+    "columns",
+    multiple=True,
+    required=True,
+    help="Column to sort by (e.g., 'A', 'B desc'). Can be repeated.",
+)
+@click.option("--header", is_flag=True, help="First row is header (exclude from sort)")
+def sort(spreadsheet_id: str, range_: str, columns: tuple[str, ...], header: bool):
+    """Sort data in a range by one or more columns.
+
+    SPREADSHEET_ID: The spreadsheet ID (from the URL)
+    RANGE: A1 notation range (e.g., 'Sheet1!A1:D100')
+
+    Examples:
+        jean-claude gsheets sort SPREADSHEET_ID 'Sheet1!A1:D100' --by A
+        jean-claude gsheets sort SPREADSHEET_ID 'Data!A1:Z50' --by B --by 'C desc'
+        jean-claude gsheets sort SPREADSHEET_ID 'Sheet1!A1:D100' --by A --header
+    """
+    normalized_range = _normalize_range(range_)
+
+    # Parse range to get sheet name and cell range
+    if "!" in normalized_range:
+        sheet_name, cell_range = normalized_range.split("!", 1)
+    else:
+        raise JeanClaudeError("Range must include sheet name (e.g., 'Sheet1!A1:D100')")
+
+    # Parse cell range to get start/end columns and rows
+    # Handle formats: A1:D100, A:D, A1:D
+    match = re.match(r"([A-Z]+)(\d*):([A-Z]+)(\d*)", cell_range.upper())
+    if not match:
+        raise JeanClaudeError(f"Invalid range format: {cell_range}")
+
+    start_col, start_row, end_col, end_row = match.groups()
+    start_col_idx = _column_to_index(start_col)
+    end_col_idx = _column_to_index(end_col) + 1  # Exclusive
+
+    # Build sort specs
+    sort_specs = []
+    for col_spec in columns:
+        parts = col_spec.split()
+        col_letter = parts[0].upper()
+        order = (
+            "DESCENDING"
+            if len(parts) > 1 and parts[1].lower() == "desc"
+            else "ASCENDING"
+        )
+        col_idx = _column_to_index(col_letter)
+        if col_idx < start_col_idx or col_idx >= end_col_idx:
+            raise JeanClaudeError(
+                f"Sort column {col_letter} is outside range {start_col}:{end_col}"
+            )
+        sort_specs.append({"dimensionIndex": col_idx, "sortOrder": order})
+
+    service = get_sheets()
+    sheet_id = _get_sheet_id(service, spreadsheet_id, sheet_name)
+
+    # Build range spec
+    range_spec: dict = {
+        "sheetId": sheet_id,
+        "startColumnIndex": start_col_idx,
+        "endColumnIndex": end_col_idx,
+    }
+
+    if start_row:
+        range_spec["startRowIndex"] = int(start_row) - 1  # 0-based
+        if header:
+            range_spec["startRowIndex"] += 1  # Skip header row
+    if end_row:
+        range_spec["endRowIndex"] = int(end_row)  # Exclusive
+
+    service.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id,
+        body={
+            "requests": [{"sortRange": {"range": range_spec, "sortSpecs": sort_specs}}]
+        },
+    ).execute()
+
+    sort_desc = ", ".join(columns)
+    logger.info(f"Sorted range by {sort_desc}", range=normalized_range)
+    click.echo(json.dumps({"sortedRange": normalized_range, "sortedBy": list(columns)}))

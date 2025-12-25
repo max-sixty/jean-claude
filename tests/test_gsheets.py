@@ -6,7 +6,11 @@ import sys
 
 import pytest
 
-from jean_claude.gsheets import _normalize_range, _read_rows_from_stdin
+from jean_claude.gsheets import (
+    _column_to_index,
+    _normalize_range,
+    _read_rows_from_stdin,
+)
 from jean_claude.logging import JeanClaudeError
 
 
@@ -73,3 +77,55 @@ class TestReadRowsFromStdin:
         monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(data)))
         result = _read_rows_from_stdin()
         assert result == data
+
+
+class TestColumnToIndex:
+    """Tests for _column_to_index function."""
+
+    def test_single_letter_a(self):
+        """Column A is index 0."""
+        assert _column_to_index("A") == 0
+
+    def test_single_letter_b(self):
+        """Column B is index 1."""
+        assert _column_to_index("B") == 1
+
+    def test_single_letter_z(self):
+        """Column Z is index 25."""
+        assert _column_to_index("Z") == 25
+
+    def test_double_letter_aa(self):
+        """Column AA is index 26."""
+        assert _column_to_index("AA") == 26
+
+    def test_double_letter_az(self):
+        """Column AZ is index 51."""
+        assert _column_to_index("AZ") == 51
+
+    def test_double_letter_ba(self):
+        """Column BA is index 52."""
+        assert _column_to_index("BA") == 52
+
+    def test_lowercase(self):
+        """Lowercase letters work."""
+        assert _column_to_index("a") == 0
+        assert _column_to_index("aa") == 26
+
+    def test_triple_letter_zz(self):
+        """Column ZZ is index 701."""
+        assert _column_to_index("ZZ") == 701
+
+    def test_empty_string_raises(self):
+        """Empty string raises JeanClaudeError."""
+        with pytest.raises(JeanClaudeError, match="must be letters only"):
+            _column_to_index("")
+
+    def test_invalid_chars_raises(self):
+        """Non-letter characters raise JeanClaudeError."""
+        with pytest.raises(JeanClaudeError, match="must be letters only"):
+            _column_to_index("A1")
+
+    def test_special_chars_raises(self):
+        """Special characters raise JeanClaudeError."""
+        with pytest.raises(JeanClaudeError, match="must be letters only"):
+            _column_to_index("!@#")

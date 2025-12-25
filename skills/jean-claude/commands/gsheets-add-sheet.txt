@@ -1,0 +1,13 @@
+Usage: jean-claude gsheets add-sheet [OPTIONS] SPREADSHEET_ID SHEET_NAME
+
+  Add a new sheet to a spreadsheet.
+
+  SPREADSHEET_ID: The spreadsheet ID (from the URL) SHEET_NAME: Name for the
+  new sheet
+
+  Examples:     jean-claude gsheets add-sheet SPREADSHEET_ID "February"
+  jean-claude gsheets add-sheet SPREADSHEET_ID "Summary" --index 0
+
+Options:
+  --index INTEGER  Position to insert (0 = first)
+  --help           Show this message and exit.

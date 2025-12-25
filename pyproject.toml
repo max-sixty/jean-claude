@@ -29,3 +29,7 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.typos.default.extend-words]
+# BA is a valid spreadsheet column (A-Z, AA-AZ, BA-BZ, etc.)
+ba = "ba"

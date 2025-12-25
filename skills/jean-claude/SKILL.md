@@ -486,6 +486,32 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets info SPREADSHEET_ID
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets info SPREADSHEET_ID --json
 ```
 
+### Manage Sheets
+
+```bash
+# Add a new sheet to a spreadsheet
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets add-sheet SPREADSHEET_ID "February"
+
+# Add at specific position (0 = first)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets add-sheet SPREADSHEET_ID "Summary" --index 0
+
+# Delete a sheet
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets delete-sheet SPREADSHEET_ID "Old Data"
+```
+
+### Sort Data
+
+```bash
+# Sort by column A (ascending)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets sort SPREADSHEET_ID 'Sheet1!A1:D100' --by A
+
+# Sort by multiple columns
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets sort SPREADSHEET_ID 'Sheet1!A1:D100' --by B --by 'C desc'
+
+# Sort with header row (exclude first row from sorting)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets sort SPREADSHEET_ID 'Sheet1!A1:D100' --by A --header
+```
+
 ## iMessage
 
 Send via AppleScript. On first use, macOS will prompt for Automation permission.
