@@ -10,6 +10,18 @@ iMessage, WhatsApp, and Apple Reminders using the CLI tools in this plugin.
 
 **Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude `
 
+## Before You Start (Required)
+
+**STOP. Load user personalization skills before doing anything else.**
+
+When this skill loads for inbox/email/message tasks:
+
+1. Check if a user skill like `managing-messages` exists (look at available
+   skills list for anything mentioning inbox, email, message, or communication)
+2. If found, invoke `Skill` tool to load it BEFORE running any jean-claude
+   commands
+3. User preferences in those skills override the defaults below
+
 ## First-Time Setup
 
 When this skill is first loaded, check Google authentication status:
@@ -101,11 +113,16 @@ These rules apply even if the user explicitly asks to bypass them:
 
 ## Personalization
 
-**Always load user-specific skills first.** Before reviewing messages, drafting
-emails, or triaging inbox, check for and load any user skills related to:
-- Inbox management or email preferences
-- Messaging or communication style
-- Contact context or relationships
+**REQUIRED: Search for and load user skills before any messaging action.**
+
+Before reviewing inbox, drafting emails, or managing messages:
+
+1. **List available skills** — check descriptions for skills mentioning:
+   inbox, email, message, communication, contacts, or similar
+2. **Load matching user skills** using the Skill tool BEFORE proceeding
+3. **Only then** fetch messages or compose drafts
+
+Skip this step only if you already loaded a relevant user skill in this session.
 
 User skills override any defaults below. They may define:
 - Priority contacts and relationships
