@@ -579,7 +579,9 @@ def unread(max_results: int, include_spam: bool):
 
     # is_filtered: 0 = contacts, 1 = unknown senders, 2 = spam
     # By default show 0 and 1; --include-spam adds 2
-    filter_clause = "" if include_spam else "AND (c.is_filtered IS NULL OR c.is_filtered < 2)"
+    filter_clause = (
+        "" if include_spam else "AND (c.is_filtered IS NULL OR c.is_filtered < 2)"
+    )
 
     cursor.execute(
         f"""
