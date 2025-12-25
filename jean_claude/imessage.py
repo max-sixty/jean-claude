@@ -16,7 +16,6 @@ logger = get_logger(__name__)
 DB_PATH = Path.home() / "Library" / "Messages" / "chat.db"
 # Apple's Cocoa epoch (2001-01-01) offset from Unix epoch (1970-01-01)
 APPLE_EPOCH_OFFSET = 978307200
-TEXT_TRUNCATE_LENGTH = 200
 
 
 def run_applescript(script: str, *args: str) -> str:
@@ -48,35 +47,23 @@ def get_db_connection() -> sqlite3.Connection:
         raise
 
 
-def truncate_text(text: str | None) -> str:
-    """Truncate text for display."""
-    if not text:
-        return "(no text)"
-    if len(text) > TEXT_TRUNCATE_LENGTH:
-        return text[:TEXT_TRUNCATE_LENGTH] + "..."
-    return text
-
-
-def format_message_row(
-    date: str, sender: str, text: str, is_from_me: bool = False
-) -> None:
-    """Format and print a message row."""
-    if is_from_me:
-        click.echo(
-            f"{click.style(date, dim=True)} {click.style('me', fg='blue', bold=True)}"
-        )
-    else:
-        click.echo(f"{click.style(date, dim=True)} {click.style(sender, bold=True)}")
-    click.echo(f"  {truncate_text(text)}")
-    click.echo()
-
-
-def _extract_identifier(chat_id: str) -> str:
-    """Extract human-readable identifier from chat ID."""
-    parts = chat_id.split(";")
-    if len(parts) >= 3:
-        return parts[-1]
-    return chat_id
+def build_message_dict(
+    date: str,
+    sender: str,
+    text: str,
+    is_from_me: bool = False,
+    contact_name: str | None = None,
+    group_name: str | None = None,
+) -> dict:
+    """Build a message dictionary for JSON output."""
+    return {
+        "date": date,
+        "sender": sender,
+        "text": text,
+        "is_from_me": is_from_me,
+        "contact_name": contact_name,
+        "group_name": group_name,
+    }
 
 
 def extract_text_from_attributed_body(data: bytes | None) -> str | None:
@@ -159,6 +146,64 @@ return ""
 end run"""
     result = run_applescript(script, phone)
     return result if result else None
+
+
+def resolve_phones_to_names(phones: list[str]) -> dict[str, str]:
+    """Resolve phone numbers to contact names via Messages.app.
+
+    Uses Messages.app's buddy lookup which has fast access to contact names.
+
+    Args:
+        phones: List of phone numbers to look up (e.g., ["+12025551234", ...])
+
+    Returns:
+        Dict mapping original phone string to contact name (only for matches).
+    """
+    if not phones:
+        return {}
+
+    # Filter to phone-like strings (contain digits, not chat IDs)
+    valid_phones = [p for p in phones if any(c.isdigit() for c in p)]
+    if not valid_phones:
+        return {}
+
+    # Pass JSON as argument to avoid AppleScript injection risks
+    phones_json = json.dumps(valid_phones)
+    script = """use framework "Foundation"
+
+on run {phonesJsonArg}
+    set phoneList to current application's NSJSONSerialization's JSONObjectWithData:((current application's NSString's stringWithString:phonesJsonArg)'s dataUsingEncoding:(current application's NSUTF8StringEncoding)) options:0 |error|:(missing value)
+    set resultDict to current application's NSMutableDictionary's new()
+
+    tell application "Messages"
+        set targetService to 1st service whose service type = iMessage
+        repeat with phoneNum in phoneList
+            try
+                set targetBuddy to buddy (phoneNum as text) of targetService
+                set buddyName to full name of targetBuddy
+                if buddyName is not missing value then
+                    resultDict's setValue:buddyName forKey:phoneNum
+                end if
+            end try
+        end repeat
+    end tell
+
+    set jsonData to current application's NSJSONSerialization's dataWithJSONObject:resultDict options:0 |error|:(missing value)
+    set jsonString to current application's NSString's alloc()'s initWithData:jsonData encoding:(current application's NSUTF8StringEncoding)
+    return jsonString as text
+end run"""
+
+    try:
+        output = run_applescript(script, phones_json)
+        if not output:
+            return {}
+        return json.loads(output)
+    except json.JSONDecodeError:
+        logger.debug("Failed to parse contact names from Messages.app")
+        return {}
+    except JeanClaudeError:
+        logger.debug("Messages.app contact lookup failed")
+        return {}
 
 
 def search_contacts_by_name(name: str) -> list[tuple[str, list[str]]]:
@@ -386,66 +431,56 @@ def chats(max_results: int):
     Example:
         jean-claude imessage chats
     """
-    # Get chats with participant names resolved by Messages.app
-    script = """tell application "Messages"
-  set chatInfo to {}
-  repeat with c in chats
-    try
-      set chatName to name of c
-      set chatId to id of c as text
+    script = f"""use framework "Foundation"
 
-      -- For 1:1 chats without a name, try to get participant's contact name
-      if chatName is missing value then
-        set chatName to ""
-        set pList to participants of c
-        if (count of pList) = 1 then
-          try
-            set pName to full name of item 1 of pList
-            if pName is not missing value then
-              set chatName to pName
+tell application "Messages"
+    set chatList to current application's NSMutableArray's new()
+    set chatCount to 0
+
+    repeat with c in chats
+        if chatCount >= {max_results} then exit repeat
+
+        try
+            set chatDict to current application's NSMutableDictionary's new()
+            set chatId to id of c as text
+            chatDict's setValue:chatId forKey:"chat_id"
+
+            -- Get chat name or participant name for 1:1 chats
+            set chatName to name of c
+            if chatName is missing value then
+                set pList to participants of c
+                if (count of pList) = 1 then
+                    try
+                        set chatName to full name of item 1 of pList
+                    end try
+                end if
             end if
-          end try
-        end if
-      end if
+            if chatName is not missing value then
+                chatDict's setValue:chatName forKey:"name"
+            end if
 
-      set end of chatInfo to chatName & "||" & chatId
-    end try
-  end repeat
-  return chatInfo
-end tell"""
+            chatList's addObject:chatDict
+            set chatCount to chatCount + 1
+        end try
+    end repeat
+end tell
+
+set jsonData to current application's NSJSONSerialization's dataWithJSONObject:chatList options:0 |error|:(missing value)
+set jsonString to current application's NSString's alloc()'s initWithData:jsonData encoding:(current application's NSUTF8StringEncoding)
+return jsonString as text"""
 
     output = run_applescript(script)
     if not output:
         logger.info("No chats found")
+        click.echo(json.dumps({"chats": []}))
         return
 
-    items = output.split(", ")
-    displayed = 0
-
-    for item in items:
-        if displayed >= max_results:
-            break
-        if "||" not in item:
-            continue
-
-        name, chat_id = item.split("||", 1)
-        name = name.strip()
-        chat_id = chat_id.strip()
-        identifier = _extract_identifier(chat_id)
-
-        if name:
-            click.echo(f"{click.style(name, bold=True)}")
-            if name != identifier:
-                # Show phone/identifier if different from name
-                click.echo(f"  {click.style(identifier, dim=True)}")
-            click.echo(f"  {click.style(chat_id, dim=True)}")
-        else:
-            # No name resolved - show identifier
-            click.echo(f"{identifier}")
-            click.echo(f"  {click.style(chat_id, dim=True)}")
-
-        displayed += 1
-        click.echo()
+    try:
+        chats_list = json.loads(output)
+        click.echo(json.dumps({"chats": chats_list}, indent=2))
+    except json.JSONDecodeError:
+        logger.debug("Failed to parse chats from Messages.app")
+        click.echo(json.dumps({"chats": []}))
 
 
 @cli.command()
@@ -458,38 +493,48 @@ def participants(chat_id: str):
     Example:
         jean-claude imessage participants "any;+;chat123456789"
     """
-    script = """on run {chatId}
-  tell application "Messages"
-    set c to chat id chatId
-    set pList to {}
-    repeat with p in participants of c
-      try
-        set pName to full name of p
-        set pHandle to handle of p
-        if pName is missing value then
-          set end of pList to pHandle
-        else
-          set end of pList to pName & " (" & pHandle & ")"
-        end if
-      on error
-        try
-          set end of pList to handle of p
-        end try
-      end try
-    end repeat
-    return pList
-  end tell
+    script = """use framework "Foundation"
+
+on run {chatId}
+    set participantList to current application's NSMutableArray's new()
+
+    tell application "Messages"
+        set c to chat id chatId
+        repeat with p in participants of c
+            try
+                set pDict to current application's NSMutableDictionary's new()
+                set pHandle to handle of p
+                pDict's setValue:pHandle forKey:"handle"
+
+                try
+                    set pName to full name of p
+                    if pName is not missing value then
+                        pDict's setValue:pName forKey:"name"
+                    end if
+                end try
+
+                participantList's addObject:pDict
+            end try
+        end repeat
+    end tell
+
+    set jsonData to current application's NSJSONSerialization's dataWithJSONObject:participantList options:0 |error|:(missing value)
+    set jsonString to current application's NSString's alloc()'s initWithData:jsonData encoding:(current application's NSUTF8StringEncoding)
+    return jsonString as text
 end run"""
 
     output = run_applescript(script, chat_id)
     if not output:
         logger.info("No participants found or not a group chat")
+        click.echo(json.dumps({"participants": []}))
         return
 
-    for item in output.split(", "):
-        item = item.strip()
-        if item:
-            click.echo(item)
+    try:
+        participants_list = json.loads(output)
+        click.echo(json.dumps({"participants": participants_list}, indent=2))
+    except json.JSONDecodeError:
+        logger.debug("Failed to parse participants from Messages.app")
+        click.echo(json.dumps({"participants": []}))
 
 
 @cli.command("open")
@@ -554,24 +599,31 @@ def unread(max_results: int):
 
     if not rows:
         logger.info("No unread messages")
+        click.echo(json.dumps({"messages": []}))
         return
 
-    for date, sender, text, attributed_body, display_name in rows:
+    # Collect unique senders and resolve to contact names
+    unique_senders = {row[1] for row in rows if row[1] and row[1] != "unknown"}
+    phone_to_name = resolve_phones_to_names(list(unique_senders))
+
+    messages = []
+    for date, sender, text, attributed_body, group_name in rows:
         msg_text = get_message_text(text, attributed_body)
         if not msg_text:
             continue
 
-        if display_name:
-            click.echo(
-                f"{click.style(date, dim=True)} {click.style(sender, bold=True)} "
-                f"in {click.style(display_name, fg='cyan')}"
+        contact_name = phone_to_name.get(sender)
+        messages.append(
+            build_message_dict(
+                date=date,
+                sender=sender,
+                text=msg_text,
+                contact_name=contact_name,
+                group_name=group_name,
             )
-        else:
-            click.echo(
-                f"{click.style(date, dim=True)} {click.style(sender, bold=True)}"
-            )
-        click.echo(f"  {truncate_text(msg_text)}")
-        click.echo()
+        )
+
+    click.echo(json.dumps({"messages": messages}, indent=2))
 
 
 @cli.command()
@@ -622,12 +674,28 @@ def search(query: str | None, max_results: int):
 
     if not rows:
         logger.info("No messages found")
+        click.echo(json.dumps({"messages": []}))
         return
 
+    # Collect unique senders and resolve to contact names
+    unique_senders = {row[1] for row in rows if row[1] and row[1] != "unknown"}
+    phone_to_name = resolve_phones_to_names(list(unique_senders))
+
+    messages = []
     for date, sender, text, attributed_body in rows:
         msg_text = get_message_text(text, attributed_body)
         if msg_text:
-            format_message_row(date, sender, msg_text)
+            contact_name = phone_to_name.get(sender)
+            messages.append(
+                build_message_dict(
+                    date=date,
+                    sender=sender,
+                    text=msg_text,
+                    contact_name=contact_name,
+                )
+            )
+
+    click.echo(json.dumps({"messages": messages}, indent=2))
 
 
 @cli.command()
@@ -688,10 +756,29 @@ def history(chat_id: str | None, max_results: int, name: str | None):
 
     if not rows:
         logger.info("No messages found for this chat")
+        click.echo(json.dumps({"messages": []}))
         return
 
+    # Collect unique senders (excluding "me") and resolve to contact names
+    unique_senders = {
+        row[1] for row in rows if row[1] and row[1] not in ("unknown", "me")
+    }
+    phone_to_name = resolve_phones_to_names(list(unique_senders))
+
     # Reverse to show oldest first
+    messages = []
     for date, sender, text, attributed_body, is_from_me in reversed(rows):
         msg_text = get_message_text(text, attributed_body)
         if msg_text:
-            format_message_row(date, sender, msg_text, is_from_me)
+            contact_name = phone_to_name.get(sender)
+            messages.append(
+                build_message_dict(
+                    date=date,
+                    sender=sender,
+                    text=msg_text,
+                    is_from_me=is_from_me,
+                    contact_name=contact_name,
+                )
+            )
+
+    click.echo(json.dumps({"messages": messages}, indent=2))
