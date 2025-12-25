@@ -99,6 +99,37 @@ These rules apply even if the user explicitly asks to bypass them:
 4. Ask: "Send this WhatsApp message?" and wait for explicit approval
 5. Call `jean-claude whatsapp send PHONE MESSAGE`
 
+## Personalization
+
+**Always load user-specific skills first.** Before reviewing messages, drafting
+emails, or triaging inbox, check for and load any user skills related to:
+- Inbox management or email preferences
+- Messaging or communication style
+- Contact context or relationships
+
+User skills override any defaults below. They may define:
+- Priority contacts and relationships
+- Triage rules (what to archive, what needs attention)
+- Response tone and style
+- Default message counts
+
+Use these defaults in lieu of any user preferences:
+
+### Email Defaults
+- Fetch both read and unread messages (context helps)
+- 20 messages per request
+- Present messages neutrally — don't assume priority
+- No automatic archiving without user guidance
+
+### iMessage Defaults
+- Prioritize known contacts over unknown senders
+- 20 messages per request
+
+### Response Drafting Defaults
+- Load prose/writing skills before composing
+- No assumed tone or style — ask if unclear
+- Show full message for approval before sending
+
 ## Setup
 
 ### Prerequisites
@@ -164,16 +195,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp logout
 
 ### Reading Emails
 
-**Default behavior:** List both read and unread messages, not just unread. Showing
-all messages provides conversation context and catches recently-read messages
-that may still need action. Prioritize unread when relevant (e.g., triaging new
-mail). User skills may override this behavior.
-
-**Reviewing inbox:** When user asks what messages need review:
-1. Fetch unread inbox threads (`gmail inbox --unread`)
-2. Also fetch read inbox threads (`gmail search "in:inbox -is:unread"`)
-3. If ≤10 read threads, list them along with unread
-4. Otherwise, report the count (e.g., "plus 25 read threads in inbox")
+See "Personalization" section for default behaviors and user skill overrides.
 
 1. **List/search** returns compact JSON with summaries and file paths
 2. **Read the file** if you need the full body
@@ -632,11 +654,8 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets sort SPREADSHEET_ID '
 ## iMessage
 
 Send via AppleScript. On first use, macOS will prompt for Automation permission.
-Reading history requires Full Disk Access.
-
-**Prioritize contacts:** When reviewing unread messages, prioritize messages from
-known contacts over unknown senders. The `unread` command returns messages sorted
-with contacts first, then unknown senders.
+Reading history requires Full Disk Access. See "Personalization" section for
+default behaviors.
 
 **Chat IDs:** Individual chats use `any;-;+1234567890` (phone number), group
 chats use `any;+;chat123...`. Get these from `imessage chats`.
