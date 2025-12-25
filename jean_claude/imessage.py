@@ -561,17 +561,25 @@ end run"""
 
 @cli.command()
 @click.option("-n", "--max-results", default=20, help="Maximum messages to return")
-def unread(max_results: int):
+@click.option("--include-spam", is_flag=True, help="Include messages filtered as spam")
+def unread(max_results: int, include_spam: bool):
     """List unread messages (requires Full Disk Access).
 
     Shows messages that haven't been read yet, excluding messages you sent.
+    By default excludes spam-filtered messages (is_filtered=2); use --include-spam
+    to include them.
 
     Example:
         jean-claude imessage unread
         jean-claude imessage unread -n 50
+        jean-claude imessage unread --include-spam
     """
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # is_filtered: 0 = contacts, 1 = unknown senders, 2 = spam
+    # By default show 0 and 1; --include-spam adds 2
+    filter_clause = "" if include_spam else "AND (c.is_filtered IS NULL OR c.is_filtered < 2)"
 
     cursor.execute(
         f"""
@@ -580,7 +588,8 @@ def unread(max_results: int):
             COALESCE(h.id, c.chat_identifier, 'unknown') as sender,
             m.text,
             m.attributedBody,
-            c.display_name
+            c.display_name,
+            COALESCE(c.is_filtered, 0) as is_filtered
         FROM message m
         LEFT JOIN handle h ON m.handle_id = h.ROWID
         LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
@@ -588,7 +597,8 @@ def unread(max_results: int):
         WHERE m.is_read = 0
           AND m.is_from_me = 0
           AND (m.text IS NOT NULL OR m.attributedBody IS NOT NULL)
-        ORDER BY m.date DESC
+          {filter_clause}
+        ORDER BY c.is_filtered ASC, m.date DESC
         LIMIT ?
         """,
         (max_results,),
@@ -607,7 +617,7 @@ def unread(max_results: int):
     phone_to_name = resolve_phones_to_names(list(unique_senders))
 
     messages = []
-    for date, sender, text, attributed_body, group_name in rows:
+    for date, sender, text, attributed_body, group_name, is_filtered in rows:
         msg_text = get_message_text(text, attributed_body)
         if not msg_text:
             continue

@@ -628,6 +628,10 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gsheets sort SPREADSHEET_ID '
 Send via AppleScript. On first use, macOS will prompt for Automation permission.
 Reading history requires Full Disk Access.
 
+**Prioritize contacts:** When reviewing unread messages, prioritize messages from
+known contacts over unknown senders. The `unread` command returns messages sorted
+with contacts first, then unknown senders.
+
 **Chat IDs:** Individual chats use `any;-;+1234567890` (phone number), group
 chats use `any;+;chat123...`. Get these from `imessage chats`.
 
@@ -670,9 +674,12 @@ Other: `imessage open CHAT_ID` opens a chat in Messages.app (brings app to focus
 ### Read Messages (Requires Full Disk Access)
 
 ```bash
-# Unread messages
+# Unread messages (excludes spam-filtered messages by default)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage unread
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage unread -n 50
+
+# Include spam-filtered messages (for cleanup/review)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage unread --include-spam
 
 # Search messages (-n limits results)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage search "dinner plans"
