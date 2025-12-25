@@ -1,0 +1,15 @@
+Usage: jean-claude reminders list [OPTIONS]
+
+  List reminders.
+
+  Shows incomplete reminders by default. Use --completed to show completed
+  ones.
+
+  Examples:     jean-claude reminders list     jean-claude reminders list
+  --list Work     jean-claude reminders list --completed -n 10
+
+Options:
+  --list TEXT                Reminder list to show (default: all lists)
+  -n, --max-results INTEGER  Maximum reminders to show
+  --completed                Show completed reminders instead
+  --help                     Show this message and exit.

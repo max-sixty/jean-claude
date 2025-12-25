@@ -17,5 +17,6 @@ Commands:
   gmail        Gmail CLI - search, draft, and send emails.
   gsheets      Google Sheets CLI - read and write spreadsheet data.
   imessage     iMessage CLI - send messages and list chats.
+  reminders    Apple Reminders CLI - create, list, and manage reminders.
   status       Show authentication status and API availability.
   whatsapp     WhatsApp CLI - send messages and list chats.

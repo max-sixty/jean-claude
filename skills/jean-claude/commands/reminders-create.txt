@@ -1,0 +1,18 @@
+Usage: jean-claude reminders create [OPTIONS] TITLE
+
+  Create a new reminder.
+
+  TITLE: The reminder title/name
+
+  Examples:     jean-claude reminders create "Buy groceries"     jean-claude
+  reminders create "Call doctor" --due "2025-12-27 14:00"     jean-claude
+  reminders create "Submit report" --due 2025-12-30 --list Work     jean-
+  claude reminders create "Important task" --priority high --notes "Don't
+  forget!"
+
+Options:
+  --due TEXT                    Due date/time (YYYY-MM-DD HH:MM or YYYY-MM-DD)
+  --notes TEXT                  Notes/description for the reminder
+  --list TEXT                   Reminder list name (default: first list)
+  --priority [low|medium|high]  Priority level
+  --help                        Show this message and exit.

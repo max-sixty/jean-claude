@@ -1,0 +1,10 @@
+Usage: jean-claude reminders delete [OPTIONS] REMINDER_ID
+
+  Delete a reminder.
+
+  REMINDER_ID: The reminder ID (from 'reminders list' output)
+
+  Example:     jean-claude reminders delete "x-apple-reminder://..."
+
+Options:
+  --help  Show this message and exit.

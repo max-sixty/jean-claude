@@ -1,0 +1,17 @@
+Usage: jean-claude reminders [OPTIONS] COMMAND [ARGS]...
+
+  Apple Reminders CLI - create, list, and manage reminders.
+
+  Uses AppleScript to interact with Reminders.app. Reminders sync across all
+  your Apple devices via iCloud.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  complete  Mark a reminder as completed.
+  create    Create a new reminder.
+  delete    Delete a reminder.
+  list      List reminders.
+  lists     List all reminder lists.
+  search    Search reminders by name.

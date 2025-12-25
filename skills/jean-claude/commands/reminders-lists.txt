@@ -1,0 +1,8 @@
+Usage: jean-claude reminders lists [OPTIONS]
+
+  List all reminder lists.
+
+  Example:     jean-claude reminders lists
+
+Options:
+  --help  Show this message and exit.

@@ -16,6 +16,7 @@ from .gdrive import cli as gdrive_cli
 from .gmail import cli as gmail_cli
 from .gsheets import cli as gsheets_cli
 from .imessage import cli as imessage_cli
+from .reminders import cli as reminders_cli
 from .logging import JeanClaudeError, configure_logging, get_logger
 from .whatsapp import cli as whatsapp_cli
 
@@ -86,6 +87,7 @@ cli.add_command(gdocs_cli, name="gdocs")
 cli.add_command(gdrive_cli, name="gdrive")
 cli.add_command(gsheets_cli, name="gsheets")
 cli.add_command(imessage_cli, name="imessage")
+cli.add_command(reminders_cli, name="reminders")
 cli.add_command(whatsapp_cli, name="whatsapp")
 
 
@@ -152,6 +154,10 @@ def status():
     # iMessage status (doesn't require Google auth)
     click.echo()
     _check_imessage_status()
+
+    # Reminders status
+    click.echo()
+    _check_reminders_status()
 
     # WhatsApp status
     click.echo()
@@ -252,6 +258,33 @@ def _check_imessage_status() -> None:
                 click.echo("    Add and enable your terminal app")
             else:
                 click.echo("  Read: " + click.style(f"Error - {e}", fg="red"))
+
+
+def _check_reminders_status() -> None:
+    """Check Apple Reminders availability."""
+    import subprocess
+
+    click.echo("Reminders:")
+
+    # Test AppleScript access to Reminders.app
+    test_script = 'tell application "Reminders" to get name of default list'
+    result = subprocess.run(
+        ["osascript", "-e", test_script],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        click.echo("  Access: " + click.style("OK", fg="green"))
+    else:
+        error = result.stderr.strip()
+        if "not allowed" in error.lower() or "assistive" in error.lower():
+            click.echo(
+                "  Access: " + click.style("No Automation permission", fg="yellow")
+            )
+            click.echo("    Grant when prompted on first use, or enable in:")
+            click.echo("    System Preferences > Privacy & Security > Automation")
+        else:
+            click.echo("  Access: " + click.style(f"Error - {error}", fg="red"))
 
 
 def _check_whatsapp_status() -> None:

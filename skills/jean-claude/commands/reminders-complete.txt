@@ -1,0 +1,10 @@
+Usage: jean-claude reminders complete [OPTIONS] REMINDER_ID
+
+  Mark a reminder as completed.
+
+  REMINDER_ID: The reminder ID (from 'reminders list' output)
+
+  Example:     jean-claude reminders complete "x-apple-reminder://..."
+
+Options:
+  --help  Show this message and exit.
