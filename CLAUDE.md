@@ -50,6 +50,13 @@ uv run jean-claude gmail --help
 # etc.
 ```
 
+## CLI API Conventions
+
+Consistent flags across all commands:
+
+- **`-n` / `--max-results`** - Limit number of results (never `--limit`)
+- **`--page-token`** - Pagination token for large result sets
+
 ## Output Policy
 
 **All data is JSON.** No `--json` flags, no formatted display modes.
