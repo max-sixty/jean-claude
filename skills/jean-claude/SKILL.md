@@ -195,6 +195,15 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox --unread -n 50 --
 Common Gmail search operators: `in:inbox`, `is:unread`, `is:starred`, `from:`,
 `to:`, `subject:`, `after:2025/01/01`, `has:attachment`, `label:`
 
+### Get a Single Message
+
+```bash
+# Get message by ID (writes full body to .tmp/email-ID.json)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail get MESSAGE_ID
+```
+
+Use this when you have a specific message ID and want to read its full content.
+
 ### Drafts
 
 All compose commands read JSON from stdin (avoids shell escaping issues).
@@ -205,9 +214,14 @@ cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft cr
 {"to": "recipient@example.com", "subject": "Subject", "body": "Message body"}
 EOF
 
-# Reply to a message (preserves threading)
+# Reply to a message (preserves threading, includes quoted original)
 cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID
 {"body": "Thanks for your email..."}
+EOF
+
+# Reply with custom CC
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID
+{"body": "Thanks!", "cc": "manager@example.com"}
 EOF
 
 # Forward a message
@@ -224,8 +238,13 @@ EOF
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list -n 5
 
-# Get full draft body
+# Get full draft body (writes to .tmp/draft-ID.txt)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft get DRAFT_ID
+
+# Update a draft (preserves threading, only updates fields provided)
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft update DRAFT_ID
+{"cc": "added@example.com", "subject": "Updated subject"}
+EOF
 
 # Send a draft (after approval)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft send DRAFT_ID
@@ -233,6 +252,17 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft send DRAFT_ID
 # Delete a draft
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft delete DRAFT_ID
 ```
+
+**Iterating on long emails:** For complex emails, use file editing to iterate
+with the user without rewriting the full email each time:
+
+1. Create initial draft: `jean-claude gmail draft create`
+2. Get draft to file: `jean-claude gmail draft get DRAFT_ID` (writes to
+   `.tmp/draft-ID.txt`)
+3. Use file editing tools (Edit/Write) to modify `.tmp/draft-ID.txt`
+4. Update draft from file: `cat .tmp/draft-ID.txt | jq -Rs '{body: .}' |
+   jean-claude gmail draft update DRAFT_ID`
+5. Show user, get feedback, repeat steps 3-4 until approved
 
 ### Manage Messages
 

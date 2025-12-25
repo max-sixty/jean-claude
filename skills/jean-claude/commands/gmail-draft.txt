@@ -16,6 +16,7 @@ Commands:
   reply      Create a reply draft from JSON stdin.
   reply-all  Create a reply-all draft from JSON stdin.
   send       Send an existing draft.
+  update     Update an existing draft from JSON stdin.
 
 
 ## gmail draft create
@@ -91,12 +92,14 @@ Usage: jean-claude gmail draft reply [OPTIONS] MESSAGE_ID
 
   Create a reply draft from JSON stdin.
 
-  Preserves threading with the original message.
+  Preserves threading with the original message. Includes quoted original
+  message in Gmail format.
 
-  JSON fields: body (required)
+  JSON fields: body (required), cc (optional)
 
   Example:     echo '{"body": "Thanks!"}' | jean-claude gmail draft reply
-  MSG_ID
+  MSG_ID     echo '{"body": "FYI", "cc": "a@x.com, b@y.com"}' | jean-claude
+  gmail draft reply MSG_ID
 
 Options:
   --help  Show this message and exit.
@@ -108,9 +111,10 @@ Usage: jean-claude gmail draft reply-all [OPTIONS] MESSAGE_ID
 
   Create a reply-all draft from JSON stdin.
 
-  Preserves threading and includes all original recipients.
+  Preserves threading and includes all original recipients. Includes quoted
+  original message in Gmail format.
 
-  JSON fields: body (required)
+  JSON fields: body (required), cc (optional, overrides auto-detected CC)
 
   Example:     echo '{"body": "Thanks!"}' | jean-claude gmail draft reply-all
   MSG_ID
@@ -126,6 +130,31 @@ Usage: jean-claude gmail draft send [OPTIONS] DRAFT_ID
   Send an existing draft.
 
   Example:     jean-claude gmail draft send r-123456789
+
+Options:
+  --help  Show this message and exit.
+
+
+## gmail draft update
+
+Usage: jean-claude gmail draft update [OPTIONS] DRAFT_ID
+
+  Update an existing draft from JSON stdin.
+
+  Preserves threading headers (In-Reply-To, References) from the original
+  draft. Only fields provided in the JSON are updated; others remain
+  unchanged.
+
+  JSON fields (all optional): to, cc, bcc, subject, body
+
+  Workflow for iterating on long emails:     1. jean-claude gmail draft get
+  DRAFT_ID  # writes to .tmp/draft-ID.txt     2. Edit the file with your
+  changes     3. cat .tmp/draft-ID.txt | jean-claude gmail draft update
+  DRAFT_ID
+
+  Example:     echo '{"cc": "new@example.com"}' | jean-claude gmail draft
+  update DRAFT_ID     echo '{"subject": "New subject", "body": "New body"}' |
+  jean-claude gmail draft update DRAFT_ID
 
 Options:
   --help  Show this message and exit.

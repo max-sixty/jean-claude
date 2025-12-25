@@ -10,6 +10,7 @@ Commands:
   attachment-download  Download an attachment from a message.
   attachments          List attachments for a message.
   draft                Manage email drafts.
+  get                  Get a single message by ID, written to file.
   inbox                List threads in inbox.
   mark-read            Mark messages as read.
   mark-unread          Mark messages as unread.

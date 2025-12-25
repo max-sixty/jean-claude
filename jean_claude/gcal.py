@@ -27,8 +27,8 @@ def _get_local_timezone() -> str:
             if "zoneinfo" in parts:
                 idx = parts.index("zoneinfo")
                 return "/".join(parts[idx + 1 :])
-    except Exception:
-        pass
+    except OSError as e:
+        logger.debug("Could not read /etc/localtime", error=str(e))
     # Fallback with warning
     logger.warning("Could not detect timezone, using America/Los_Angeles")
     return "America/Los_Angeles"

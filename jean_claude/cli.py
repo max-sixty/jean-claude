@@ -27,18 +27,39 @@ class ErrorHandlingGroup(click.Group):
         try:
             return super().invoke(ctx)
         except HttpError as e:
-            status = e.resp.status
-            if status == 404:
-                raise JeanClaudeError("Resource not found")
-            if status == 403:
-                raise JeanClaudeError("Permission denied. Check sharing settings.")
-            if status == 400:
-                raise JeanClaudeError(f"Invalid request: {e._get_reason()}")
-            raise JeanClaudeError(f"API error: {e._get_reason()}")
+            self._handle_error(self._http_error_message(e))
         except JeanClaudeError as e:
-            logger.error(str(e))
-            click.echo(f"Error: {e}", err=True)
-            sys.exit(1)
+            self._handle_error(str(e))
+
+    def _handle_error(self, message: str) -> None:
+        """Log error and exit cleanly."""
+        logger.error(message)
+        click.echo(f"Error: {message}", err=True)
+        sys.exit(1)
+
+    def _http_error_message(self, e: HttpError) -> str:
+        """Convert HttpError to user-friendly message."""
+        status = e.resp.status
+        reason = e._get_reason()
+
+        if status == 404:
+            return f"Not found: {reason}"
+        if status == 403:
+            # Check for specific API-not-enabled error
+            error_str = str(e)
+            if (
+                "not been used" in error_str.lower()
+                or "not enabled" in error_str.lower()
+            ):
+                return f"API not enabled: {reason}. Enable at https://console.cloud.google.com/apis/library"
+            return f"Permission denied: {reason}"
+        if status == 400:
+            return f"Invalid request: {reason}"
+        if status == 401:
+            return f"Authentication failed: {reason}. Try 'jean-claude auth' to re-authenticate."
+        if status == 429:
+            return f"Rate limit exceeded: {reason}. Wait a moment and try again."
+        return f"API error ({status}): {reason}"
 
 
 @click.group(cls=ErrorHandlingGroup)

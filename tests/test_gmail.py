@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jean_claude.gmail import _extract_attachments, _strip_html, decode_body, get_header
+from jean_claude.gmail import _extract_attachments, _strip_html, decode_body
 
 
 class TestStripHtml:
@@ -48,35 +48,6 @@ class TestStripHtml:
         result = _strip_html(html)
         assert "Para 1" in result
         assert "Para 2" in result
-
-
-class TestGetHeader:
-    """Tests for header extraction."""
-
-    def test_existing_header(self):
-        """Test extracting an existing header."""
-        headers = [
-            {"name": "From", "value": "alice@example.com"},
-            {"name": "To", "value": "bob@example.com"},
-            {"name": "Subject", "value": "Test"},
-        ]
-        assert get_header(headers, "From") == "alice@example.com"
-        assert get_header(headers, "Subject") == "Test"
-
-    def test_case_insensitive(self):
-        """Test that header lookup is case-insensitive."""
-        headers = [{"name": "Content-Type", "value": "text/plain"}]
-        assert get_header(headers, "content-type") == "text/plain"
-        assert get_header(headers, "CONTENT-TYPE") == "text/plain"
-
-    def test_missing_header(self):
-        """Test that missing headers return empty string."""
-        headers = [{"name": "From", "value": "alice@example.com"}]
-        assert get_header(headers, "Cc") == ""
-
-    def test_empty_headers(self):
-        """Test with empty headers list."""
-        assert get_header([], "From") == ""
 
 
 class TestDecodeBody:

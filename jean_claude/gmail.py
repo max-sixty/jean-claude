@@ -72,9 +72,11 @@ https://developers.google.com/workspace/gmail/api/reference/quota
 from __future__ import annotations
 
 import base64
+import html
 import json
 import sys
 import time
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, getaddresses, parseaddr
 from pathlib import Path
@@ -89,6 +91,47 @@ logger = get_logger(__name__)
 
 def get_gmail():
     return build_service("gmail", "v1")
+
+
+def get_people():
+    return build_service("people", "v1")
+
+
+def get_my_from_address(service=None) -> str:
+    """Get the user's From address with display name.
+
+    Uses the Google People API to get the user's profile name, which is the same
+    name Gmail uses when sending emails from the web interface.
+
+    Returns formatted as "Name <email>" or just "email" if no name found.
+    """
+    if service is None:
+        service = get_gmail()
+
+    my_email = service.users().getProfile(userId="me").execute()["emailAddress"]
+
+    # Get display name from Google People API (same source Gmail web UI uses)
+    try:
+        people = get_people()
+        profile = (
+            people.people()
+            .get(resourceName="people/me", personFields="names")
+            .execute()
+        )
+        names = profile.get("names", [])
+        # Find the primary name (or first available)
+        for name in names:
+            if name.get("metadata", {}).get("primary", False):
+                display_name = name.get("displayName")
+                if display_name:
+                    return formataddr((display_name, my_email))
+        # Fall back to first name if no primary
+        if names and names[0].get("displayName"):
+            return formataddr((names[0]["displayName"], my_email))
+    except Exception as e:
+        logger.debug("Could not retrieve display name from People API", error=str(e))
+
+    return my_email
 
 
 def _batch_callback(responses: dict):
@@ -355,9 +398,13 @@ def _strip_html(html: str) -> str:
 def decode_body(payload: dict) -> str:
     """Extract text body from message payload. Falls back to HTML if no plain text."""
     if "body" in payload and payload["body"].get("data"):
-        return base64.urlsafe_b64decode(payload["body"]["data"]).decode(
+        data = base64.urlsafe_b64decode(payload["body"]["data"]).decode(
             "utf-8", errors="replace"
         )
+        # Strip HTML if this is an HTML-only email
+        if payload.get("mimeType") == "text/html":
+            return _strip_html(data)
+        return data
     if "parts" in payload:
         # First pass: look for text/plain
         for part in payload["parts"]:
@@ -418,13 +465,6 @@ def extract_html_body(payload: dict) -> str | None:
     return None
 
 
-def get_header(headers: list, name: str) -> str:
-    for h in headers:
-        if h["name"].lower() == name.lower():
-            return h["value"]
-    return ""
-
-
 def _write_email_json(
     prefix: str, id_: str, summary: dict, body: str, html_body: str | None
 ) -> str:
@@ -450,18 +490,18 @@ def extract_message_summary(msg: dict) -> dict:
 
     Writes self-contained JSON to .tmp/ with full body (and html_body when present).
     """
-    headers = msg.get("payload", {}).get("headers", [])
+    headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
     result = {
         "id": msg["id"],
         "threadId": msg.get("threadId"),
-        "from": get_header(headers, "From"),
-        "to": get_header(headers, "To"),
-        "subject": get_header(headers, "Subject"),
-        "date": get_header(headers, "Date"),
+        "from": headers.get("From", ""),
+        "to": headers.get("To", ""),
+        "subject": headers.get("Subject", ""),
+        "date": headers.get("Date", ""),
         "snippet": msg.get("snippet", ""),
         "labels": msg.get("labelIds", []),
     }
-    if cc := get_header(headers, "Cc"):
+    if cc := headers.get("Cc"):
         result["cc"] = cc
 
     payload = msg.get("payload", {})
@@ -484,7 +524,9 @@ def extract_thread_summary(thread: dict) -> dict:
 
     # Get the latest message for display
     latest_msg = messages[-1]
-    headers = latest_msg.get("payload", {}).get("headers", [])
+    headers = {
+        h["name"]: h["value"] for h in latest_msg.get("payload", {}).get("headers", [])
+    }
 
     # Aggregate labels across all messages in thread
     all_labels = set()
@@ -500,14 +542,14 @@ def extract_thread_summary(thread: dict) -> dict:
         "messageCount": len(messages),
         "unreadCount": unread_count,
         "latestMessageId": latest_msg["id"],
-        "from": get_header(headers, "From"),
-        "to": get_header(headers, "To"),
-        "subject": get_header(headers, "Subject"),
-        "date": get_header(headers, "Date"),
+        "from": headers.get("From", ""),
+        "to": headers.get("To", ""),
+        "subject": headers.get("Subject", ""),
+        "date": headers.get("Date", ""),
         "snippet": latest_msg.get("snippet", ""),
         "labels": sorted(all_labels),
     }
-    if cc := get_header(headers, "Cc"):
+    if cc := headers.get("Cc"):
         result["cc"] = cc
 
     payload = latest_msg.get("payload", {})
@@ -522,15 +564,15 @@ def extract_thread_summary(thread: dict) -> dict:
 def extract_draft_summary(draft: dict) -> dict:
     """Extract essential fields from a draft for compact output."""
     msg = draft.get("message", {})
-    headers = msg.get("payload", {}).get("headers", [])
+    headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
     result = {
         "id": draft["id"],
         "messageId": msg.get("id"),
-        "to": get_header(headers, "To"),
-        "subject": get_header(headers, "Subject"),
+        "to": headers.get("To", ""),
+        "subject": headers.get("Subject", ""),
         "snippet": msg.get("snippet", ""),
     }
-    if cc := get_header(headers, "Cc"):
+    if cc := headers.get("Cc"):
         result["cc"] = cc
     return result
 
@@ -571,6 +613,28 @@ def search(query: str, max_results: int, page_token: str | None):
     QUERY: Gmail search query (e.g., 'is:unread', 'from:someone@example.com')
     """
     _search_messages(query, max_results, page_token)
+
+
+@cli.command()
+@click.argument("message_id")
+def get(message_id: str):
+    """Get a single message by ID, written to file.
+
+    Fetches the full message content and writes it to .tmp/email-ID.json.
+    Returns the message summary JSON to stdout.
+
+    Example:
+        jean-claude gmail get 19b51f93fcf3f8ca
+    """
+    service = get_gmail()
+    msg = (
+        service.users()
+        .messages()
+        .get(userId="me", id=message_id, format="full")
+        .execute()
+    )
+    summary = extract_message_summary(msg)
+    click.echo(json.dumps(summary, indent=2))
 
 
 def _search_messages(query: str, max_results: int, page_token: str | None = None):
@@ -728,8 +792,84 @@ def draft_send(draft_id: str):
     logger.info(f"Sent: {result['id']}")
 
 
+def _format_gmail_date(date_str: str) -> str:
+    """Format date string to Gmail's reply format: 'Mon, 22 Dec 2025 at 02:50'."""
+    from email.utils import parsedate_to_datetime
+
+    try:
+        dt = parsedate_to_datetime(date_str)
+        # Gmail format: "Mon, 22 Dec 2025 at 02:50"
+        return dt.strftime("%a, %d %b %Y at %H:%M")
+    except ValueError as e:
+        # Malformed date header - log for debugging, fall back to original
+        logger.warning("Could not parse date header", date=date_str, error=str(e))
+        return date_str
+
+
+def _build_quoted_reply(
+    body: str, original_body: str, from_addr: str, date: str
+) -> str:
+    """Build plain text reply body with Gmail-style quoted original message.
+
+    Format:
+        [user's reply]
+
+        On Mon, 22 Dec 2025 at 02:50, Sender Name <sender@example.com> wrote:
+
+        > quoted line 1
+        > quoted line 2
+    """
+    quoted_lines = [f"> {line}" for line in original_body.splitlines()]
+    quoted_text = "\n".join(quoted_lines)
+
+    formatted_date = _format_gmail_date(date)
+    return f"{body}\n\nOn {formatted_date}, {from_addr} wrote:\n\n{quoted_text}\n"
+
+
+def _text_to_html(text: str) -> str:
+    """Convert plain text to HTML, preserving line breaks."""
+    escaped = html.escape(text)
+    return escaped.replace("\n", "<br>\n")
+
+
+def _build_html_quoted_reply(
+    body: str, original_html: str | None, original_text: str, from_addr: str, date: str
+) -> str:
+    """Build HTML reply body with Gmail-style blockquote.
+
+    Format matches Gmail's HTML replies with proper blockquote styling.
+    If original was plain text, converts it to HTML.
+
+    Note: When original_html is provided, it's embedded as-is. Gmail sanitizes
+    HTML on send/display, so we trust the original content from Gmail's API.
+    """
+    formatted_date = _format_gmail_date(date)
+
+    # Convert reply body to HTML
+    reply_html = _text_to_html(body)
+
+    # Use original HTML if available, otherwise convert plain text
+    if original_html:
+        quoted_content = original_html
+    else:
+        quoted_content = _text_to_html(original_text)
+
+    # Escape from_addr since it may contain < > characters
+    safe_from = html.escape(from_addr)
+    safe_date = html.escape(formatted_date)
+
+    return f"""<div dir="ltr">{reply_html}</div>
+<br>
+<div class="gmail_quote gmail_quote_container">
+<div dir="ltr" class="gmail_attr">On {safe_date}, {safe_from} wrote:<br></div>
+<blockquote class="gmail_quote" style="margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex">
+{quoted_content}
+</blockquote>
+</div>"""
+
+
 def _create_reply_draft(
-    message_id: str, body: str, *, include_cc: bool
+    message_id: str, body: str, *, include_cc: bool, custom_cc: str | None = None
 ) -> tuple[str, str]:
     """Create a reply draft, returning (draft_id, draft_url).
 
@@ -737,26 +877,38 @@ def _create_reply_draft(
         message_id: ID of the message to reply to
         body: Reply body text
         include_cc: If True, include CC recipients (reply-all behavior)
+        custom_cc: Optional user-specified CC addresses (overrides auto-CC)
     """
     service = get_gmail()
+    # Use format="full" to get the message body for quoting
     original = (
         service.users()
         .messages()
-        .get(userId="me", id=message_id, format="metadata")
+        .get(userId="me", id=message_id, format="full")
         .execute()
     )
-    my_email = service.users().getProfile(userId="me").execute()["emailAddress"]
+    my_from_addr = get_my_from_address(service)
+    _, my_email = parseaddr(my_from_addr)
 
-    headers = original.get("payload", {}).get("headers", [])
-    subject = get_header(headers, "Subject") or ""
-    message_id_header = get_header(headers, "Message-ID")
-    orig_refs = get_header(headers, "References")
+    headers = {
+        h["name"].lower(): h["value"]
+        for h in original.get("payload", {}).get("headers", [])
+    }
     thread_id = original.get("threadId")
 
-    reply_to = get_header(headers, "Reply-To")
-    from_addr = get_header(headers, "From")
-    orig_to = get_header(headers, "To")
-    orig_cc = get_header(headers, "Cc")
+    subject = headers.get("subject", "")
+    date = headers.get("date", "")
+    from_addr = headers.get("from", "")
+    reply_to = headers.get("reply-to", "")
+    orig_to = headers.get("to", "")
+    orig_cc = headers.get("cc", "")
+    message_id_header = headers.get("message-id", "")
+    orig_refs = headers.get("references", "")
+
+    # Get original body for quoting (both plain text and HTML)
+    payload = original.get("payload", {})
+    original_body = decode_body(payload)
+    original_html = extract_html_body(payload)
 
     # Use SENT label to detect own messages (handles send-as aliases)
     labels = original.get("labelIds", [])
@@ -809,9 +961,20 @@ def _create_reply_draft(
     if not subject.lower().startswith("re:"):
         subject = f"Re: {subject}"
 
-    msg = MIMEText(body)
+    # Build both plain text and HTML versions
+    plain_body = _build_quoted_reply(body, original_body, from_addr, date)
+    html_body = _build_html_quoted_reply(
+        body, original_html, original_body, from_addr, date
+    )
+
+    # Create multipart/alternative with both versions
+    msg = MIMEMultipart("alternative")
+    msg["from"] = my_from_addr
     msg["to"] = to_addr
-    if include_cc and cc_addr:
+    # Use custom CC if provided, otherwise use auto-detected CC for reply-all
+    if custom_cc:
+        msg["cc"] = custom_cc
+    elif include_cc and cc_addr:
         msg["cc"] = cc_addr
     msg["subject"] = subject
     if message_id_header:
@@ -820,6 +983,10 @@ def _create_reply_draft(
         msg["References"] = (
             f"{orig_refs} {message_id_header}" if orig_refs else message_id_header
         )
+
+    # Attach plain text first, then HTML (email clients prefer later parts)
+    msg.attach(MIMEText(plain_body, "plain"))
+    msg.attach(MIMEText(html_body, "html"))
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     result = (
@@ -836,18 +1003,22 @@ def _create_reply_draft(
 def draft_reply(message_id: str):
     """Create a reply draft from JSON stdin.
 
-    Preserves threading with the original message.
+    Preserves threading with the original message. Includes quoted original
+    message in Gmail format.
 
-    JSON fields: body (required)
+    JSON fields: body (required), cc (optional)
 
     Example:
         echo '{"body": "Thanks!"}' | jean-claude gmail draft reply MSG_ID
+        echo '{"body": "FYI", "cc": "a@x.com, b@y.com"}' | jean-claude gmail draft reply MSG_ID
     """
     data = json.load(sys.stdin)
     if "body" not in data:
         raise click.UsageError("Missing required field: body")
 
-    draft_id, url = _create_reply_draft(message_id, data["body"], include_cc=False)
+    draft_id, url = _create_reply_draft(
+        message_id, data["body"], include_cc=False, custom_cc=data.get("cc")
+    )
     logger.info(f"Reply draft created: {draft_id}", url=url)
 
 
@@ -856,9 +1027,10 @@ def draft_reply(message_id: str):
 def draft_reply_all(message_id: str):
     """Create a reply-all draft from JSON stdin.
 
-    Preserves threading and includes all original recipients.
+    Preserves threading and includes all original recipients. Includes quoted
+    original message in Gmail format.
 
-    JSON fields: body (required)
+    JSON fields: body (required), cc (optional, overrides auto-detected CC)
 
     Example:
         echo '{"body": "Thanks!"}' | jean-claude gmail draft reply-all MSG_ID
@@ -867,7 +1039,9 @@ def draft_reply_all(message_id: str):
     if "body" not in data:
         raise click.UsageError("Missing required field: body")
 
-    draft_id, url = _create_reply_draft(message_id, data["body"], include_cc=True)
+    draft_id, url = _create_reply_draft(
+        message_id, data["body"], include_cc=True, custom_cc=data.get("cc")
+    )
     logger.info(f"Reply-all draft created: {draft_id}", url=url)
 
 
@@ -893,10 +1067,13 @@ def draft_forward(message_id: str):
         .execute()
     )
 
-    headers = original.get("payload", {}).get("headers", [])
-    subject = get_header(headers, "Subject") or ""
-    from_addr = get_header(headers, "From")
-    date = get_header(headers, "Date")
+    headers = {
+        h["name"].lower(): h["value"]
+        for h in original.get("payload", {}).get("headers", [])
+    }
+    subject = headers.get("subject", "")
+    from_addr = headers.get("from", "")
+    date = headers.get("date", "")
     original_body = decode_body(original.get("payload", {}))
 
     if not subject.lower().startswith("fwd:"):
@@ -908,7 +1085,7 @@ def draft_forward(message_id: str):
     fwd_body += "---------- Forwarded message ----------\n"
     fwd_body += f"From: {from_addr}\n"
     fwd_body += f"Date: {date}\n"
-    fwd_body += f"Subject: {get_header(headers, 'Subject')}\n\n"
+    fwd_body += f"Subject: {headers.get('subject', '')}\n\n"
     fwd_body += original_body
 
     msg = MIMEText(fwd_body)
@@ -974,23 +1151,81 @@ def draft_get(draft_id: str):
         service.users().drafts().get(userId="me", id=draft_id, format="full").execute()
     )
     msg = draft.get("message", {})
-    headers = msg.get("payload", {}).get("headers", [])
-
+    headers = {
+        h["name"].lower(): h["value"] for h in msg.get("payload", {}).get("headers", [])
+    }
     body = decode_body(msg.get("payload", {}))
+
     tmp_dir = Path(".tmp")
     tmp_dir.mkdir(exist_ok=True)
     file_path = tmp_dir / f"draft-{draft_id}.txt"
 
     with open(file_path, "w") as f:
-        f.write(f"From: {get_header(headers, 'From')}\n")
-        f.write(f"To: {get_header(headers, 'To')}\n")
-        f.write(f"Cc: {get_header(headers, 'Cc')}\n")
-        f.write(f"Bcc: {get_header(headers, 'Bcc')}\n")
-        f.write(f"Subject: {get_header(headers, 'Subject')}\n")
-        f.write(f"Date: {get_header(headers, 'Date')}\n")
+        for field in ["from", "to", "cc", "bcc", "subject", "date"]:
+            f.write(f"{field.title()}: {headers.get(field, '')}\n")
         f.write(f"\n{body}")
 
     click.echo(str(file_path))
+
+
+@draft.command("update")
+@click.argument("draft_id")
+def draft_update(draft_id: str):
+    """Update an existing draft from JSON stdin.
+
+    Preserves threading headers (In-Reply-To, References) from the original draft.
+    Only fields provided in the JSON are updated; others remain unchanged.
+
+    JSON fields (all optional): to, cc, bcc, subject, body
+
+    Workflow for iterating on long emails:
+        1. jean-claude gmail draft get DRAFT_ID  # writes to .tmp/draft-ID.txt
+        2. Edit the file with your changes
+        3. cat .tmp/draft-ID.txt | jean-claude gmail draft update DRAFT_ID
+
+    Example:
+        echo '{"cc": "new@example.com"}' | jean-claude gmail draft update DRAFT_ID
+        echo '{"subject": "New subject", "body": "New body"}' | jean-claude gmail draft update DRAFT_ID
+    """
+    data = json.load(sys.stdin)
+    if not data:
+        raise click.UsageError("No fields provided to update")
+
+    service = get_gmail()
+
+    # Fetch existing draft to preserve threading headers
+    existing = (
+        service.users().drafts().get(userId="me", id=draft_id, format="full").execute()
+    )
+    existing_msg = existing.get("message", {})
+    existing_headers = existing_msg.get("payload", {}).get("headers", [])
+    thread_id = existing_msg.get("threadId")
+
+    # Copy all headers from original, then apply updates
+    headers = {h["name"].lower(): h["value"] for h in existing_headers}
+    headers["body"] = decode_body(existing_msg.get("payload", {}))
+    headers |= {k.lower(): v for k, v in data.items()}
+
+    # Build new message
+    msg = MIMEText(headers.get("body", ""))
+    msg["from"] = get_my_from_address(service)
+    for field in ["to", "cc", "bcc", "subject"]:
+        if value := headers.get(field):
+            msg[field] = value
+    if in_reply_to := headers.get("in-reply-to"):
+        msg["In-Reply-To"] = in_reply_to
+    if references := headers.get("references"):
+        msg["References"] = references
+
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    body = {"message": {"raw": raw}}
+    if thread_id:
+        body["message"]["threadId"] = thread_id
+
+    result = (
+        service.users().drafts().update(userId="me", id=draft_id, body=body).execute()
+    )
+    logger.info(f"Updated draft: {result['id']}", url=draft_url(result))
 
 
 @draft.command("delete")

@@ -82,12 +82,10 @@ def configure_logging(
         force=True,
     )
 
-    # Silence noisy third-party loggers (show only warnings/errors)
-    logging.getLogger("googleapiclient.discovery").setLevel(logging.WARNING)
-    logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.WARNING)
-    logging.getLogger("google.auth.transport.requests").setLevel(logging.WARNING)
-    logging.getLogger("google_auth_httplib2").setLevel(logging.WARNING)
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    # Third-party loggers: filter from console but keep in file log
+    # We add a filter to console handler instead of changing log levels,
+    # so warnings still go to the JSON log file for debugging.
+    console_handler.addFilter(_ThirdPartyFilter())
 
     # Configure structlog
     structlog.configure(
@@ -196,6 +194,33 @@ def get_logger(name: str) -> structlog.stdlib.BoundLogger:
         logger.info("operation started", operation="search", query="foo")
     """
     return structlog.get_logger(name)
+
+
+class _ThirdPartyFilter(logging.Filter):
+    """Filter out noisy third-party loggers from console output.
+
+    These logs still go to the JSON file for debugging, but don't clutter
+    the console with warnings about expected conditions (like 403 from
+    People API when scope isn't granted).
+    """
+
+    THIRD_PARTY_PREFIXES = (
+        "googleapiclient.",
+        "google.auth.",
+        "google_auth_httplib2",
+        "urllib3",
+    )
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        # Allow our own logs
+        if record.name.startswith("jean_claude"):
+            return True
+        # Filter third-party logs from console
+        for prefix in self.THIRD_PARTY_PREFIXES:
+            if record.name.startswith(prefix):
+                return False
+        # Allow other logs (structlog, etc.)
+        return True
 
 
 class JeanClaudeError(Exception):
