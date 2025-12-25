@@ -1,0 +1,11 @@
+Usage: jean-claude gdocs create [OPTIONS] TITLE
+
+  Create a new document.
+
+  TITLE: Title of the new document
+
+  Examples:     jean-claude gdocs create "My Document"     jean-claude gdocs
+  create "Meeting Notes 2025-01-15"
+
+Options:
+  --help  Show this message and exit.

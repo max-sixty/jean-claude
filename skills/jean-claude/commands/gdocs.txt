@@ -1,0 +1,13 @@
+Usage: jean-claude gdocs [OPTIONS] COMMAND [ARGS]...
+
+  Google Docs CLI - read and write document content.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  append   Append text to the end of a document.
+  create   Create a new document.
+  info     Get document metadata.
+  read     Read document content.
+  replace  Find and replace text in a document.

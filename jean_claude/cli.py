@@ -11,6 +11,7 @@ from googleapiclient.errors import HttpError
 
 from .auth import SCOPES_FULL, SCOPES_READONLY, TOKEN_FILE, run_auth
 from .gcal import cli as gcal_cli
+from .gdocs import cli as gdocs_cli
 from .gdrive import cli as gdrive_cli
 from .gmail import cli as gmail_cli
 from .gsheets import cli as gsheets_cli
@@ -81,6 +82,7 @@ def cli(verbose: bool, json_log: str):
 
 cli.add_command(gmail_cli, name="gmail")
 cli.add_command(gcal_cli, name="gcal")
+cli.add_command(gdocs_cli, name="gdocs")
 cli.add_command(gdrive_cli, name="gdrive")
 cli.add_command(gsheets_cli, name="gsheets")
 cli.add_command(imessage_cli, name="imessage")
@@ -175,6 +177,19 @@ def _check_google_apis() -> None:
 
     drive = build_service("drive", "v3")
     check_api("Drive", lambda: drive.about().get(fields="user").execute())
+
+    # Docs: test by attempting to get a non-existent doc (404/400 = API works, 403 = disabled)
+    docs = build_service("docs", "v1")
+
+    def check_docs_api():
+        try:
+            docs.documents().get(documentId="test-api-access").execute()
+        except HttpError as e:
+            if e.resp.status in (404, 400):
+                return  # API works, doc just doesn't exist or invalid ID format
+            raise
+
+    check_api("Docs", check_docs_api)
 
     # Sheets: test with Google's public sample spreadsheet
     sheets = build_service("sheets", "v4")

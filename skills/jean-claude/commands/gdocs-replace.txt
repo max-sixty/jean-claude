@@ -1,0 +1,15 @@
+Usage: jean-claude gdocs replace [OPTIONS] DOCUMENT_ID
+
+  Find and replace text in a document.
+
+  DOCUMENT_ID: The document ID (from the URL)
+
+  Examples:     jean-claude gdocs replace 1abc...xyz --find "old text"
+  --replace-with "new text"     jean-claude gdocs replace 1abc...xyz --find
+  "TODO" --replace-with "DONE" --match-case
+
+Options:
+  --find TEXT          Text to find  [required]
+  --replace-with TEXT  Replacement text  [required]
+  --match-case         Case-sensitive matching
+  --help               Show this message and exit.

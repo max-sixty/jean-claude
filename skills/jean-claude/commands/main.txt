@@ -12,6 +12,7 @@ Commands:
   auth         Authenticate with Google APIs.
   completions  Generate shell completion script.
   gcal         Google Calendar CLI - list, create, and search events.
+  gdocs        Google Docs CLI - read and write document content.
   gdrive       Google Drive CLI - list, search, and manage files.
   gmail        Gmail CLI - search, draft, and send emails.
   gsheets      Google Sheets CLI - read and write spreadsheet data.

@@ -1,12 +1,12 @@
 ---
 name: jean-claude
-description: "This skill should be used when the user asks to search/send/draft email, check calendar, create events, schedule meetings, find/upload/share Drive files, read spreadsheet data, send texts/iMessages, send WhatsApp messages, or check messages. Manages Gmail, Google Calendar, Google Drive, Google Sheets, iMessage, and WhatsApp."
+description: "This skill should be used when the user asks to search/send/draft email, check calendar, create events, schedule meetings, find/upload/share Drive files, read/edit Google Docs, read spreadsheet data, send texts/iMessages, send WhatsApp messages, or check messages. Manages Gmail, Google Calendar, Google Drive, Google Docs, Google Sheets, iMessage, and WhatsApp."
 ---
 
-# jean-claude - Gmail, Calendar, Drive, Sheets, iMessage & WhatsApp
+# jean-claude - Gmail, Calendar, Drive, Docs, Sheets, iMessage & WhatsApp
 
-Manage Gmail, Google Calendar, Google Drive, Google Sheets, iMessage, and
-WhatsApp using the CLI tools in this plugin.
+Manage Gmail, Google Calendar, Google Drive, Google Docs, Google Sheets,
+iMessage, and WhatsApp using the CLI tools in this plugin.
 
 **Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude `
 
@@ -496,6 +496,48 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive untrash FILE_ID
 
 # Get file metadata
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive get FILE_ID
+```
+
+## Docs
+
+Read and write Google Docs documents.
+
+The document ID is in the URL:
+`https://docs.google.com/document/d/DOCUMENT_ID/edit`
+
+### Create Document
+
+```bash
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs create "My Document"
+```
+
+### Read Content
+
+```bash
+# Read as plain text
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs read DOCUMENT_ID
+
+# Read full JSON structure (includes indices for advanced editing)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs read DOCUMENT_ID --json
+```
+
+### Write Content
+
+```bash
+# Append text to end of document
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs append DOCUMENT_ID --text "New paragraph to add"
+echo "Content from stdin" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs append DOCUMENT_ID
+
+# Find and replace text
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs replace DOCUMENT_ID --find "old text" --replace-with "new text"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs replace DOCUMENT_ID --find "TODO" --replace-with "DONE" --match-case
+```
+
+### Get Document Info
+
+```bash
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs info DOCUMENT_ID
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs info DOCUMENT_ID --json
 ```
 
 ## Sheets
