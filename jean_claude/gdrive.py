@@ -250,3 +250,34 @@ def untrash(file_id: str):
     ).execute()
     logger.info("Restored file", file_id=file_id)
     click.echo(json.dumps({"fileId": file_id, "restored": True}, indent=2))
+
+
+@cli.command()
+@click.argument("file_id")
+@click.argument("folder_id")
+def move(file_id: str, folder_id: str):
+    """Move a file to a different folder.
+
+    FILE_ID: The file to move
+    FOLDER_ID: Destination folder ID
+    """
+    service = get_drive()
+
+    # Get current parents
+    f = service.files().get(fileId=file_id, fields="parents").execute()
+    previous_parents = ",".join(f["parents"])
+
+    # Move to new folder
+    f = (
+        service.files()
+        .update(
+            fileId=file_id,
+            addParents=folder_id,
+            removeParents=previous_parents,
+            fields="id, name, webViewLink, parents",
+        )
+        .execute()
+    )
+
+    logger.info("Moved file", name=f["name"], file_id=f["id"], folder_id=folder_id)
+    click.echo(json.dumps(f, indent=2))

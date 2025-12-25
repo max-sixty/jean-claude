@@ -515,6 +515,9 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive upload document.pdf --
 # Create folder
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive mkdir "New Folder"
 
+# Move file to different folder
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive move FILE_ID FOLDER_ID
+
 # Share
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive share FILE_ID user@example.com --role reader
 

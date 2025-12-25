@@ -1,0 +1,8 @@
+Usage: jean-claude gdrive move [OPTIONS] FILE_ID FOLDER_ID
+
+  Move a file to a different folder.
+
+  FILE_ID: The file to move FOLDER_ID: Destination folder ID
+
+Options:
+  --help  Show this message and exit.

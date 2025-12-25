@@ -10,6 +10,7 @@ Commands:
   get       Get file metadata.
   list      List files in a folder.
   mkdir     Create a folder.
+  move      Move a file to a different folder.
   search    Search for files.
   share     Share a file or folder.
   trash     Move a file to trash.
