@@ -1,9 +1,8 @@
 Usage: jean-claude gdrive list [OPTIONS]
 
-  List files in a folder.
+  List files in a folder. Returns JSON array.
 
 Options:
   --folder TEXT              Folder ID to list (default: root)
   -n, --max-results INTEGER  Maximum results
-  --json                     Output as JSON
   --help                     Show this message and exit.

@@ -1,12 +1,10 @@
 Usage: jean-claude gdocs read [OPTIONS] DOCUMENT_ID
 
-  Read document content.
+  Read document structure. Returns JSON.
 
   DOCUMENT_ID: The document ID (from the URL)
 
-  Examples:     jean-claude gdocs read 1abc...xyz     jean-claude gdocs read
-  1abc...xyz --json
+  Examples:     jean-claude gdocs read 1abc...xyz
 
 Options:
-  --json  Output full document structure
   --help  Show this message and exit.

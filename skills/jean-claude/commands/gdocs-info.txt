@@ -1,9 +1,8 @@
 Usage: jean-claude gdocs info [OPTIONS] DOCUMENT_ID
 
-  Get document metadata.
+  Get document metadata. Returns JSON.
 
   DOCUMENT_ID: The document ID (from the URL)
 
 Options:
-  --json  Output as JSON
   --help  Show this message and exit.

@@ -1,11 +1,10 @@
 Usage: jean-claude gdrive search [OPTIONS] QUERY
 
-  Search for files.
+  Search for files. Returns JSON array.
 
   QUERY: Search query (e.g., 'name contains "report"', 'mimeType =
   "application/pdf"')
 
 Options:
   -n, --max-results INTEGER  Maximum results
-  --json                     Output as JSON
   --help                     Show this message and exit.

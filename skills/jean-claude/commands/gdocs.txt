@@ -9,5 +9,5 @@ Commands:
   append   Append text to the end of a document.
   create   Create a new document.
   info     Get document metadata.
-  read     Read document content.
+  read     Read document structure.
   replace  Find and replace text in a document.

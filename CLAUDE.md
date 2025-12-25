@@ -50,18 +50,22 @@ uv run jean-claude gmail --help
 # etc.
 ```
 
-## Output & Logging
+## Output Policy
+
+**All metadata is JSON.** No `--json` flags, no formatted display modes.
+
+- **Metadata** (list, search, get, info, read) → JSON to stdout
+- **File content** → Write to file (e.g., `gdrive download`)
+- **Operation status** → `logger.info()` to stderr + JSON result to stdout
 
 Two output mechanisms:
 
 - **`click.echo()`** — JSON data to stdout only
-  - `click.echo(json.dumps(output))`
+  - `click.echo(json.dumps(output, indent=2))`
 
-- **`logger`** (structlog) — All other output to stderr
-  - `logger.info("Archived 5 threads", count=5)` — progress/status (shown by default)
+- **`logger`** (structlog) — Status/progress to stderr
+  - `logger.info("Archived 5 threads", count=5)` — progress (shown by default)
   - `logger.debug("detail", context=data)` — debug info (shown with --verbose)
-  - `logger.warning("Rate limited", delay=2)` — warnings
-  - `logger.error("Failed to connect")` — errors
 
 Console level is INFO by default, DEBUG with --verbose. All logs also go to
 JSON file at `~/Library/Logs/jean-claude/jean-claude.log`.

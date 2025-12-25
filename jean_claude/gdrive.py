@@ -10,37 +10,10 @@ import click
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
 from .auth import build_service
-from .logging import get_logger
-
-logger = get_logger(__name__)
 
 
 def get_drive():
     return build_service("drive", "v3")
-
-
-def format_file(f: dict) -> str:
-    """Format a file for display."""
-    is_folder = f.get("mimeType") == "application/vnd.google-apps.folder"
-    size = f.get("size", "")
-    if size:
-        size = f" ({int(size):,} bytes)"
-    modified = f.get("modifiedTime", "")[:10] if f.get("modifiedTime") else ""
-
-    name = f["name"]
-    if is_folder:
-        name += "/"
-
-    lines = [
-        click.style(f"ID: {f['id']}", dim=True),
-        click.style(name, bold=True) + size,
-    ]
-    if modified:
-        lines.append(f"Modified: {modified}")
-    if f.get("webViewLink"):
-        lines.append(f"Link: {f['webViewLink']}")
-
-    return "\n".join(lines)
 
 
 @click.group()
@@ -52,9 +25,8 @@ def cli():
 @cli.command("list")
 @click.option("--folder", help="Folder ID to list (default: root)")
 @click.option("-n", "--max-results", default=20, help="Maximum results")
-@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def list_files(folder: str | None, max_results: int, as_json: bool):
-    """List files in a folder."""
+def list_files(folder: str | None, max_results: int):
+    """List files in a folder. Returns JSON array."""
     parent = folder or "root"
     query = f"'{parent}' in parents and trashed = false"
 
@@ -70,30 +42,14 @@ def list_files(folder: str | None, max_results: int, as_json: bool):
         .execute()
     )
 
-    files = result.get("files", [])
-
-    if not files:
-        if as_json:
-            click.echo(json.dumps([]))
-        else:
-            logger.info("No files found")
-        return
-
-    if as_json:
-        click.echo(json.dumps(files, indent=2))
-    else:
-        for i, f in enumerate(files):
-            if i > 0:
-                click.echo("\n" + "─" * 40 + "\n")
-            click.echo(format_file(f))
+    click.echo(json.dumps(result.get("files", []), indent=2))
 
 
 @cli.command()
 @click.argument("query")
 @click.option("-n", "--max-results", default=20, help="Maximum results")
-@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def search(query: str, max_results: int, as_json: bool):
-    """Search for files.
+def search(query: str, max_results: int):
+    """Search for files. Returns JSON array.
 
     QUERY: Search query (e.g., 'name contains "report"', 'mimeType = "application/pdf"')
     """
@@ -114,29 +70,13 @@ def search(query: str, max_results: int, as_json: bool):
         .execute()
     )
 
-    files = result.get("files", [])
-
-    if not files:
-        if as_json:
-            click.echo(json.dumps([]))
-        else:
-            logger.info("No files found")
-        return
-
-    if as_json:
-        click.echo(json.dumps(files, indent=2))
-    else:
-        for i, f in enumerate(files):
-            if i > 0:
-                click.echo("\n" + "─" * 40 + "\n")
-            click.echo(format_file(f))
+    click.echo(json.dumps(result.get("files", []), indent=2))
 
 
 @cli.command()
 @click.argument("file_id")
-@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def get(file_id: str, as_json: bool):
-    """Get file metadata."""
+def get(file_id: str):
+    """Get file metadata. Returns JSON."""
     f = (
         get_drive()
         .files()
@@ -147,14 +87,7 @@ def get(file_id: str, as_json: bool):
         .execute()
     )
 
-    if as_json:
-        click.echo(json.dumps(f, indent=2))
-    else:
-        click.echo(format_file(f))
-        if f.get("parents"):
-            click.echo(f"Parents: {', '.join(f['parents'])}")
-        if f.get("owners"):
-            click.echo(f"Owner: {f['owners'][0].get('emailAddress', 'unknown')}")
+    click.echo(json.dumps(f, indent=2))
 
 
 @cli.command()

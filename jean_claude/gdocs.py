@@ -17,17 +17,6 @@ def get_docs():
     return build_service("docs", "v1")
 
 
-def _extract_text(doc: dict) -> str:
-    """Extract plain text from a Google Docs document structure."""
-    text_parts = []
-    for element in doc.get("body", {}).get("content", []):
-        if "paragraph" in element:
-            for elem in element["paragraph"].get("elements", []):
-                if "textRun" in elem:
-                    text_parts.append(elem["textRun"]["content"])
-    return "".join(text_parts)
-
-
 def _get_end_index(doc: dict) -> int:
     """Get the end index for appending text (insert point at end of document)."""
     content = doc.get("body", {}).get("content", [])
@@ -48,24 +37,17 @@ def cli():
 
 @cli.command()
 @click.argument("document_id")
-@click.option("--json", "as_json", is_flag=True, help="Output full document structure")
-def read(document_id: str, as_json: bool):
-    """Read document content.
+def read(document_id: str):
+    """Read document structure. Returns JSON.
 
     DOCUMENT_ID: The document ID (from the URL)
 
     Examples:
         jean-claude gdocs read 1abc...xyz
-        jean-claude gdocs read 1abc...xyz --json
     """
     service = get_docs()
     doc = service.documents().get(documentId=document_id).execute()
-
-    if as_json:
-        click.echo(json.dumps(doc, indent=2))
-    else:
-        text = _extract_text(doc)
-        click.echo(text)
+    click.echo(json.dumps(doc, indent=2))
 
 
 @cli.command()
@@ -184,9 +166,8 @@ def replace(document_id: str, find_text: str, replace_text: str, match_case: boo
 
 @cli.command()
 @click.argument("document_id")
-@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def info(document_id: str, as_json: bool):
-    """Get document metadata.
+def info(document_id: str):
+    """Get document metadata. Returns JSON.
 
     DOCUMENT_ID: The document ID (from the URL)
     """
@@ -200,19 +181,4 @@ def info(document_id: str, as_json: bool):
         .execute()
     )
 
-    if as_json:
-        click.echo(
-            json.dumps(
-                {
-                    "documentId": doc["documentId"],
-                    "title": doc["title"],
-                    "revisionId": doc.get("revisionId"),
-                },
-                indent=2,
-            )
-        )
-    else:
-        click.echo(f"Title: {doc['title']}")
-        click.echo(f"ID: {doc['documentId']}")
-        if doc.get("revisionId"):
-            click.echo(f"Revision: {doc['revisionId']}")
+    click.echo(json.dumps(doc, indent=2))

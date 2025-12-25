@@ -63,16 +63,15 @@ def _normalize_range(range_str: str) -> str:
     "--range", "range_", default="", help="A1 notation range (e.g., 'Sheet1!A1:D10')"
 )
 @click.option("--sheet", help="Sheet name (default: first sheet)")
-@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def read(spreadsheet_id: str, range_: str, sheet: str | None, as_json: bool):
-    """Read data from a spreadsheet.
+def read(spreadsheet_id: str, range_: str, sheet: str | None):
+    """Read data from a spreadsheet. Returns JSON array of rows.
 
     SPREADSHEET_ID: The spreadsheet ID (from the URL)
 
     Examples:
         jean-claude gsheets read 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
         jean-claude gsheets read 1BxiM... --range 'Sheet1!A1:D10'
-        jean-claude gsheets read 1BxiM... --sheet 'Data' --json
+        jean-claude gsheets read 1BxiM... --sheet 'Data'
     """
     service = get_sheets()
 
@@ -102,28 +101,13 @@ def read(spreadsheet_id: str, range_: str, sheet: str | None, as_json: bool):
         .execute()
     )
 
-    values = result.get("values", [])
-
-    if not values:
-        if as_json:
-            click.echo(json.dumps([]))
-        else:
-            logger.info("No data found")
-        return
-
-    if as_json:
-        click.echo(json.dumps(values, indent=2))
-    else:
-        # Simple table output
-        for row in values:
-            click.echo("\t".join(str(cell) for cell in row))
+    click.echo(json.dumps(result.get("values", []), indent=2))
 
 
 @cli.command()
 @click.argument("spreadsheet_id")
-@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def info(spreadsheet_id: str, as_json: bool):
-    """Get spreadsheet metadata.
+def info(spreadsheet_id: str):
+    """Get spreadsheet metadata. Returns JSON.
 
     SPREADSHEET_ID: The spreadsheet ID (from the URL)
     """
@@ -137,18 +121,7 @@ def info(spreadsheet_id: str, as_json: bool):
         .execute()
     )
 
-    if as_json:
-        click.echo(json.dumps(result, indent=2))
-    else:
-        click.echo(click.style(f"Title: {result['properties']['title']}", bold=True))
-        click.echo(click.style(f"ID: {result['spreadsheetId']}", dim=True))
-        click.echo()
-        click.echo("Sheets:")
-        for sheet in result.get("sheets", []):
-            props = sheet["properties"]
-            rows = props.get("gridProperties", {}).get("rowCount", "?")
-            cols = props.get("gridProperties", {}).get("columnCount", "?")
-            click.echo(f"  • {props['title']} ({rows} rows × {cols} cols)")
+    click.echo(json.dumps(result, indent=2))
 
 
 @cli.command()
