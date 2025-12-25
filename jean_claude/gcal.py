@@ -170,8 +170,8 @@ def create(
     result = (
         get_calendar().events().insert(calendarId="primary", body=event_body).execute()
     )
-    click.echo(f"Event created: {result['id']}")
-    click.echo(f"View: {result.get('htmlLink', '')}")
+    logger.info("Event created", event_id=result["id"])
+    click.echo(json.dumps(result, indent=2))
 
 
 @cli.command()
@@ -349,16 +349,17 @@ def respond(event_id: str, response: str, notify: bool):
         sendUpdates=send_updates,
     ).execute()
 
-    response_text = {
-        "accepted": "accepted",
-        "declined": "declined",
-        "tentative": "tentatively accepted",
-    }
-    click.echo(
-        f"Invitation {response_text[response]}: {event.get('summary', '(no title)')}"
+    logger.info(
+        "Invitation response sent",
+        event_id=event_id,
+        response=response,
+        notified=notify,
     )
-    if notify:
-        click.echo("Organizer has been notified.")
+    click.echo(
+        json.dumps(
+            {"eventId": event_id, "response": response, "notified": notify}, indent=2
+        )
+    )
 
 
 @cli.command()
@@ -373,9 +374,10 @@ def delete(event_id: str, notify: bool):
     get_calendar().events().delete(
         calendarId="primary", eventId=event_id, sendUpdates=send_updates
     ).execute()
-    click.echo(f"Event deleted: {event_id}")
-    if notify:
-        click.echo("Cancellation notifications sent to attendees.")
+    logger.info("Event deleted", event_id=event_id, notified=notify)
+    click.echo(
+        json.dumps({"eventId": event_id, "deleted": True, "notified": notify}, indent=2)
+    )
 
 
 @cli.command()
@@ -452,7 +454,5 @@ def update(
         .execute()
     )
 
-    click.echo(f"Event updated: {result['id']}")
-    click.echo(f"View: {result.get('htmlLink', '')}")
-    if notify:
-        click.echo("Update notifications sent to attendees.")
+    logger.info("Event updated", event_id=result["id"], notified=notify)
+    click.echo(json.dumps(result, indent=2))

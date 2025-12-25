@@ -10,6 +10,9 @@ import click
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
 from .auth import build_service
+from .logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def get_drive():
@@ -126,7 +129,8 @@ def download(file_id: str, output: str):
         _, done = downloader.next_chunk()
 
     Path(output).write_bytes(fh.getvalue())
-    click.echo(f"Downloaded: {output}")
+    logger.info("Downloaded file", path=output)
+    click.echo(json.dumps({"path": output, "fileId": file_id}, indent=2))
 
 
 @cli.command()
@@ -157,10 +161,8 @@ def upload(file_path: str, folder: str | None, name: str | None):
         .execute()
     )
 
-    click.echo(f"Uploaded: {f['name']}")
-    click.echo(f"ID: {f['id']}")
-    if f.get("webViewLink"):
-        click.echo(f"Link: {f['webViewLink']}")
+    logger.info("Uploaded file", name=f["name"], file_id=f["id"])
+    click.echo(json.dumps(f, indent=2))
 
 
 @cli.command()
@@ -188,10 +190,8 @@ def mkdir(name: str, folder: str | None):
         .execute()
     )
 
-    click.echo(f"Created folder: {f['name']}")
-    click.echo(f"ID: {f['id']}")
-    if f.get("webViewLink"):
-        click.echo(f"Link: {f['webViewLink']}")
+    logger.info("Created folder", name=f["name"], folder_id=f["id"])
+    click.echo(json.dumps(f, indent=2))
 
 
 @cli.command()
@@ -222,7 +222,10 @@ def share(file_id: str, email: str, role: str, notify: bool):
         sendNotificationEmail=notify,
     ).execute()
 
-    click.echo(f"Shared with {email} as {role}")
+    logger.info("Shared file", file_id=file_id, email=email, role=role)
+    click.echo(
+        json.dumps({"fileId": file_id, "sharedWith": email, "role": role}, indent=2)
+    )
 
 
 @cli.command()
@@ -233,7 +236,8 @@ def trash(file_id: str):
         fileId=file_id,
         body={"trashed": True},
     ).execute()
-    click.echo(f"Trashed: {file_id}")
+    logger.info("Trashed file", file_id=file_id)
+    click.echo(json.dumps({"fileId": file_id, "trashed": True}, indent=2))
 
 
 @cli.command()
@@ -244,4 +248,5 @@ def untrash(file_id: str):
         fileId=file_id,
         body={"trashed": False},
     ).execute()
-    click.echo(f"Restored: {file_id}")
+    logger.info("Restored file", file_id=file_id)
+    click.echo(json.dumps({"fileId": file_id, "restored": True}, indent=2))
