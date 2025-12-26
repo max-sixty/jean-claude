@@ -205,6 +205,7 @@ def mark_read(chat_jid: str):
 
     CHAT_JID: The chat identifier (e.g., "12025551234@s.whatsapp.net")
 
+    \b
     Examples:
         jean-claude whatsapp mark-read "12025551234@s.whatsapp.net"
     """

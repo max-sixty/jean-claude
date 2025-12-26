@@ -214,9 +214,15 @@ def _check_imessage_status() -> None:
     """Check iMessage availability (send and read capabilities)."""
     import sqlite3
     import subprocess
+    import sys
     from pathlib import Path
 
     click.echo("iMessage:")
+
+    # iMessage only available on macOS
+    if sys.platform != "darwin":
+        click.echo("  " + click.style("Not available (macOS only)", fg="yellow"))
+        return
 
     # Check send capability (AppleScript/Automation permission)
     # This script just checks if Messages.app is accessible, doesn't send anything
@@ -263,8 +269,14 @@ def _check_imessage_status() -> None:
 def _check_reminders_status() -> None:
     """Check Apple Reminders availability."""
     import subprocess
+    import sys
 
     click.echo("Reminders:")
+
+    # Reminders only available on macOS
+    if sys.platform != "darwin":
+        click.echo("  " + click.style("Not available (macOS only)", fg="yellow"))
+        return
 
     # Test AppleScript access to Reminders.app
     test_script = 'tell application "Reminders" to get name of default list'
