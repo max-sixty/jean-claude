@@ -395,9 +395,9 @@ def unread(max_results: int):
 
     # Auto-download images
     for msg in result:
-        media_type = msg.get("media_type")
+        msg_id = msg["id"]  # Always present
+        media_type = msg.get("media_type")  # Only present for media messages
         mime_type = msg.get("mime_type_full", "")
-        msg_id = msg.get("id")
 
         # Only auto-download images
         if media_type == "image" or mime_type in IMAGE_MIME_TYPES:
