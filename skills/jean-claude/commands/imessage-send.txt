@@ -1,14 +1,16 @@
-Usage: jean-claude imessage send [OPTIONS] [RECIPIENT] [MESSAGE]
+Usage: jean-claude imessage send [OPTIONS] RECIPIENT
 
   Send an iMessage to a phone number, chat ID, or contact name.
 
-  RECIPIENT: Phone number (+1234567890) or chat ID (any;+;chat123...) MESSAGE:
-  The message text to send
+  RECIPIENT: Phone number (+1234567890), chat ID (any;+;chat123...),
+  email/Apple ID, or contact name.
 
-  Examples:     jean-claude imessage send "+12025551234" "Hello!"     jean-
-  claude imessage send "any;+;chat123456789" "Hello group!"     jean-claude
-  imessage send --name "Kevin Seals" "Hello!"
+  Message body is read from stdin.
+
+  Examples:     echo "Hello!" | jean-claude imessage send "+12025551234"
+
+      cat << 'EOF' | jean-claude imessage send "+12025551234"     It's great
+      to hear from you!     EOF
 
 Options:
-  --name TEXT  Contact name to send to (instead of phone/chat ID)
-  --help       Show this message and exit.
+  --help  Show this message and exit.

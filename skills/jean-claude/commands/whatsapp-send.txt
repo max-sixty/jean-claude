@@ -1,18 +1,16 @@
-Usage: jean-claude whatsapp send [OPTIONS] [RECIPIENT] [MESSAGE]
+Usage: jean-claude whatsapp send [OPTIONS] RECIPIENT
 
   Send a WhatsApp message.
 
-  RECIPIENT: Phone number with country code (e.g., +12025551234) MESSAGE: The
-  message text to send
+  RECIPIENT: Phone number with country code (e.g., +12025551234).
 
-  Use --name to send by contact name instead of phone number. Use --reply-to
-  to create a quoted reply to a specific message.
+  Message body is read from stdin.
 
-  Examples:     jean-claude whatsapp send "+12025551234" "Hello!"     jean-
-  claude whatsapp send --name "John Doe" "Hello!"     jean-claude whatsapp
-  send "+12025551234" --reply-to "MSG_ID" "Reply text"
+  Examples:     echo "Hello!" | jean-claude whatsapp send "+12025551234"
+
+      cat << 'EOF' | jean-claude whatsapp send "+12025551234"     It's great
+      to hear from you!     EOF
 
 Options:
-  --name TEXT      Look up recipient by contact name instead of phone number
-  --reply-to TEXT  Message ID to reply to (creates quoted reply)
+  --reply-to TEXT  Message ID to reply to
   --help           Show this message and exit.

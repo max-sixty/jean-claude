@@ -10,11 +10,11 @@ Options:
 Commands:
   create     Create a new email draft from JSON stdin.
   delete     Permanently delete a draft.
-  forward    Create a forward draft from JSON stdin.
+  forward    Create a forward draft with body from stdin.
   get        Get a draft as JSON, written to file.
   list       List drafts.
-  reply      Create a reply draft from JSON stdin.
-  reply-all  Create a reply-all draft from JSON stdin.
+  reply      Create a reply draft with body from stdin.
+  reply-all  Create a reply-all draft with body from stdin.
   send       Send an existing draft.
   update     Update an existing draft from JSON stdin.
 
@@ -48,14 +48,22 @@ Options:
 
 ## gmail draft forward
 
-Usage: jean-claude gmail draft forward [OPTIONS] MESSAGE_ID
+Usage: jean-claude gmail draft forward [OPTIONS] MESSAGE_ID TO
 
-  Create a forward draft from JSON stdin.
+  Create a forward draft with body from stdin.
 
-  JSON fields: to (required), body (optional, prepended to forwarded message)
+  MESSAGE_ID: The message to forward. TO: Recipient email address.
 
-  Example:     echo '{"to": "x@y.com", "body": "FYI"}' | jean-claude gmail
-  draft forward MSG_ID
+  Body is read from stdin (can be empty for forwarding without adding text).
+
+  Examples:     echo "FYI" | jean-claude gmail draft forward MSG_ID
+  someone@example.com
+
+      cat << 'EOF' | jean-claude gmail draft forward MSG_ID
+      someone@example.com     Please see the message below.     EOF
+
+      # Forward without adding text     jean-claude gmail draft forward MSG_ID
+      someone@example.com < /dev/null
 
 Options:
   --help  Show this message and exit.
@@ -98,37 +106,47 @@ Options:
 
 Usage: jean-claude gmail draft reply [OPTIONS] MESSAGE_ID
 
-  Create a reply draft from JSON stdin.
+  Create a reply draft with body from stdin.
 
   Preserves threading with the original message. Includes quoted original
   message in Gmail format.
 
-  JSON fields: body (required), cc (optional)
+  MESSAGE_ID: The message to reply to.
 
-  Example:     echo '{"body": "Thanks!"}' | jean-claude gmail draft reply
-  MSG_ID     echo '{"body": "FYI", "cc": "a@x.com, b@y.com"}' | jean-claude
-  gmail draft reply MSG_ID
+  Body is read from stdin.
+
+  Examples:     echo "Thanks!" | jean-claude gmail draft reply MSG_ID
+
+      cat << 'EOF' | jean-claude gmail draft reply MSG_ID --cc
+      "other@example.com"     Thanks for the update!     EOF
 
 Options:
-  --help  Show this message and exit.
+  --cc TEXT  Additional CC recipients (comma-separated)
+  --help     Show this message and exit.
 
 
 ## gmail draft reply-all
 
 Usage: jean-claude gmail draft reply-all [OPTIONS] MESSAGE_ID
 
-  Create a reply-all draft from JSON stdin.
+  Create a reply-all draft with body from stdin.
 
   Preserves threading and includes all original recipients. Includes quoted
   original message in Gmail format.
 
-  JSON fields: body (required), cc (optional, overrides auto-detected CC)
+  MESSAGE_ID: The message to reply to.
 
-  Example:     echo '{"body": "Thanks!"}' | jean-claude gmail draft reply-all
+  Body is read from stdin.
+
+  Examples:     echo "Thanks everyone!" | jean-claude gmail draft reply-all
   MSG_ID
 
+      cat << 'EOF' | jean-claude gmail draft reply-all MSG_ID     Thanks for
+      the update!     EOF
+
 Options:
-  --help  Show this message and exit.
+  --cc TEXT  Override CC recipients (comma-separated)
+  --help     Show this message and exit.
 
 
 ## gmail draft send

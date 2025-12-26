@@ -128,9 +128,9 @@ class TestGmailDraftOperations:
 
     def test_reply_draft(self, runner, test_message, draft_cleanup):
         """Test creating a reply draft."""
-        reply_data = json.dumps({"body": "This is an automated reply."})
+        reply_body = "This is an automated reply."
         result = runner.invoke(
-            cli, ["gmail", "draft", "reply", test_message], input=reply_data
+            cli, ["gmail", "draft", "reply", test_message], input=reply_body
         )
         assert result.exit_code == 0
 
@@ -153,14 +153,11 @@ class TestGmailDraftOperations:
         self, runner, test_message, my_email, draft_cleanup
     ):
         """Test that forward draft includes original message body and proper From header."""
-        forward_data = json.dumps(
-            {
-                "to": my_email,
-                "body": "FYI - forwarding this test message.",
-            }
-        )
+        forward_body = "FYI - forwarding this test message."
         result = runner.invoke(
-            cli, ["gmail", "draft", "forward", test_message], input=forward_data
+            cli,
+            ["gmail", "draft", "forward", test_message, my_email],
+            input=forward_body,
         )
         assert result.exit_code == 0
 

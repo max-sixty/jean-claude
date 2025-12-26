@@ -68,6 +68,7 @@ import click
 from googleapiclient.errors import HttpError
 
 from .auth import build_service
+from .input import read_body_stdin
 from .logging import JeanClaudeError, get_logger
 from .paths import ATTACHMENT_CACHE_DIR, DRAFT_CACHE_DIR, EMAIL_CACHE_DIR
 
@@ -1003,24 +1004,28 @@ def _create_reply_draft(
 
 @draft.command("reply")
 @click.argument("message_id")
-def draft_reply(message_id: str):
-    """Create a reply draft from JSON stdin.
+@click.option("--cc", help="Additional CC recipients (comma-separated)")
+def draft_reply(message_id: str, cc: str | None):
+    """Create a reply draft with body from stdin.
 
     Preserves threading with the original message. Includes quoted original
     message in Gmail format.
 
-    JSON fields: body (required), cc (optional)
+    MESSAGE_ID: The message to reply to.
 
-    Example:
-        echo '{"body": "Thanks!"}' | jean-claude gmail draft reply MSG_ID
-        echo '{"body": "FYI", "cc": "a@x.com, b@y.com"}' | jean-claude gmail draft reply MSG_ID
+    Body is read from stdin.
+
+    Examples:
+        echo "Thanks!" | jean-claude gmail draft reply MSG_ID
+
+        cat << 'EOF' | jean-claude gmail draft reply MSG_ID --cc "other@example.com"
+        Thanks for the update!
+        EOF
     """
-    data = json.load(sys.stdin)
-    if "body" not in data:
-        raise click.UsageError("Missing required field: body")
+    body = read_body_stdin()
 
     draft_id, url = _create_reply_draft(
-        message_id, data["body"], include_cc=False, custom_cc=data.get("cc")
+        message_id, body, include_cc=False, custom_cc=cc
     )
     logger.info(f"Reply draft created: {draft_id}", url=url)
     click.echo(json.dumps({"id": draft_id, "url": url}, indent=2))
@@ -1028,41 +1033,53 @@ def draft_reply(message_id: str):
 
 @draft.command("reply-all")
 @click.argument("message_id")
-def draft_reply_all(message_id: str):
-    """Create a reply-all draft from JSON stdin.
+@click.option("--cc", help="Override CC recipients (comma-separated)")
+def draft_reply_all(message_id: str, cc: str | None):
+    """Create a reply-all draft with body from stdin.
 
     Preserves threading and includes all original recipients. Includes quoted
     original message in Gmail format.
 
-    JSON fields: body (required), cc (optional, overrides auto-detected CC)
+    MESSAGE_ID: The message to reply to.
 
-    Example:
-        echo '{"body": "Thanks!"}' | jean-claude gmail draft reply-all MSG_ID
+    Body is read from stdin.
+
+    Examples:
+        echo "Thanks everyone!" | jean-claude gmail draft reply-all MSG_ID
+
+        cat << 'EOF' | jean-claude gmail draft reply-all MSG_ID
+        Thanks for the update!
+        EOF
     """
-    data = json.load(sys.stdin)
-    if "body" not in data:
-        raise click.UsageError("Missing required field: body")
+    body = read_body_stdin()
 
-    draft_id, url = _create_reply_draft(
-        message_id, data["body"], include_cc=True, custom_cc=data.get("cc")
-    )
+    draft_id, url = _create_reply_draft(message_id, body, include_cc=True, custom_cc=cc)
     logger.info(f"Reply-all draft created: {draft_id}", url=url)
     click.echo(json.dumps({"id": draft_id, "url": url}, indent=2))
 
 
 @draft.command("forward")
 @click.argument("message_id")
-def draft_forward(message_id: str):
-    """Create a forward draft from JSON stdin.
+@click.argument("to")
+def draft_forward(message_id: str, to: str):
+    """Create a forward draft with body from stdin.
 
-    JSON fields: to (required), body (optional, prepended to forwarded message)
+    MESSAGE_ID: The message to forward.
+    TO: Recipient email address.
 
-    Example:
-        echo '{"to": "x@y.com", "body": "FYI"}' | jean-claude gmail draft forward MSG_ID
+    Body is read from stdin (can be empty for forwarding without adding text).
+
+    Examples:
+        echo "FYI" | jean-claude gmail draft forward MSG_ID someone@example.com
+
+        cat << 'EOF' | jean-claude gmail draft forward MSG_ID someone@example.com
+        Please see the message below.
+        EOF
+
+        # Forward without adding text
+        jean-claude gmail draft forward MSG_ID someone@example.com < /dev/null
     """
-    data = json.load(sys.stdin)
-    if "to" not in data:
-        raise click.UsageError("Missing required field: to")
+    body = read_body_stdin(allow_empty=True)
 
     service = get_gmail()
     original = (
@@ -1090,20 +1107,16 @@ def draft_forward(message_id: str):
     else:
         subject = f"Fwd: {orig_subject}"
 
-    user_body = data.get("body", "")
-
     # Build both plain text and HTML versions (like replies)
-    plain_body = _build_forward_text(
-        user_body, original_text, from_addr, date, orig_subject
-    )
+    plain_body = _build_forward_text(body, original_text, from_addr, date, orig_subject)
     html_body = _build_forward_html(
-        user_body, original_html, original_text, from_addr, date, orig_subject
+        body, original_html, original_text, from_addr, date, orig_subject
     )
 
     # Create multipart/alternative with both versions
     msg = MIMEMultipart("alternative")
     msg["from"] = get_my_from_address(service)
-    msg["to"] = data["to"]
+    msg["to"] = to
     msg["subject"] = subject
 
     # Attach plain text first, then HTML (email clients prefer later parts)

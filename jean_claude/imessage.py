@@ -10,6 +10,7 @@ from pathlib import Path
 
 import click
 
+from .input import read_body_stdin
 from .logging import JeanClaudeError, get_logger
 
 logger = get_logger(__name__)
@@ -309,19 +310,45 @@ end run"""
     return [(c["name"], c["phones"]) for c in contacts_data]
 
 
-def resolve_recipient(recipient: str | None, name: str | None) -> str:
-    """Resolve recipient to phone/chat ID from direct value or contact name.
+def resolve_recipient_from_string(value: str) -> str:
+    """Resolve a 'to' value to a phone/chat ID or iMessage handle.
 
-    Raises UsageError if neither is provided.
-    Raises ClickException if contact name doesn't resolve.
+    Auto-detects whether the value is:
+    - A chat ID (starts with "any;")
+    - An email/Apple ID (contains "@" - passed directly as iMessage handle)
+    - A phone number (starts with "+" followed by digits, or digit-only string)
+    - A contact name (anything else - will be looked up in Contacts.app)
+
+    Phone number detection uses formatting-stripped values for matching but
+    returns the original value to preserve any user formatting.
     """
-    if name:
-        return resolve_contact_to_phone(name)
+    # Chat IDs pass through directly
+    if value.startswith("any;"):
+        return value
 
-    if recipient:
-        return recipient
+    # Email addresses / Apple IDs pass through directly (iMessage handles)
+    if "@" in value:
+        return value
 
-    raise click.UsageError("Provide either RECIPIENT or --name")
+    # Phone numbers: check against formatting-stripped version
+    cleaned = (
+        value.replace(" ", "")
+        .replace("-", "")
+        .replace("(", "")
+        .replace(")", "")
+        .replace(".", "")
+    )
+
+    # +1234567890 format: must have + followed by digits only
+    if cleaned.startswith("+") and cleaned[1:].isdigit() and len(cleaned) >= 8:
+        return value
+
+    # Local format: all digits, at least 7 (shortest valid phone numbers)
+    if cleaned.isdigit() and len(cleaned) >= 7:
+        return value
+
+    # Otherwise treat as contact name
+    return resolve_contact_to_phone(value)
 
 
 def resolve_contact_to_phone(name: str) -> str:
@@ -529,29 +556,24 @@ def cli():
 
 
 @cli.command()
-@click.argument("recipient", required=False)
-@click.argument("message", required=False)
-@click.option("--name", help="Contact name to send to (instead of phone/chat ID)")
-def send(recipient: str | None, message: str | None, name: str | None):
+@click.argument("recipient")
+def send(recipient: str):
     """Send an iMessage to a phone number, chat ID, or contact name.
 
-    RECIPIENT: Phone number (+1234567890) or chat ID (any;+;chat123...)
-    MESSAGE: The message text to send
+    RECIPIENT: Phone number (+1234567890), chat ID (any;+;chat123...),
+    email/Apple ID, or contact name.
+
+    Message body is read from stdin.
 
     Examples:
-        jean-claude imessage send "+12025551234" "Hello!"
-        jean-claude imessage send "any;+;chat123456789" "Hello group!"
-        jean-claude imessage send --name "Kevin Seals" "Hello!"
+        echo "Hello!" | jean-claude imessage send "+12025551234"
+
+        cat << 'EOF' | jean-claude imessage send "+12025551234"
+        It's great to hear from you!
+        EOF
     """
-    # When --name is used, recipient slot contains the message
-    if name and recipient and not message:
-        message = recipient
-        recipient = None
-
-    if not message:
-        raise click.UsageError("MESSAGE is required")
-
-    recipient = resolve_recipient(recipient, name)
+    message = read_body_stdin()
+    recipient = resolve_recipient_from_string(recipient)
 
     if recipient.startswith("any;"):
         # Chat ID - send directly to chat
@@ -576,33 +598,20 @@ end run"""
 
 
 @cli.command()
-@click.argument("recipient", required=False)
-@click.argument(
-    "file_path", required=False, type=click.Path(exists=True, path_type=Path)
-)
-@click.option("--name", help="Contact name to send to (instead of phone/chat ID)")
-def send_file(recipient: str | None, file_path: Path | None, name: str | None):
+@click.argument("recipient")
+@click.argument("file_path", type=click.Path(exists=True, path_type=Path))
+def send_file(recipient: str, file_path: Path):
     """Send a file attachment via iMessage.
 
-    RECIPIENT: Phone number (+1234567890) or chat ID (any;+;chat123...)
+    RECIPIENT: Phone number, chat ID, email/Apple ID, or contact name.
     FILE_PATH: Path to file to send
 
     Examples:
         jean-claude imessage send-file "+12025551234" ./document.pdf
         jean-claude imessage send-file "any;+;chat123456789" ./photo.jpg
-        jean-claude imessage send-file --name "Kevin Seals" ./photo.jpg
+        jean-claude imessage send-file "Kevin Seals" ./photo.jpg
     """
-    # When --name is used, recipient slot contains the file path
-    if name and recipient and not file_path:
-        file_path = Path(recipient)
-        if not file_path.exists():
-            raise click.UsageError(f"File not found: {recipient}")
-        recipient = None
-
-    if not file_path:
-        raise click.UsageError("FILE_PATH is required")
-
-    recipient = resolve_recipient(recipient, name)
+    recipient = resolve_recipient_from_string(recipient)
     abs_path = str(file_path.resolve())
 
     if recipient.startswith("any;"):

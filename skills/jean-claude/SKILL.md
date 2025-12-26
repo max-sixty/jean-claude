@@ -74,10 +74,10 @@ These rules apply even if the user explicitly asks to bypass them:
 5. **Double-check iMessage recipients.** iMessage sends are instant and cannot
    be undone. Verify the phone number or chat ID before sending.
 
-6. **Never send to ambiguous recipients.** If using `--name` to look up a
-   contact and multiple contacts or phone numbers match, the command will fail
-   with a list of options. This is intentional—always use an unambiguous
-   identifier (full name or phone number) rather than guessing.
+6. **Never send to ambiguous recipients.** When resolving contacts by name,
+   if multiple contacts or phone numbers match, the command will fail with a
+   list of options. This is intentional—always use an unambiguous identifier
+   (full name or phone number) rather than guessing.
 
 7. **Never send a WhatsApp message without explicit approval.** Show the full
    message (recipient, body) to the user and receive explicit confirmation
@@ -101,7 +101,7 @@ These rules apply even if the user explicitly asks to bypass them:
 2. Compose the message content
 3. Show the user: Recipient (phone or chat name) and full message
 4. Ask: "Send this message?" and wait for explicit approval
-5. Call `jean-claude imessage send RECIPIENT MESSAGE`
+5. Pipe message body to `jean-claude imessage send RECIPIENT`
 
 **WhatsApp workflow:**
 
@@ -109,7 +109,7 @@ These rules apply even if the user explicitly asks to bypass them:
 2. Compose the message content
 3. Show the user: Recipient (phone number with country code) and full message
 4. Ask: "Send this WhatsApp message?" and wait for explicit approval
-5. Call `jean-claude whatsapp send PHONE MESSAGE`
+5. Pipe message body to `jean-claude whatsapp send RECIPIENT`
 
 ## Personalization
 
@@ -314,25 +314,22 @@ cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft cr
 {"to": "recipient@example.com", "subject": "Subject", "body": "Message body"}
 EOF
 
-# Reply to a message (preserves threading, includes quoted original)
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID
-{"body": "Thanks for your email..."}
-EOF
+# Reply to a message (body from stdin, preserves threading, includes quoted original)
+echo "Thanks for your email..." | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID
 
 # Reply with custom CC
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID
-{"body": "Thanks!", "cc": "manager@example.com"}
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID --cc "manager@example.com"
+Thanks for the update!
 EOF
 
-# Forward a message
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft forward MESSAGE_ID
-{"to": "someone@example.com", "body": "FYI - see below"}
-EOF
+# Forward a message (TO as argument, optional note from stdin)
+echo "FYI - see below" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft forward MESSAGE_ID someone@example.com
+
+# Forward without a note
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft forward MESSAGE_ID someone@example.com < /dev/null
 
 # Reply-all (includes all original recipients)
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply-all MESSAGE_ID
-{"body": "Thanks everyone!"}
-EOF
+echo "Thanks everyone!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply-all MESSAGE_ID
 
 # List drafts
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list
@@ -702,22 +699,32 @@ chats use `any;+;chat123...`. Get these from `imessage chats`.
 
 ### Send Messages
 
+Message body is read from stdin (avoids shell escaping issues with apostrophes
+and special characters). Recipient is a positional argument.
+
 ```bash
 # Send to phone number
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234" "Hello!"
+echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234"
 
 # Send to contact by name (must match exactly one contact with one phone)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send --name "Kevin Seals" "Hello!"
+echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "Kevin Seals"
+
+# Multiline message with heredoc
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234"
+It's great to hear from you!
+Let me know when you're free.
+EOF
 
 # Send to group chat
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "any;+;chat123456789" "Hello group!"
+echo "Hello group!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "any;+;chat123456789"
 
-# Send file
+# Send file (recipient auto-detects phone vs contact name)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file "+12025551234" ./document.pdf
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file --name "Kevin Seals" ./photo.jpg
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file "Kevin Seals" ./photo.jpg
 ```
 
-**Contact lookup with `--name`:** Searches macOS Contacts.app. Fails if:
+**Contact lookup:** The recipient auto-detects phone numbers vs contact names.
+Fails if:
 - Multiple contacts match (e.g., "Kevin" matches "Kevin Seals" and "Kevin Smith")
 - One contact has multiple phone numbers
 
@@ -803,9 +810,21 @@ chats that don't have them.
 
 ### Send Messages
 
+Message body is read from stdin (avoids shell escaping issues). Recipient is a
+positional argument.
+
 ```bash
 # Send to phone number (with country code)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp send "+12025551234" "Hello!"
+echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp send "+12025551234"
+
+# Multiline message with heredoc
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp send "+12025551234"
+It's great to hear from you!
+Let me know when you're free.
+EOF
+
+# Reply to a specific message
+echo "Reply text" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp send "+12025551234" --reply-to MSG_ID
 ```
 
 ### List Chats

@@ -68,12 +68,22 @@ Consistent flags across all commands:
 
 ### Input Conventions
 
-- **Stdin (JSON only)** — Structured content (email bodies, spreadsheet rows,
-  message text). Always JSON, never plain text. Avoids shell escaping issues.
-- **Positional args** — IDs, file paths, short values that don't need escaping.
-- **Flags** — Options and modifiers (`-n`, `--unread`, `--json`).
+- **Stdin** — Content that needs to avoid shell escaping
+  - **JSON** for structured data with multiple fields (e.g., `gmail draft create`)
+  - **Plain text** for message bodies (e.g., `imessage send`, `gmail draft reply`)
+- **Positional args** — IDs, recipients, file paths
+- **Flags** — Options and modifiers (`-n`, `--unread`, `--cc`)
 
 One canonical input method per command. No auto-detection between formats.
+
+**Message commands** use plain text stdin to avoid shell escaping issues (Claude
+Code's Bash tool can mangle `!` when combined with apostrophes):
+
+```bash
+echo "Hello!" | jean-claude imessage send "+1234567890"
+echo "Thanks!" | jean-claude gmail draft reply MESSAGE_ID
+echo "FYI" | jean-claude gmail draft forward MESSAGE_ID recipient@example.com
+```
 
 ### Output: File Indirection for Full Content
 
