@@ -333,6 +333,39 @@ func initMessageDB() error {
 		}
 	}
 
+	// Migration: add reply context columns to messages if they don't exist
+	replyColumns := []string{
+		"reply_to_id TEXT",          // ID of message being replied to
+		"reply_to_sender TEXT",      // Sender of the quoted message
+		"reply_to_text TEXT",        // Preview of quoted message text
+	}
+	for _, colDef := range replyColumns {
+		colName := strings.Split(colDef, " ")[0]
+		if !hasColumn(messageDB, "messages", colName) {
+			if _, err = messageDB.Exec("ALTER TABLE messages ADD COLUMN " + colDef); err != nil {
+				return fmt.Errorf("failed to add %s column: %w", colName, err)
+			}
+		}
+	}
+
+	// Create reactions table if it doesn't exist
+	_, err = messageDB.Exec(`
+		CREATE TABLE IF NOT EXISTS reactions (
+			message_id TEXT NOT NULL,
+			chat_jid TEXT NOT NULL,
+			sender_jid TEXT NOT NULL,
+			sender_name TEXT,
+			emoji TEXT NOT NULL,
+			timestamp INTEGER NOT NULL,
+			PRIMARY KEY (message_id, sender_jid)
+		);
+		CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id);
+		CREATE INDEX IF NOT EXISTS idx_reactions_chat ON reactions(chat_jid);
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create reactions table: %w", err)
+	}
+
 	return nil
 }
 
@@ -977,10 +1010,12 @@ func cmdSync() error {
 
 // cmdMessages lists messages from local database.
 // When --unread is specified, auto-syncs with WhatsApp first to ensure fresh data.
+// When --with-media is specified, auto-downloads image media and returns file paths.
 func cmdMessages(args []string) error {
 	// Parse args first to check if we need to sync
 	var chatJID string
 	var unreadOnly bool
+	var withMedia bool
 	limit := 50
 	for i := 0; i < len(args); i++ {
 		switch {
@@ -990,16 +1025,23 @@ func cmdMessages(args []string) error {
 			fmt.Sscanf(strings.TrimPrefix(args[i], "--max-results="), "%d", &limit)
 		case args[i] == "--unread":
 			unreadOnly = true
+		case args[i] == "--with-media":
+			withMedia = true
 		}
 	}
 
+	// --unread implies --with-media for full context when reviewing inbox
+	if unreadOnly {
+		withMedia = true
+	}
+
+	ctx := context.Background()
 	if err := initMessageDB(); err != nil {
 		return err
 	}
 
 	// Auto-sync when checking unread messages to ensure fresh data
 	if unreadOnly {
-		ctx := context.Background()
 		if err := initClient(ctx); err != nil {
 			return err
 		}
@@ -1008,13 +1050,15 @@ func cmdMessages(args []string) error {
 		}
 	}
 
-	// Build query with LEFT JOIN to get chat name
+	// Build query with LEFT JOIN to get chat name, including reply context
 	query := `SELECT m.id, m.chat_jid, m.sender_jid, m.sender_name, m.timestamp, m.text, m.media_type, m.is_from_me, m.is_read,
 		CASE
 			WHEN c.is_group = 1 THEN COALESCE(NULLIF(c.name, ''), '')
 			ELSE COALESCE(NULLIF(c.name, ''), ct.name, ct.push_name, '')
 		END as chat_name,
-		m.mime_type_full, m.file_length, m.media_file_path
+		m.mime_type_full, m.file_length, m.media_file_path,
+		m.reply_to_id, m.reply_to_sender, m.reply_to_text,
+		m.media_key, m.file_sha256, m.file_enc_sha256, m.direct_path
 		FROM messages m
 		LEFT JOIN chats c ON m.chat_jid = c.jid
 		LEFT JOIN contacts ct ON m.chat_jid = ct.jid`
@@ -1041,21 +1085,30 @@ func cmdMessages(args []string) error {
 	}
 	defer rows.Close()
 
+	// Collect message IDs to query reactions
+	var messageIDs []string
 	var messages []map[string]any
+
 	for rows.Next() {
-		var id, chatJID, senderJID string
+		var id, chatJIDVal, senderJID string
 		var senderName, text, mediaType, chatName, mimeType, mediaFilePath sql.NullString
+		var replyToID, replyToSender, replyToText sql.NullString
+		var directPath sql.NullString
 		var timestamp int64
 		var isFromMe, isRead int
 		var fileLength sql.NullInt64
+		var mediaKey, fileSHA256, fileEncSHA256 []byte
 
-		if err := rows.Scan(&id, &chatJID, &senderJID, &senderName, &timestamp, &text, &mediaType, &isFromMe, &isRead, &chatName, &mimeType, &fileLength, &mediaFilePath); err != nil {
+		if err := rows.Scan(&id, &chatJIDVal, &senderJID, &senderName, &timestamp, &text, &mediaType, &isFromMe, &isRead, &chatName,
+			&mimeType, &fileLength, &mediaFilePath,
+			&replyToID, &replyToSender, &replyToText,
+			&mediaKey, &fileSHA256, &fileEncSHA256, &directPath); err != nil {
 			return fmt.Errorf("failed to scan row: %w", err)
 		}
 
 		msg := map[string]any{
 			"id":         id,
-			"chat_jid":   chatJID,
+			"chat_jid":   chatJIDVal,
 			"sender_jid": senderJID,
 			"timestamp":  timestamp,
 			"is_from_me": isFromMe == 1,
@@ -1079,13 +1132,175 @@ func cmdMessages(args []string) error {
 		if fileLength.Valid {
 			msg["file_length"] = fileLength.Int64
 		}
+
+		// Handle media file path and auto-download
+		filePath := ""
 		if mediaFilePath.Valid && mediaFilePath.String != "" {
-			msg["media_file_path"] = mediaFilePath.String
+			filePath = mediaFilePath.String
 		}
+
+		// Auto-download media if --with-media and not already downloaded
+		if withMedia && mediaType.Valid && isDownloadableMedia(mediaType.String) && filePath == "" && len(mediaKey) > 0 {
+			downloaded := downloadMediaForMessage(ctx, id, mediaType.String, mimeType.String, mediaKey, fileSHA256, fileEncSHA256, fileLength.Int64, directPath.String)
+			if downloaded != "" {
+				filePath = downloaded
+			}
+		}
+
+		if filePath != "" {
+			msg["file"] = filePath
+		}
+
+		// Add reply context if present
+		if replyToID.Valid && replyToID.String != "" {
+			replyTo := map[string]any{
+				"id": replyToID.String,
+			}
+			if replyToSender.Valid && replyToSender.String != "" {
+				replyTo["sender"] = replyToSender.String
+			}
+			if replyToText.Valid && replyToText.String != "" {
+				replyTo["text"] = replyToText.String
+			}
+			msg["reply_to"] = replyTo
+		}
+
 		messages = append(messages, msg)
+		messageIDs = append(messageIDs, id)
+	}
+
+	// Query reactions for all messages
+	if len(messageIDs) > 0 {
+		reactionsByMsg := getReactionsForMessages(messageIDs)
+		for _, msg := range messages {
+			msgID := msg["id"].(string)
+			if reactions, ok := reactionsByMsg[msgID]; ok {
+				msg["reactions"] = reactions
+			}
+		}
 	}
 
 	return printJSON(messages)
+}
+
+// getReactionsForMessages queries reactions for a list of message IDs.
+func getReactionsForMessages(messageIDs []string) map[string][]map[string]any {
+	if len(messageIDs) == 0 {
+		return nil
+	}
+
+	// Build IN clause
+	placeholders := make([]string, len(messageIDs))
+	args := make([]interface{}, len(messageIDs))
+	for i, id := range messageIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := `SELECT message_id, sender_jid, sender_name, emoji FROM reactions WHERE message_id IN (` + strings.Join(placeholders, ",") + `)`
+	rows, err := messageDB.Query(query, args...)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to query reactions: %v\n", err)
+		return nil
+	}
+	defer rows.Close()
+
+	result := make(map[string][]map[string]any)
+	for rows.Next() {
+		var msgID, senderJID string
+		var senderName sql.NullString
+		var emoji string
+		if err := rows.Scan(&msgID, &senderJID, &senderName, &emoji); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to scan reaction: %v\n", err)
+			continue
+		}
+		reaction := map[string]any{
+			"emoji":      emoji,
+			"sender_jid": senderJID,
+		}
+		if senderName.Valid && senderName.String != "" {
+			reaction["sender_name"] = senderName.String
+		}
+		result[msgID] = append(result[msgID], reaction)
+	}
+	return result
+}
+
+// isDownloadableMedia returns true if the media type can be auto-downloaded
+func isDownloadableMedia(mediaType string) bool {
+	switch mediaType {
+	case "image", "video", "audio", "sticker", "document":
+		return true
+	default:
+		return false
+	}
+}
+
+// downloadMediaForMessage downloads media for a message and returns the file path.
+// On failure, logs to stderr and returns empty string.
+func downloadMediaForMessage(ctx context.Context, messageID, mediaType, mimeType string, mediaKey, fileSHA256, fileEncSHA256 []byte, fileLength int64, directPath string) string {
+	if len(mediaKey) == 0 || directPath == "" {
+		return ""
+	}
+
+	// Determine output path
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to get home directory: %v\n", err)
+		return ""
+	}
+	mediaDir := filepath.Join(home, ".local", "share", "jean-claude", "whatsapp", "media")
+	if err := os.MkdirAll(mediaDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to create media directory: %v\n", err)
+		return ""
+	}
+
+	ext := getExtensionFromMime(mimeType)
+	filename := hex.EncodeToString(fileSHA256) + ext
+	outputPath := filepath.Join(mediaDir, filename)
+
+	// Check if already exists
+	if _, err := os.Stat(outputPath); err == nil {
+		// Update message with file path
+		_, _ = messageDB.Exec(`UPDATE messages SET media_file_path = ? WHERE id = ?`, outputPath, messageID)
+		return outputPath
+	}
+
+	// Need client to download
+	if client == nil || !client.IsConnected() {
+		// Try to initialize and connect
+		if err := initClient(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to initialize client for download: %v\n", err)
+			return ""
+		}
+		if client.Store.ID == nil {
+			fmt.Fprintf(os.Stderr, "Warning: not authenticated, cannot download media\n")
+			return ""
+		}
+		if err := client.Connect(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to connect for download: %v\n", err)
+			return ""
+		}
+		// Wait briefly for connection
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// Download using the correct media type
+	waMediaType, mmsType := mediaTypeToWA(mediaType)
+	data, err := client.DownloadMediaWithPath(ctx, directPath, fileEncSHA256, fileSHA256, mediaKey, int(fileLength), waMediaType, mmsType)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to download media for %s: %v\n", messageID, err)
+		return ""
+	}
+
+	if err := os.WriteFile(outputPath, data, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to write media file: %v\n", err)
+		return ""
+	}
+
+	// Update message with file path
+	_, _ = messageDB.Exec(`UPDATE messages SET media_file_path = ? WHERE id = ?`, outputPath, messageID)
+	return outputPath
 }
 
 // cmdContacts lists contacts from local database
@@ -1933,6 +2148,12 @@ func getQuotedContext(messageID, chatJID string) (*waProto.ContextInfo, error) {
 
 func saveMessage(evt *events.Message) error {
 	info := evt.Info
+
+	// Handle reaction messages separately - they go to reactions table, not messages
+	if rm := evt.Message.GetReactionMessage(); rm != nil {
+		return saveReactionFromMessage(info, rm)
+	}
+
 	content := extractMessageContentFull(evt.Message)
 
 	// New messages from others are unread; messages from self are read
@@ -1956,10 +2177,19 @@ func saveMessage(evt *events.Message) error {
 		}
 	}
 
+	// Prepare reply context for storage
+	var replyToID, replyToSender, replyToText sql.NullString
+	if content.Reply != nil {
+		replyToID = sql.NullString{String: content.Reply.ID, Valid: content.Reply.ID != ""}
+		replyToSender = sql.NullString{String: content.Reply.Sender, Valid: content.Reply.Sender != ""}
+		replyToText = sql.NullString{String: content.Reply.Text, Valid: content.Reply.Text != ""}
+	}
+
 	_, err := messageDB.Exec(`
 		INSERT INTO messages (id, chat_jid, sender_jid, sender_name, timestamp, text, media_type, is_from_me, is_read, created_at,
-			mime_type_full, media_key, file_sha256, file_enc_sha256, file_length, direct_path, media_url)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			mime_type_full, media_key, file_sha256, file_enc_sha256, file_length, direct_path, media_url,
+			reply_to_id, reply_to_sender, reply_to_text)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			text = excluded.text,
 			media_type = excluded.media_type,
@@ -1970,10 +2200,14 @@ func saveMessage(evt *events.Message) error {
 			file_enc_sha256 = COALESCE(excluded.file_enc_sha256, messages.file_enc_sha256),
 			file_length = COALESCE(excluded.file_length, messages.file_length),
 			direct_path = COALESCE(excluded.direct_path, messages.direct_path),
-			media_url = COALESCE(excluded.media_url, messages.media_url)
+			media_url = COALESCE(excluded.media_url, messages.media_url),
+			reply_to_id = COALESCE(excluded.reply_to_id, messages.reply_to_id),
+			reply_to_sender = COALESCE(excluded.reply_to_sender, messages.reply_to_sender),
+			reply_to_text = COALESCE(excluded.reply_to_text, messages.reply_to_text)
 	`, info.ID, info.Chat.String(), info.Sender.String(), info.PushName, info.Timestamp.Unix(),
 		content.Text, content.MediaType, boolToInt(info.IsFromMe), isRead, time.Now().Unix(),
-		mimeType, mediaKey, fileSHA256, fileEncSHA256, fileLength, directPath, mediaURL)
+		mimeType, mediaKey, fileSHA256, fileEncSHA256, fileLength, directPath, mediaURL,
+		replyToID, replyToSender, replyToText)
 
 	if err == nil {
 		// Update chat timestamp (best-effort, don't fail message save)
@@ -2031,12 +2265,21 @@ func saveHistoryMessageWithReadStatus(chatJID string, msg *waWeb.WebMessageInfo,
 		}
 	}
 
+	// Prepare reply context for storage
+	var replyToID, replyToSender, replyToText sql.NullString
+	if content.Reply != nil {
+		replyToID = sql.NullString{String: content.Reply.ID, Valid: content.Reply.ID != ""}
+		replyToSender = sql.NullString{String: content.Reply.Sender, Valid: content.Reply.Sender != ""}
+		replyToText = sql.NullString{String: content.Reply.Text, Valid: content.Reply.Text != ""}
+	}
+
 	// UPSERT pattern: insert new messages, update existing ones only to mark as read (never unread).
 	// MAX(is_read, excluded.is_read) ensures read status only moves unread→read, never back.
 	_, err := messageDB.Exec(`
 		INSERT INTO messages (id, chat_jid, sender_jid, sender_name, timestamp, text, media_type, is_from_me, is_read, created_at,
-			mime_type_full, media_key, file_sha256, file_enc_sha256, file_length, direct_path, media_url)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			mime_type_full, media_key, file_sha256, file_enc_sha256, file_length, direct_path, media_url,
+			reply_to_id, reply_to_sender, reply_to_text)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			is_read = MAX(messages.is_read, excluded.is_read),
 			mime_type_full = COALESCE(excluded.mime_type_full, messages.mime_type_full),
@@ -2045,10 +2288,14 @@ func saveHistoryMessageWithReadStatus(chatJID string, msg *waWeb.WebMessageInfo,
 			file_enc_sha256 = COALESCE(excluded.file_enc_sha256, messages.file_enc_sha256),
 			file_length = COALESCE(excluded.file_length, messages.file_length),
 			direct_path = COALESCE(excluded.direct_path, messages.direct_path),
-			media_url = COALESCE(excluded.media_url, messages.media_url)
+			media_url = COALESCE(excluded.media_url, messages.media_url),
+			reply_to_id = COALESCE(excluded.reply_to_id, messages.reply_to_id),
+			reply_to_sender = COALESCE(excluded.reply_to_sender, messages.reply_to_sender),
+			reply_to_text = COALESCE(excluded.reply_to_text, messages.reply_to_text)
 	`, key.GetID(), chatJID, sender, msg.GetPushName(), timestamp,
 		content.Text, content.MediaType, boolToInt(key.GetFromMe()), boolToInt(isRead), time.Now().Unix(),
-		mimeType, mediaKey, fileSHA256, fileEncSHA256, fileLength, directPath, mediaURL)
+		mimeType, mediaKey, fileSHA256, fileEncSHA256, fileLength, directPath, mediaURL,
+		replyToID, replyToSender, replyToText)
 
 	return err
 }
@@ -2081,6 +2328,32 @@ func markMessageRead(msgID string) error {
 	return err
 }
 
+func saveReactionFromMessage(info types.MessageInfo, rm *waE2E.ReactionMessage) error {
+	emoji := rm.GetText()
+	targetKey := rm.GetKey()
+	if targetKey == nil {
+		return nil
+	}
+	messageID := targetKey.GetID()
+
+	// Empty emoji means reaction was removed
+	if emoji == "" {
+		_, err := messageDB.Exec(`DELETE FROM reactions WHERE message_id = ? AND sender_jid = ?`,
+			messageID, info.Sender.String())
+		return err
+	}
+
+	// UPSERT: update emoji if sender already reacted
+	_, err := messageDB.Exec(`
+		INSERT INTO reactions (message_id, chat_jid, sender_jid, sender_name, emoji, timestamp)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(message_id, sender_jid) DO UPDATE SET
+			emoji = excluded.emoji,
+			timestamp = excluded.timestamp
+	`, messageID, info.Chat.String(), info.Sender.String(), info.PushName, emoji, info.Timestamp.Unix())
+	return err
+}
+
 // MediaMetadata holds media information extracted from a WhatsApp message.
 // Used for storing download info and later retrieval.
 type MediaMetadata struct {
@@ -2100,11 +2373,19 @@ func extractMessageContent(m *waE2E.Message) (text, mediaType string) {
 	return meta.Text, meta.MediaType
 }
 
+// ReplyContext holds information about the message being replied to.
+type ReplyContext struct {
+	ID     string // ID of the quoted message
+	Sender string // JID of quoted message sender
+	Text   string // Preview of quoted text (first 200 chars)
+}
+
 // MessageContent holds full message content including media metadata.
 type MessageContent struct {
 	Text      string
 	MediaType string
 	Media     *MediaMetadata
+	Reply     *ReplyContext
 }
 
 // extractMessageContentFull extracts text and full media metadata from a WhatsApp message.
@@ -2115,11 +2396,36 @@ func extractMessageContentFull(m *waE2E.Message) MessageContent {
 
 	var content MessageContent
 
+	// Helper to extract reply context from ContextInfo
+	extractReply := func(ci *waE2E.ContextInfo) {
+		if ci == nil {
+			return
+		}
+		stanzaID := ci.GetStanzaID()
+		if stanzaID == "" {
+			return
+		}
+		content.Reply = &ReplyContext{
+			ID:     stanzaID,
+			Sender: ci.GetParticipant(),
+		}
+		// Extract quoted message text preview
+		if qm := ci.GetQuotedMessage(); qm != nil {
+			qText, _ := extractMessageContent(qm)
+			if len(qText) > 200 {
+				qText = qText[:200] + "..."
+			}
+			content.Reply.Text = qText
+		}
+	}
+
 	switch {
 	case m.GetConversation() != "":
 		content.Text = m.GetConversation()
 	case m.GetExtendedTextMessage() != nil:
-		content.Text = m.GetExtendedTextMessage().GetText()
+		ext := m.GetExtendedTextMessage()
+		content.Text = ext.GetText()
+		extractReply(ext.GetContextInfo())
 	case m.GetImageMessage() != nil:
 		img := m.GetImageMessage()
 		content.MediaType = "image"
@@ -2134,6 +2440,7 @@ func extractMessageContentFull(m *waE2E.Message) MessageContent {
 			DirectPath:    img.GetDirectPath(),
 			URL:           img.GetURL(),
 		}
+		extractReply(img.GetContextInfo())
 	case m.GetVideoMessage() != nil:
 		vid := m.GetVideoMessage()
 		content.MediaType = "video"
@@ -2148,6 +2455,7 @@ func extractMessageContentFull(m *waE2E.Message) MessageContent {
 			DirectPath:    vid.GetDirectPath(),
 			URL:           vid.GetURL(),
 		}
+		extractReply(vid.GetContextInfo())
 	case m.GetAudioMessage() != nil:
 		aud := m.GetAudioMessage()
 		content.MediaType = "audio"
@@ -2161,6 +2469,7 @@ func extractMessageContentFull(m *waE2E.Message) MessageContent {
 			DirectPath:    aud.GetDirectPath(),
 			URL:           aud.GetURL(),
 		}
+		extractReply(aud.GetContextInfo())
 	case m.GetDocumentMessage() != nil:
 		doc := m.GetDocumentMessage()
 		content.MediaType = "document"
@@ -2175,6 +2484,7 @@ func extractMessageContentFull(m *waE2E.Message) MessageContent {
 			DirectPath:    doc.GetDirectPath(),
 			URL:           doc.GetURL(),
 		}
+		extractReply(doc.GetContextInfo())
 	case m.GetStickerMessage() != nil:
 		stk := m.GetStickerMessage()
 		content.MediaType = "sticker"
@@ -2188,6 +2498,7 @@ func extractMessageContentFull(m *waE2E.Message) MessageContent {
 			DirectPath:    stk.GetDirectPath(),
 			URL:           stk.GetURL(),
 		}
+		extractReply(stk.GetContextInfo())
 	case m.GetContactMessage() != nil:
 		content.MediaType = "contact"
 		content.Text = m.GetContactMessage().GetDisplayName()
@@ -2199,6 +2510,11 @@ func extractMessageContentFull(m *waE2E.Message) MessageContent {
 		} else if loc.GetAddress() != "" {
 			content.Text = loc.GetAddress()
 		}
+	case m.GetReactionMessage() != nil:
+		// Reaction messages have their own event type, but can appear in history
+		// Text is the emoji, key contains the target message
+		content.MediaType = "reaction"
+		content.Text = m.GetReactionMessage().GetText()
 	}
 	return content
 }

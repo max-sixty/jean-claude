@@ -859,20 +859,47 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp chats -n 10
 # Recent messages (from local database)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages -n 20
 
-# Unread messages only (auto-syncs first to ensure fresh data)
+# Unread messages (auto-syncs and downloads all media)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --unread
 
 # Messages from specific chat (use JID from chats command)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --chat "120363277025153496@g.us"
+
+# Explicitly download media for non-unread queries
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --chat "..." --with-media
 ```
 
-**Note:** The `--unread` flag automatically syncs with WhatsApp before querying,
-so you always get fresh data. Other queries read from the local database only—run
-`whatsapp sync` first if you need the latest messages.
+**Output includes:**
+- `reply_to`: When a message is a reply, shows the original message context (id, sender, text preview)
+- `reactions`: List of emoji reactions with sender info
+- `file`: Path to downloaded media (with `--with-media`)
+
+**Example output with new fields:**
+```json
+{
+  "id": "ABC123",
+  "text": "That's great!",
+  "sender_name": "Alice",
+  "reply_to": {
+    "id": "XYZ789",
+    "sender": "12025551234@s.whatsapp.net",
+    "text": "Check out this article: https://..."
+  },
+  "reactions": [
+    {"emoji": "👍", "sender_name": "Bob"},
+    {"emoji": "❤️", "sender_name": "Carol"}
+  ]
+}
+```
+
+**Note:** The `--unread` flag automatically syncs with WhatsApp and downloads
+all media (images, videos, audio, documents, stickers). Other queries read from
+the local database only—run `whatsapp sync` first if you need the latest
+messages, and use `--with-media` to download media.
 
 ### Media Downloads
 
-Use `download` to fetch media from messages:
+Use `download` to fetch media from specific messages:
 
 ```bash
 # Download media from a specific message

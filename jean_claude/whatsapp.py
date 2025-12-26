@@ -379,24 +379,34 @@ def chats(max_results: int, unread: bool):
 @click.option("--chat", "chat_jid", help="Filter to specific chat JID")
 @click.option("-n", "--max-results", default=50, help="Maximum messages to return")
 @click.option("--unread", is_flag=True, help="Show only unread messages")
-def messages(chat_jid: str | None, max_results: int, unread: bool):
+@click.option("--with-media", is_flag=True, help="Auto-download media files")
+def messages(chat_jid: str | None, max_results: int, unread: bool, with_media: bool):
     """List messages from local database.
 
     Shows messages with sender, timestamp, and text content.
     Use --chat to filter to a specific conversation.
-    Use --unread to show only unread messages.
+    Use --unread to show only unread messages (auto-syncs and downloads all media).
+    Use --with-media to download media for non-unread queries.
+
+    Output includes:
+    - reply_to: Context when message is a reply (id, sender, text preview)
+    - reactions: List of emoji reactions with sender info
+    - file: Path to downloaded media (automatic with --unread, or use --with-media)
 
     \b
     Examples:
         jean-claude whatsapp messages -n 20
         jean-claude whatsapp messages --chat "120363277025153496@g.us"
         jean-claude whatsapp messages --unread
+        jean-claude whatsapp messages --chat "..." --with-media
     """
     args = ["messages", f"--max-results={max_results}"]
     if chat_jid:
         args.append(f"--chat={chat_jid}")
     if unread:
         args.append("--unread")
+    if with_media:
+        args.append("--with-media")
 
     result = _run_whatsapp_cli(*args)
     if result:

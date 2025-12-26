@@ -74,6 +74,19 @@ uv run pytest                # Run tests (integration tests excluded by default)
 pre-commit run --all-files   # Run lints
 ```
 
+### WhatsApp (Go)
+
+The WhatsApp CLI is written in Go and lives in `whatsapp/` with its own
+`go.mod`. Build and test separately:
+
+```bash
+cd whatsapp && go build -o /dev/null .   # Verify it compiles
+cd whatsapp && go build -o whatsapp-cli . # Build the binary
+```
+
+The Python wrapper (`jean_claude/whatsapp.py`) auto-compiles the Go binary on
+first use if Go is installed, or downloads a pre-built binary from PyPI.
+
 ## Testing Commands
 
 Commands can be tested directly:

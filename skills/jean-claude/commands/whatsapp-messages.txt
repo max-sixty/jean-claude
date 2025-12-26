@@ -3,16 +3,23 @@ Usage: jean-claude whatsapp messages [OPTIONS]
   List messages from local database.
 
   Shows messages with sender, timestamp, and text content. Use --chat to
-  filter to a specific conversation. Use --unread to show only unread
-  messages.
+  filter to a specific conversation. Use --unread to show only unread messages
+  (auto-syncs and downloads all media). Use --with-media to download media for
+  non-unread queries.
+
+  Output includes: - reply_to: Context when message is a reply (id, sender,
+  text preview) - reactions: List of emoji reactions with sender info - file:
+  Path to downloaded media (automatic with --unread, or use --with-media)
 
   Examples:
       jean-claude whatsapp messages -n 20
       jean-claude whatsapp messages --chat "120363277025153496@g.us"
       jean-claude whatsapp messages --unread
+      jean-claude whatsapp messages --chat "..." --with-media
 
 Options:
   --chat TEXT                Filter to specific chat JID
   -n, --max-results INTEGER  Maximum messages to return
   --unread                   Show only unread messages
+  --with-media               Auto-download media files
   --help                     Show this message and exit.
