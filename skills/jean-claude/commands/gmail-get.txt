@@ -2,8 +2,8 @@ Usage: jean-claude gmail get [OPTIONS] MESSAGE_ID
 
   Get a single message by ID, written to file.
 
-  Fetches the full message content and writes it to .tmp/email-ID.json.
-  Returns the message summary JSON to stdout.
+  Fetches the full message content and writes it to ~/.cache/jean-
+  claude/emails/. Returns the message summary JSON to stdout.
 
   Example:     jean-claude gmail get 19b51f93fcf3f8ca
 

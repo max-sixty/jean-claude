@@ -78,10 +78,10 @@ One canonical input method per command. No auto-detection between formats.
 ### Output: File Indirection for Full Content
 
 Commands return compact JSON to stdout. Full content (email bodies, draft text)
-is written to `.tmp/` files with the path included in the JSON response.
+is written to XDG cache with the path included in the JSON response.
 
 ```json
-{"id": "abc123", "snippet": "First 200 chars...", "file": ".tmp/email-abc123.json"}
+{"id": "abc123", "snippet": "First 200 chars...", "file": "~/.cache/jean-claude/emails/email-abc123.json"}
 ```
 
 **Why files instead of inline content?**
@@ -89,6 +89,30 @@ is written to `.tmp/` files with the path included in the JSON response.
 - **Composability** — Agents can use `cat`, `grep`, `jq` on the files
 - **Context efficiency** — Summaries fit in output; full bodies read on demand
 - **Iteration** — Edit files with standard tools, pipe back to update commands
+- **No project pollution** — Cache files don't clutter working directories
+
+## Storage Layout
+
+XDG Base Directory compliant:
+
+```
+~/.config/jean-claude/           # Config and credentials
+├── token.json                   # Google OAuth token
+├── client_secret.json           # Custom OAuth credentials (optional)
+└── whatsapp/
+    └── session.db               # WhatsApp device/session auth
+
+~/.local/share/jean-claude/      # Persistent user data
+└── whatsapp/
+    ├── messages.db              # Message history
+    └── media/                   # Downloaded media files
+
+~/.cache/jean-claude/            # Re-fetchable content (clearable)
+├── emails/                      # Fetched email bodies
+└── drafts/                      # Draft files for editing
+```
+
+Cache can be cleared without data loss (content is re-fetchable from APIs).
 
 ## Output Policy
 

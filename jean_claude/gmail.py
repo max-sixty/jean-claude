@@ -69,6 +69,7 @@ from googleapiclient.errors import HttpError
 
 from .auth import build_service
 from .logging import JeanClaudeError, get_logger
+from .paths import DRAFT_CACHE_DIR, EMAIL_CACHE_DIR
 
 logger = get_logger(__name__)
 
@@ -422,19 +423,19 @@ def extract_body(payload: dict) -> tuple[str, str | None]:
 def _write_email_json(
     prefix: str, id_: str, summary: dict, body: str, html_body: str | None
 ) -> str:
-    """Write email data to .tmp/ as JSON, return file path.
+    """Write email data to cache as JSON, return file path.
 
     Creates a self-contained JSON file with the full body instead of snippet.
+    Files are written to ~/.cache/jean-claude/emails/ (XDG cache).
     """
-    tmp_dir = Path(".tmp")
-    tmp_dir.mkdir(exist_ok=True)
+    EMAIL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     file_data = {k: v for k, v in summary.items() if k != "snippet"}
     file_data["body"] = body
     if html_body:
         file_data["html_body"] = html_body
 
-    file_path = tmp_dir / f"{prefix}-{id_}.json"
+    file_path = EMAIL_CACHE_DIR / f"{prefix}-{id_}.json"
     file_path.write_text(json.dumps(file_data, indent=2))
     return str(file_path)
 
@@ -442,7 +443,7 @@ def _write_email_json(
 def extract_message_summary(msg: dict) -> dict:
     """Extract essential fields from a message for compact output.
 
-    Writes self-contained JSON to .tmp/ with full body (and html_body when present).
+    Writes self-contained JSON to cache with full body (and html_body when present).
     """
     headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
     result = {
@@ -570,7 +571,7 @@ def search(query: str, max_results: int, page_token: str | None):
 def get(message_id: str):
     """Get a single message by ID, written to file.
 
-    Fetches the full message content and writes it to .tmp/email-ID.json.
+    Fetches the full message content and writes it to ~/.cache/jean-claude/emails/.
     Returns the message summary JSON to stdout.
 
     Example:
@@ -1172,11 +1173,12 @@ def draft_get(draft_id: str):
     """Get a draft as JSON, written to file.
 
     Writes JSON that can be edited and piped directly to 'draft update'.
+    File is written to ~/.cache/jean-claude/drafts/.
 
     Workflow:
-        jean-claude gmail draft get DRAFT_ID      # writes .tmp/draft-DRAFT_ID.json
+        jean-claude gmail draft get DRAFT_ID
         # Edit the body field with Edit tool
-        cat .tmp/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
+        cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
 
     Example:
         jean-claude gmail draft get r-123456789
@@ -1205,9 +1207,8 @@ def draft_get(draft_id: str):
     if bcc := headers.get("bcc"):
         draft_data["bcc"] = bcc
 
-    tmp_dir = Path(".tmp")
-    tmp_dir.mkdir(exist_ok=True)
-    file_path = tmp_dir / f"draft-{draft_id}.json"
+    DRAFT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    file_path = DRAFT_CACHE_DIR / f"draft-{draft_id}.json"
     file_path.write_text(json.dumps(draft_data, indent=2))
 
     click.echo(json.dumps({"id": draft_id, "file": str(file_path)}, indent=2))
@@ -1224,9 +1225,9 @@ def draft_update(draft_id: str):
     JSON fields (all optional): to, cc, bcc, subject, body
 
     Workflow for iterating on long emails:
-        jean-claude gmail draft get DRAFT_ID      # writes .tmp/draft-DRAFT_ID.json
+        jean-claude gmail draft get DRAFT_ID
         # Edit the body field with Edit tool
-        cat .tmp/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
+        cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
 
     Example:
         echo '{"cc": "new@example.com"}' | jean-claude gmail draft update DRAFT_ID

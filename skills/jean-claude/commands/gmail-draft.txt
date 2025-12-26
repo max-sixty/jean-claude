@@ -67,11 +67,12 @@ Usage: jean-claude gmail draft get [OPTIONS] DRAFT_ID
 
   Get a draft as JSON, written to file.
 
-  Writes JSON that can be edited and piped directly to 'draft update'.
+  Writes JSON that can be edited and piped directly to 'draft update'. File is
+  written to ~/.cache/jean-claude/drafts/.
 
-  Workflow:     jean-claude gmail draft get DRAFT_ID      # writes .tmp/draft-
-  DRAFT_ID.json     # Edit the body field with Edit tool     cat .tmp/draft-
-  DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
+  Workflow:     jean-claude gmail draft get DRAFT_ID     # Edit the body field
+  with Edit tool     cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.json |
+  jean-claude gmail draft update DRAFT_ID
 
   Example:     jean-claude gmail draft get r-123456789
 
@@ -155,9 +156,8 @@ Usage: jean-claude gmail draft update [OPTIONS] DRAFT_ID
   JSON fields (all optional): to, cc, bcc, subject, body
 
   Workflow for iterating on long emails:     jean-claude gmail draft get
-  DRAFT_ID      # writes .tmp/draft-DRAFT_ID.json     # Edit the body field
-  with Edit tool     cat .tmp/draft-DRAFT_ID.json | jean-claude gmail draft
-  update DRAFT_ID
+  DRAFT_ID     # Edit the body field with Edit tool     cat ~/.cache/jean-
+  claude/drafts/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
 
   Example:     echo '{"cc": "new@example.com"}' | jean-claude gmail draft
   update DRAFT_ID     echo '{"subject": "New subject", "body": "New body"}' |

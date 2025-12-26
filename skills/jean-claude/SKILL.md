@@ -248,7 +248,7 @@ See "Personalization" section for default behaviors and user skill overrides.
       "date": "Tue, 16 Dec 2025 21:12:21 +0000",
       "snippet": "First ~200 chars of body...",
       "labels": ["INBOX", "UNREAD"],
-      "file": ".tmp/email-19b29039fd36d1c1.json"
+      "file": "~/.cache/jean-claude/emails/email-19b29039fd36d1c1.json"
     }
   ],
   "nextPageToken": "abc123..."
@@ -298,7 +298,7 @@ Common Gmail search operators: `in:inbox`, `is:unread`, `is:starred`, `from:`,
 ### Get a Single Message
 
 ```bash
-# Get message by ID (writes full body to .tmp/email-ID.json)
+# Get message by ID (writes full body to ~/.cache/jean-claude/emails/)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail get MESSAGE_ID
 ```
 
@@ -338,7 +338,7 @@ EOF
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list -n 5
 
-# Get draft as JSON (writes to .tmp/draft-DRAFT_ID.json)
+# Get draft as JSON (writes to ~/.cache/jean-claude/drafts/)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft get DRAFT_ID
 
 # Update a draft (preserves threading, only updates fields provided)
@@ -357,10 +357,9 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft delete DRAFT_ID
 with the user without rewriting the full email each time:
 
 1. Create initial draft: `jean-claude gmail draft create`
-2. Get draft as JSON: `jean-claude gmail draft get DRAFT_ID` (writes to
-   `.tmp/draft-DRAFT_ID.json`)
-3. Use Edit tool to modify the `body` field in `.tmp/draft-DRAFT_ID.json`
-4. Update draft: `cat .tmp/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID`
+2. Get draft as JSON: `jean-claude gmail draft get DRAFT_ID` (writes to cache)
+3. Use Edit tool to modify the `body` field in `~/.cache/jean-claude/drafts/draft-DRAFT_ID.json`
+4. Update draft: `cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID`
 5. Show user, get feedback, repeat steps 3-4 until approved
 
 ### Manage Threads and Messages
@@ -408,7 +407,7 @@ in the HTML, not the plain text.
 
 ```bash
 # Search HTML body for unsubscribe links
-jq -r '.html_body' .tmp/email-MESSAGE_ID.json | grep -oE 'https?://[^"<>]+unsubscribe[^"<>]*'
+jq -r '.html_body' ~/.cache/jean-claude/emails/email-MESSAGE_ID.json | grep -oE 'https?://[^"<>]+unsubscribe[^"<>]*'
 ```
 
 **Decoding tracking URLs:** Newsletters often wrap links in tracking redirects.

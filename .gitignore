@@ -7,7 +7,6 @@ venv/
 .pytest_cache/
 
 # Temporary files
-.tmp/
 *.tmp
 
 # IDE

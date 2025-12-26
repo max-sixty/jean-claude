@@ -7,5 +7,5 @@ They are skipped by default and must be run explicitly:
 
 Before running:
 1. Ensure you have valid credentials: jean-claude status
-2. Run from project root (tests create .tmp/ files)
+2. Cache files are written to ~/.cache/jean-claude/
 """

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -11,13 +10,9 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 from .logging import LoggingHttp, get_logger
+from .paths import CLIENT_SECRET_FILE, CONFIG_DIR, TOKEN_FILE
 
 logger = get_logger(__name__)
-
-# Store credentials in user's home directory
-CONFIG_DIR = Path.home() / ".config" / "jean-claude"
-CLIENT_SECRET_FILE = CONFIG_DIR / "client_secret.json"
-TOKEN_FILE = CONFIG_DIR / "token.json"
 
 # Embedded OAuth credentials for public distribution.
 # These are inherently non-secret for desktop/CLI apps per Google's OAuth model.

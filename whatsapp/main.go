@@ -32,20 +32,24 @@ import (
 )
 
 var (
-	dataDir    string
-	client     *whatsmeow.Client
-	messageDB  *sql.DB
-	logger     waLog.Logger
+	// XDG-compliant directory layout:
+	// - configDir: ~/.config/jean-claude/whatsapp/ (auth/session state)
+	// - dataDir: ~/.local/share/jean-claude/whatsapp/ (user data: messages, media)
+	configDir string
+	dataDir   string
+	client    *whatsmeow.Client
+	messageDB *sql.DB
+	logger    waLog.Logger
 )
 
 func init() {
-	// Store in same location as other jean-claude credentials
 	home, err := os.UserHomeDir()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Fatal: failed to get home directory: %v\n", err)
 		os.Exit(1)
 	}
-	dataDir = filepath.Join(home, ".config", "jean-claude", "whatsapp")
+	configDir = filepath.Join(home, ".config", "jean-claude", "whatsapp")
+	dataDir = filepath.Join(home, ".local", "share", "jean-claude", "whatsapp")
 }
 
 func main() {
@@ -151,11 +155,25 @@ Options:
 
 // Initialize WhatsApp client
 func initClient(ctx context.Context) error {
-	if err := os.MkdirAll(dataDir, 0700); err != nil {
-		return fmt.Errorf("failed to create data directory: %w", err)
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	dbPath := filepath.Join(dataDir, "whatsapp.db")
+	// Migration: rename old whatsapp.db to session.db if needed
+	oldSessionPath := filepath.Join(configDir, "whatsapp.db")
+	newSessionPath := filepath.Join(configDir, "session.db")
+	if _, err := os.Stat(oldSessionPath); err == nil {
+		if _, err := os.Stat(newSessionPath); os.IsNotExist(err) {
+			if err := os.Rename(oldSessionPath, newSessionPath); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to migrate session database: %v\n", err)
+			} else {
+				fmt.Fprintln(os.Stderr, "Migrated session database to new location")
+			}
+		}
+	}
+
+	// Session/device state goes in config (auth credential)
+	dbPath := newSessionPath
 	container, err := sqlstore.New(ctx, "sqlite", "file:"+dbPath+"?_pragma=foreign_keys(1)", logger)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
@@ -176,9 +194,26 @@ func initClient(ctx context.Context) error {
 
 // Initialize message database
 func initMessageDB() error {
-	dbPath := filepath.Join(dataDir, "messages.db")
+	// Messages are user data, stored in XDG data directory
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	// Migration: move messages.db from config to data directory if needed
+	oldMsgPath := filepath.Join(configDir, "messages.db")
+	newMsgPath := filepath.Join(dataDir, "messages.db")
+	if _, err := os.Stat(oldMsgPath); err == nil {
+		if _, err := os.Stat(newMsgPath); os.IsNotExist(err) {
+			if err := os.Rename(oldMsgPath, newMsgPath); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to migrate messages database: %v\n", err)
+			} else {
+				fmt.Fprintln(os.Stderr, "Migrated messages database to new location")
+			}
+		}
+	}
+
 	var err error
-	messageDB, err = sql.Open("sqlite", dbPath)
+	messageDB, err = sql.Open("sqlite", newMsgPath)
 	if err != nil {
 		return fmt.Errorf("failed to open message database: %w", err)
 	}
@@ -356,7 +391,7 @@ func cmdAuth() error {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 
-	qrFile := filepath.Join(dataDir, "qr.png")
+	qrFile := filepath.Join(configDir, "qr.png")
 
 	for evt := range qrChan {
 		switch evt.Event {
@@ -1655,6 +1690,7 @@ func cmdStatus() error {
 
 	status := map[string]any{
 		"authenticated": client.Store.ID != nil,
+		"config_dir":    configDir,
 		"data_dir":      dataDir,
 	}
 
