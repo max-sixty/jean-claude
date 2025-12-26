@@ -1,8 +1,9 @@
 Usage: j-claude gdrive list [OPTIONS]
 
-  List files in a folder. Returns JSON array.
+  List files in a folder. Returns JSON with files and optional nextPageToken.
 
 Options:
   --folder TEXT              Folder ID to list (default: root)
-  -n, --max-results INTEGER  Maximum results
+  -n, --max-results INTEGER  Maximum results per page
+  --page-token TEXT          Token for next page of results
   --help                     Show this message and exit.

@@ -221,8 +221,6 @@ def _batch_modify_labels(
 
     # batchModify supports up to 1000 messages per call
     chunk_size = 1000
-    max_retries = 3
-    processed_count = 0
 
     for i in range(0, len(message_ids), chunk_size):
         chunk = message_ids[i : i + chunk_size]
@@ -232,65 +230,16 @@ def _batch_modify_labels(
         if remove_label_ids:
             body["removeLabelIds"] = remove_label_ids
 
-        # Retry loop with exponential backoff for rate limits
-        for attempt in range(max_retries + 1):
-            try:
-                service.users().messages().batchModify(userId="me", body=body).execute()
-                processed_count += len(chunk)
-                logger.debug(
-                    f"Processed {processed_count}/{len(message_ids)} messages",
-                    chunk_size=len(chunk),
-                )
-                break  # Success - exit retry loop
-            except HttpError as e:
-                if e.resp.status == 429:
-                    if attempt < max_retries:
-                        delay = 2 ** (attempt + 1)  # 2s, 4s, 8s
-                        logger.warning(
-                            f"Rate limited, retrying in {delay}s",
-                            attempt=attempt + 1,
-                            max_retries=max_retries,
-                            delay=delay,
-                        )
-                        time.sleep(delay)
-                        continue
-                    # Exhausted retries
-                    remaining = message_ids[i:]
-                    raise JeanClaudeError(
-                        f"Gmail API rate limit exceeded after {max_retries} retries.\n\n"
-                        f"Progress: Successfully processed {processed_count} of {len(message_ids)} messages.\n"
-                        f"Remaining: {len(remaining)} messages still need processing.\n\n"
-                        f"Action required:\n"
-                        f"1. Wait 30-60 seconds for rate limit to reset\n"
-                        f"2. Retry with the remaining {len(remaining)} message IDs:\n"
-                        f"   {' '.join(remaining[:10])}{'...' if len(remaining) > 10 else ''}\n\n"
-                        f"Note: Using batchModify (50 units per 1000 messages). "
-                        f"See module docstring (help jean_claude.gmail) for details."
-                    )
-                elif e.resp.status == 404:
-                    raise JeanClaudeError(
-                        f"One or more message IDs not found.\n\n"
-                        f"Progress: Successfully processed {processed_count} of {len(message_ids)} messages.\n"
-                        f"Failed batch: {' '.join(chunk[:10])}{'...' if len(chunk) > 10 else ''}\n\n"
-                        f"Possible causes:\n"
-                        f"- Message(s) were deleted\n"
-                        f"- Invalid message ID format\n"
-                        f"- Message belongs to a different account\n\n"
-                        f"Action required: Verify the message IDs and retry with valid IDs only."
-                    )
-                elif e.resp.status in (401, 403):
-                    raise JeanClaudeError(
-                        f"Gmail API authentication failed (HTTP {e.resp.status}).\n\n"
-                        f"Possible causes:\n"
-                        f"- Credentials expired or revoked\n"
-                        f"- Insufficient permissions for this operation\n"
-                        f"- API not enabled in Google Cloud project\n\n"
-                        f"Action required:\n"
-                        f"1. Check authentication: jean-claude status\n"
-                        f"2. Re-authenticate if needed: jean-claude auth\n"
-                        f"3. Verify required scopes are granted"
-                    )
-                raise
+        _retry_on_rate_limit(
+            lambda b=body: service.users()
+            .messages()
+            .batchModify(userId="me", body=b)
+            .execute()
+        )
+        logger.debug(
+            f"Processed {i + len(chunk)}/{len(message_ids)} messages",
+            chunk_size=len(chunk),
+        )
 
         # Add small delay between 1000-message chunks (only needed for 1000+ messages)
         if i + chunk_size < len(message_ids):
@@ -337,6 +286,32 @@ def _modify_thread_labels(
             .execute()
         )
         logger.debug(f"Modified thread {thread_id}")
+
+
+def _batch_fetch(
+    service, items: list[dict], build_request, chunk_size: int = 15
+) -> dict:
+    """Batch fetch full details for a list of items.
+
+    Args:
+        service: Gmail API service instance
+        items: List of dicts with 'id' keys (from list API response)
+        build_request: Callable(service, item_id) -> request object
+        chunk_size: Items per batch (15 for messages, 10 for threads)
+
+    Returns:
+        Dict mapping item ID to full response
+    """
+    responses = {}
+    for i in range(0, len(items), chunk_size):
+        chunk = items[i : i + chunk_size]
+        batch = service.new_batch_http_request(callback=_batch_callback(responses))
+        for item in chunk:
+            batch.add(build_request(service, item["id"]), request_id=item["id"])
+        batch.execute()
+        if i + chunk_size < len(items):
+            time.sleep(0.3)
+    return responses
 
 
 def _strip_html(html: str) -> str:
@@ -631,26 +606,13 @@ def _search_messages(query: str, max_results: int, page_token: str | None = None
         click.echo(json.dumps(output, indent=2))
         return
 
-    # Batch fetch messages in chunks to avoid rate limits
-    # messages.get costs 5 quota units per operation
-    # Strategy: 15 messages/chunk × 5 units = 75 units/chunk
-    # With 0.3s delay: ~250 units/second (100% of limit, acceptable for search)
-    # See module docstring for detailed analysis
-    responses = {}
-    chunk_size = 15
-
-    for i in range(0, len(messages), chunk_size):
-        chunk = messages[i : i + chunk_size]
-        batch = service.new_batch_http_request(callback=_batch_callback(responses))
-        for m in chunk:
-            batch.add(
-                service.users().messages().get(userId="me", id=m["id"], format="full"),
-                request_id=m["id"],
-            )
-        batch.execute()
-        if i + chunk_size < len(messages):
-            time.sleep(0.3)
-
+    # Batch fetch messages (15/chunk × 5 units = 75 units, 0.3s delay)
+    responses = _batch_fetch(
+        service,
+        messages,
+        lambda svc, mid: svc.users().messages().get(userId="me", id=mid, format="full"),
+        chunk_size=15,
+    )
     detailed = [
         extract_message_summary(responses[m["id"]])
         for m in messages
@@ -686,22 +648,13 @@ def _search_threads(query: str, max_results: int, page_token: str | None = None)
         click.echo(json.dumps(output, indent=2))
         return
 
-    # Fetch full thread details
-    responses = {}
-    chunk_size = 10  # threads.get is heavier than messages.get
-
-    for i in range(0, len(threads), chunk_size):
-        chunk = threads[i : i + chunk_size]
-        batch = service.new_batch_http_request(callback=_batch_callback(responses))
-        for t in chunk:
-            batch.add(
-                service.users().threads().get(userId="me", id=t["id"], format="full"),
-                request_id=t["id"],
-            )
-        batch.execute()
-        if i + chunk_size < len(threads):
-            time.sleep(0.3)
-
+    # Batch fetch threads (10/chunk - threads.get is heavier than messages.get)
+    responses = _batch_fetch(
+        service,
+        threads,
+        lambda svc, tid: svc.users().threads().get(userId="me", id=tid, format="full"),
+        chunk_size=10,
+    )
     detailed = [
         extract_thread_summary(responses[t["id"]])
         for t in threads
@@ -1265,7 +1218,8 @@ def draft_update(draft_id: str):
 
     # Build new message
     msg = MIMEText(headers.get("body", ""))
-    msg["from"] = get_my_from_address(service)
+    # Preserve original From header unless explicitly updated
+    msg["from"] = headers.get("from") or get_my_from_address(service)
     for field in ["to", "cc", "bcc", "subject"]:
         if value := headers.get(field):
             msg[field] = value

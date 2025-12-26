@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"mime"
@@ -102,6 +103,8 @@ func main() {
 		err = cmdRefresh()
 	case "mark-read":
 		err = cmdMarkRead(args)
+	case "download":
+		err = cmdDownload(args)
 	case "status":
 		err = cmdStatus()
 	case "logout":
@@ -138,6 +141,7 @@ Commands:
   participants  List group participants: participants <group-jid>
   refresh       Fetch chat/group names from WhatsApp
   mark-read     Mark messages in a chat as read: mark-read <chat-jid>
+  download      Download media from a message: download <message-id> [--output path]
   status        Show connection status
   logout        Log out and clear credentials
 
@@ -271,6 +275,26 @@ func initMessageDB() error {
 	if !hasColumn(messageDB, "chats", "marked_as_unread") {
 		if _, err = messageDB.Exec(`ALTER TABLE chats ADD COLUMN marked_as_unread INTEGER NOT NULL DEFAULT 0`); err != nil {
 			return fmt.Errorf("failed to add marked_as_unread column: %w", err)
+		}
+	}
+
+	// Migration: add media metadata columns to messages if they don't exist
+	mediaColumns := []string{
+		"mime_type_full TEXT",       // Full MIME type (e.g., image/jpeg)
+		"media_key BLOB",            // Decryption key
+		"file_sha256 BLOB",          // SHA256 hash of decrypted file
+		"file_enc_sha256 BLOB",      // SHA256 hash of encrypted file
+		"file_length INTEGER",       // File size in bytes
+		"direct_path TEXT",          // WhatsApp CDN path
+		"media_url TEXT",            // Full download URL
+		"media_file_path TEXT",      // Local file path after download
+	}
+	for _, colDef := range mediaColumns {
+		colName := strings.Split(colDef, " ")[0]
+		if !hasColumn(messageDB, "messages", colName) {
+			if _, err = messageDB.Exec("ALTER TABLE messages ADD COLUMN " + colDef); err != nil {
+				return fmt.Errorf("failed to add %s column: %w", colName, err)
+			}
 		}
 	}
 
@@ -890,7 +914,8 @@ func cmdMessages(args []string) error {
 		CASE
 			WHEN c.is_group = 1 THEN COALESCE(NULLIF(c.name, ''), '')
 			ELSE COALESCE(NULLIF(c.name, ''), ct.name, ct.push_name, '')
-		END as chat_name
+		END as chat_name,
+		m.mime_type_full, m.file_length, m.media_file_path
 		FROM messages m
 		LEFT JOIN chats c ON m.chat_jid = c.jid
 		LEFT JOIN contacts ct ON m.chat_jid = ct.jid`
@@ -920,11 +945,12 @@ func cmdMessages(args []string) error {
 	var messages []map[string]any
 	for rows.Next() {
 		var id, chatJID, senderJID string
-		var senderName, text, mediaType, chatName sql.NullString
+		var senderName, text, mediaType, chatName, mimeType, mediaFilePath sql.NullString
 		var timestamp int64
 		var isFromMe, isRead int
+		var fileLength sql.NullInt64
 
-		if err := rows.Scan(&id, &chatJID, &senderJID, &senderName, &timestamp, &text, &mediaType, &isFromMe, &isRead, &chatName); err != nil {
+		if err := rows.Scan(&id, &chatJID, &senderJID, &senderName, &timestamp, &text, &mediaType, &isFromMe, &isRead, &chatName, &mimeType, &fileLength, &mediaFilePath); err != nil {
 			return fmt.Errorf("failed to scan row: %w", err)
 		}
 
@@ -945,8 +971,17 @@ func cmdMessages(args []string) error {
 		if text.Valid {
 			msg["text"] = text.String
 		}
-		if mediaType.Valid {
+		if mediaType.Valid && mediaType.String != "" {
 			msg["media_type"] = mediaType.String
+		}
+		if mimeType.Valid && mimeType.String != "" {
+			msg["mime_type_full"] = mimeType.String
+		}
+		if fileLength.Valid {
+			msg["file_length"] = fileLength.Int64
+		}
+		if mediaFilePath.Valid && mediaFilePath.String != "" {
+			msg["media_file_path"] = mediaFilePath.String
 		}
 		messages = append(messages, msg)
 	}
@@ -1420,6 +1455,197 @@ func cmdMarkRead(args []string) error {
 	return printJSON(output)
 }
 
+// cmdDownload downloads media from a message
+func cmdDownload(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: download <message-id> [--output path]")
+	}
+
+	messageID := args[0]
+	var outputPath string
+	for i := 1; i < len(args); i++ {
+		if strings.HasPrefix(args[i], "--output=") {
+			outputPath = strings.TrimPrefix(args[i], "--output=")
+		} else if args[i] == "--output" && i+1 < len(args) {
+			outputPath = args[i+1]
+			i++
+		}
+	}
+
+	if err := initMessageDB(); err != nil {
+		return err
+	}
+
+	// Look up message to get media metadata
+	var mediaType, mimeType, directPath sql.NullString
+	var mediaKey, fileSHA256, fileEncSHA256 []byte
+	var fileLength sql.NullInt64
+	var existingPath sql.NullString
+
+	err := messageDB.QueryRow(`
+		SELECT media_type, mime_type_full, media_key, file_sha256, file_enc_sha256, file_length, direct_path, media_file_path
+		FROM messages WHERE id = ?
+	`, messageID).Scan(&mediaType, &mimeType, &mediaKey, &fileSHA256, &fileEncSHA256, &fileLength, &directPath, &existingPath)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("message not found: %s", messageID)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to query message: %w", err)
+	}
+
+	// Check if this is a media message
+	if !mediaType.Valid || mediaType.String == "" {
+		return fmt.Errorf("message has no media")
+	}
+	if len(mediaKey) == 0 {
+		return fmt.Errorf("message has no download metadata (media_key missing)")
+	}
+
+	// Check if already downloaded
+	if existingPath.Valid && existingPath.String != "" {
+		// Verify file still exists
+		if _, err := os.Stat(existingPath.String); err == nil {
+			output := map[string]any{
+				"success":    true,
+				"message_id": messageID,
+				"file":       existingPath.String,
+				"cached":     true,
+			}
+			return printJSON(output)
+		}
+	}
+
+	// Determine output path if not specified
+	if outputPath == "" {
+		// Use XDG data dir: ~/.local/share/jean-claude/whatsapp/media/
+		home, _ := os.UserHomeDir()
+		mediaDir := filepath.Join(home, ".local", "share", "jean-claude", "whatsapp", "media")
+		if err := os.MkdirAll(mediaDir, 0755); err != nil {
+			return fmt.Errorf("failed to create media directory: %w", err)
+		}
+
+		// Use file hash as filename to deduplicate
+		ext := getExtensionFromMime(mimeType.String)
+		filename := hex.EncodeToString(fileSHA256) + ext
+		outputPath = filepath.Join(mediaDir, filename)
+
+		// Check if file already exists (downloaded via another message with same content)
+		if _, err := os.Stat(outputPath); err == nil {
+			// Update message with existing file path
+			_, _ = messageDB.Exec(`UPDATE messages SET media_file_path = ? WHERE id = ?`, outputPath, messageID)
+			output := map[string]any{
+				"success":    true,
+				"message_id": messageID,
+				"file":       outputPath,
+				"cached":     true,
+			}
+			return printJSON(output)
+		}
+	}
+
+	// Need to connect to WhatsApp to download
+	ctx := context.Background()
+	if err := initClient(ctx); err != nil {
+		return err
+	}
+
+	if client.Store.ID == nil {
+		return fmt.Errorf("not authenticated. Run 'auth' first")
+	}
+
+	if err := client.Connect(); err != nil {
+		return fmt.Errorf("failed to connect: %w", err)
+	}
+	defer client.Disconnect()
+
+	// Wait for connection
+	time.Sleep(2 * time.Second)
+
+	// Download using whatsmeow
+	waMediaType, mmsType := mediaTypeToWA(mediaType.String)
+	data, err := client.DownloadMediaWithPath(
+		ctx,
+		directPath.String,
+		fileEncSHA256,
+		fileSHA256,
+		mediaKey,
+		int(fileLength.Int64),
+		waMediaType,
+		mmsType,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to download media: %w", err)
+	}
+
+	// Write to file
+	if err := os.WriteFile(outputPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	// Update message with file path
+	_, _ = messageDB.Exec(`UPDATE messages SET media_file_path = ? WHERE id = ?`, outputPath, messageID)
+
+	output := map[string]any{
+		"success":    true,
+		"message_id": messageID,
+		"file":       outputPath,
+		"size":       len(data),
+		"cached":     false,
+	}
+	return printJSON(output)
+}
+
+// getExtensionFromMime returns a file extension for a MIME type
+func getExtensionFromMime(mimeType string) string {
+	switch mimeType {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	case "video/mp4":
+		return ".mp4"
+	case "audio/ogg", "audio/ogg; codecs=opus":
+		return ".ogg"
+	case "audio/mpeg":
+		return ".mp3"
+	case "application/pdf":
+		return ".pdf"
+	default:
+		if strings.HasPrefix(mimeType, "image/") {
+			return ".bin"
+		}
+		if strings.HasPrefix(mimeType, "video/") {
+			return ".mp4"
+		}
+		if strings.HasPrefix(mimeType, "audio/") {
+			return ".ogg"
+		}
+		return ".bin"
+	}
+}
+
+// mediaTypeToWA converts our media type string to whatsmeow MediaType and mmsType
+func mediaTypeToWA(mediaType string) (whatsmeow.MediaType, string) {
+	switch mediaType {
+	case "image":
+		return whatsmeow.MediaImage, "image"
+	case "video":
+		return whatsmeow.MediaVideo, "video"
+	case "audio":
+		return whatsmeow.MediaAudio, "audio"
+	case "document":
+		return whatsmeow.MediaDocument, "document"
+	case "sticker":
+		return whatsmeow.MediaImage, "image" // Stickers use image type
+	default:
+		return whatsmeow.MediaImage, "image"
+	}
+}
+
 // cmdStatus shows connection status
 func cmdStatus() error {
 	ctx := context.Background()
@@ -1607,19 +1833,47 @@ func getQuotedContext(messageID, chatJID string) (*waProto.ContextInfo, error) {
 
 func saveMessage(evt *events.Message) error {
 	info := evt.Info
-	text, mediaType := extractMessageContent(evt.Message)
+	content := extractMessageContentFull(evt.Message)
 
 	// New messages from others are unread; messages from self are read
 	// UPSERT: insert new messages, preserve read status if already marked read (MAX prevents read→unread)
 	isRead := boolToInt(info.IsFromMe)
+
+	// Prepare media metadata for storage
+	var mimeType, directPath, mediaURL sql.NullString
+	var mediaKey, fileSHA256, fileEncSHA256 []byte
+	var fileLength sql.NullInt64
+
+	if content.Media != nil {
+		mimeType = sql.NullString{String: content.Media.MimeType, Valid: content.Media.MimeType != ""}
+		directPath = sql.NullString{String: content.Media.DirectPath, Valid: content.Media.DirectPath != ""}
+		mediaURL = sql.NullString{String: content.Media.URL, Valid: content.Media.URL != ""}
+		mediaKey = content.Media.MediaKey
+		fileSHA256 = content.Media.FileSHA256
+		fileEncSHA256 = content.Media.FileEncSHA256
+		if content.Media.FileLength > 0 {
+			fileLength = sql.NullInt64{Int64: content.Media.FileLength, Valid: true}
+		}
+	}
+
 	_, err := messageDB.Exec(`
-		INSERT INTO messages (id, chat_jid, sender_jid, sender_name, timestamp, text, media_type, is_from_me, is_read, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO messages (id, chat_jid, sender_jid, sender_name, timestamp, text, media_type, is_from_me, is_read, created_at,
+			mime_type_full, media_key, file_sha256, file_enc_sha256, file_length, direct_path, media_url)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			text = excluded.text,
 			media_type = excluded.media_type,
-			is_read = MAX(messages.is_read, excluded.is_read)
-	`, info.ID, info.Chat.String(), info.Sender.String(), info.PushName, info.Timestamp.Unix(), text, mediaType, boolToInt(info.IsFromMe), isRead, time.Now().Unix())
+			is_read = MAX(messages.is_read, excluded.is_read),
+			mime_type_full = COALESCE(excluded.mime_type_full, messages.mime_type_full),
+			media_key = COALESCE(excluded.media_key, messages.media_key),
+			file_sha256 = COALESCE(excluded.file_sha256, messages.file_sha256),
+			file_enc_sha256 = COALESCE(excluded.file_enc_sha256, messages.file_enc_sha256),
+			file_length = COALESCE(excluded.file_length, messages.file_length),
+			direct_path = COALESCE(excluded.direct_path, messages.direct_path),
+			media_url = COALESCE(excluded.media_url, messages.media_url)
+	`, info.ID, info.Chat.String(), info.Sender.String(), info.PushName, info.Timestamp.Unix(),
+		content.Text, content.MediaType, boolToInt(info.IsFromMe), isRead, time.Now().Unix(),
+		mimeType, mediaKey, fileSHA256, fileEncSHA256, fileLength, directPath, mediaURL)
 
 	if err == nil {
 		// Update chat timestamp (best-effort, don't fail message save)
@@ -1642,7 +1896,7 @@ func saveHistoryMessageWithReadStatus(chatJID string, msg *waWeb.WebMessageInfo,
 		return nil
 	}
 
-	text, mediaType := extractMessageContent(msg.GetMessage())
+	content := extractMessageContentFull(msg.GetMessage())
 
 	timestamp := int64(msg.GetMessageTimestamp())
 	if timestamp == 0 {
@@ -1660,14 +1914,41 @@ func saveHistoryMessageWithReadStatus(chatJID string, msg *waWeb.WebMessageInfo,
 		_ = saveContact(sender, "", pushName)
 	}
 
+	// Prepare media metadata for storage
+	var mimeType, directPath, mediaURL sql.NullString
+	var mediaKey, fileSHA256, fileEncSHA256 []byte
+	var fileLength sql.NullInt64
+
+	if content.Media != nil {
+		mimeType = sql.NullString{String: content.Media.MimeType, Valid: content.Media.MimeType != ""}
+		directPath = sql.NullString{String: content.Media.DirectPath, Valid: content.Media.DirectPath != ""}
+		mediaURL = sql.NullString{String: content.Media.URL, Valid: content.Media.URL != ""}
+		mediaKey = content.Media.MediaKey
+		fileSHA256 = content.Media.FileSHA256
+		fileEncSHA256 = content.Media.FileEncSHA256
+		if content.Media.FileLength > 0 {
+			fileLength = sql.NullInt64{Int64: content.Media.FileLength, Valid: true}
+		}
+	}
+
 	// UPSERT pattern: insert new messages, update existing ones only to mark as read (never unread).
 	// MAX(is_read, excluded.is_read) ensures read status only moves unread→read, never back.
 	_, err := messageDB.Exec(`
-		INSERT INTO messages (id, chat_jid, sender_jid, sender_name, timestamp, text, media_type, is_from_me, is_read, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO messages (id, chat_jid, sender_jid, sender_name, timestamp, text, media_type, is_from_me, is_read, created_at,
+			mime_type_full, media_key, file_sha256, file_enc_sha256, file_length, direct_path, media_url)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
-			is_read = MAX(messages.is_read, excluded.is_read)
-	`, key.GetID(), chatJID, sender, msg.GetPushName(), timestamp, text, mediaType, boolToInt(key.GetFromMe()), boolToInt(isRead), time.Now().Unix())
+			is_read = MAX(messages.is_read, excluded.is_read),
+			mime_type_full = COALESCE(excluded.mime_type_full, messages.mime_type_full),
+			media_key = COALESCE(excluded.media_key, messages.media_key),
+			file_sha256 = COALESCE(excluded.file_sha256, messages.file_sha256),
+			file_enc_sha256 = COALESCE(excluded.file_enc_sha256, messages.file_enc_sha256),
+			file_length = COALESCE(excluded.file_length, messages.file_length),
+			direct_path = COALESCE(excluded.direct_path, messages.direct_path),
+			media_url = COALESCE(excluded.media_url, messages.media_url)
+	`, key.GetID(), chatJID, sender, msg.GetPushName(), timestamp,
+		content.Text, content.MediaType, boolToInt(key.GetFromMe()), boolToInt(isRead), time.Now().Unix(),
+		mimeType, mediaKey, fileSHA256, fileEncSHA256, fileLength, directPath, mediaURL)
 
 	return err
 }
@@ -1700,42 +1981,126 @@ func markMessageRead(msgID string) error {
 	return err
 }
 
+// MediaMetadata holds media information extracted from a WhatsApp message.
+// Used for storing download info and later retrieval.
+type MediaMetadata struct {
+	MediaType    string // image, video, audio, document, sticker, contact, location
+	MimeType     string // Full MIME type (e.g., image/jpeg)
+	MediaKey     []byte // Decryption key
+	FileSHA256   []byte // SHA256 hash of decrypted file
+	FileEncSHA256 []byte // SHA256 hash of encrypted file
+	FileLength   int64  // File size in bytes
+	DirectPath   string // WhatsApp CDN path
+	URL          string // Full download URL
+}
+
 // extractMessageContent extracts text and media type from a WhatsApp message.
 func extractMessageContent(m *waE2E.Message) (text, mediaType string) {
+	meta := extractMessageContentFull(m)
+	return meta.Text, meta.MediaType
+}
+
+// MessageContent holds full message content including media metadata.
+type MessageContent struct {
+	Text      string
+	MediaType string
+	Media     *MediaMetadata
+}
+
+// extractMessageContentFull extracts text and full media metadata from a WhatsApp message.
+func extractMessageContentFull(m *waE2E.Message) MessageContent {
 	if m == nil {
-		return "", ""
+		return MessageContent{}
 	}
+
+	var content MessageContent
+
 	switch {
 	case m.GetConversation() != "":
-		text = m.GetConversation()
+		content.Text = m.GetConversation()
 	case m.GetExtendedTextMessage() != nil:
-		text = m.GetExtendedTextMessage().GetText()
+		content.Text = m.GetExtendedTextMessage().GetText()
 	case m.GetImageMessage() != nil:
-		mediaType = "image"
-		text = m.GetImageMessage().GetCaption()
+		img := m.GetImageMessage()
+		content.MediaType = "image"
+		content.Text = img.GetCaption()
+		content.Media = &MediaMetadata{
+			MediaType:     "image",
+			MimeType:      img.GetMimetype(),
+			MediaKey:      img.GetMediaKey(),
+			FileSHA256:    img.GetFileSHA256(),
+			FileEncSHA256: img.GetFileEncSHA256(),
+			FileLength:    int64(img.GetFileLength()),
+			DirectPath:    img.GetDirectPath(),
+			URL:           img.GetURL(),
+		}
 	case m.GetVideoMessage() != nil:
-		mediaType = "video"
-		text = m.GetVideoMessage().GetCaption()
+		vid := m.GetVideoMessage()
+		content.MediaType = "video"
+		content.Text = vid.GetCaption()
+		content.Media = &MediaMetadata{
+			MediaType:     "video",
+			MimeType:      vid.GetMimetype(),
+			MediaKey:      vid.GetMediaKey(),
+			FileSHA256:    vid.GetFileSHA256(),
+			FileEncSHA256: vid.GetFileEncSHA256(),
+			FileLength:    int64(vid.GetFileLength()),
+			DirectPath:    vid.GetDirectPath(),
+			URL:           vid.GetURL(),
+		}
 	case m.GetAudioMessage() != nil:
-		mediaType = "audio"
+		aud := m.GetAudioMessage()
+		content.MediaType = "audio"
+		content.Media = &MediaMetadata{
+			MediaType:     "audio",
+			MimeType:      aud.GetMimetype(),
+			MediaKey:      aud.GetMediaKey(),
+			FileSHA256:    aud.GetFileSHA256(),
+			FileEncSHA256: aud.GetFileEncSHA256(),
+			FileLength:    int64(aud.GetFileLength()),
+			DirectPath:    aud.GetDirectPath(),
+			URL:           aud.GetURL(),
+		}
 	case m.GetDocumentMessage() != nil:
-		mediaType = "document"
-		text = m.GetDocumentMessage().GetCaption()
+		doc := m.GetDocumentMessage()
+		content.MediaType = "document"
+		content.Text = doc.GetCaption()
+		content.Media = &MediaMetadata{
+			MediaType:     "document",
+			MimeType:      doc.GetMimetype(),
+			MediaKey:      doc.GetMediaKey(),
+			FileSHA256:    doc.GetFileSHA256(),
+			FileEncSHA256: doc.GetFileEncSHA256(),
+			FileLength:    int64(doc.GetFileLength()),
+			DirectPath:    doc.GetDirectPath(),
+			URL:           doc.GetURL(),
+		}
 	case m.GetStickerMessage() != nil:
-		mediaType = "sticker"
+		stk := m.GetStickerMessage()
+		content.MediaType = "sticker"
+		content.Media = &MediaMetadata{
+			MediaType:     "sticker",
+			MimeType:      stk.GetMimetype(),
+			MediaKey:      stk.GetMediaKey(),
+			FileSHA256:    stk.GetFileSHA256(),
+			FileEncSHA256: stk.GetFileEncSHA256(),
+			FileLength:    int64(stk.GetFileLength()),
+			DirectPath:    stk.GetDirectPath(),
+			URL:           stk.GetURL(),
+		}
 	case m.GetContactMessage() != nil:
-		mediaType = "contact"
-		text = m.GetContactMessage().GetDisplayName()
+		content.MediaType = "contact"
+		content.Text = m.GetContactMessage().GetDisplayName()
 	case m.GetLocationMessage() != nil:
-		mediaType = "location"
+		content.MediaType = "location"
 		loc := m.GetLocationMessage()
 		if loc.GetName() != "" {
-			text = loc.GetName()
+			content.Text = loc.GetName()
 		} else if loc.GetAddress() != "" {
-			text = loc.GetAddress()
+			content.Text = loc.GetAddress()
 		}
 	}
-	return text, mediaType
+	return content
 }
 
 func boolToInt(b bool) int {

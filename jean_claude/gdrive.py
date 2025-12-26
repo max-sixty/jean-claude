@@ -27,32 +27,36 @@ def cli():
 
 @cli.command("list")
 @click.option("--folder", help="Folder ID to list (default: root)")
-@click.option("-n", "--max-results", default=20, help="Maximum results")
-def list_files(folder: str | None, max_results: int):
-    """List files in a folder. Returns JSON array."""
+@click.option("-n", "--max-results", default=20, help="Maximum results per page")
+@click.option("--page-token", help="Token for next page of results")
+def list_files(folder: str | None, max_results: int, page_token: str):
+    """List files in a folder. Returns JSON with files and optional nextPageToken."""
     parent = folder or "root"
     query = f"'{parent}' in parents and trashed = false"
 
-    result = (
-        get_drive()
-        .files()
-        .list(
-            q=query,
-            pageSize=max_results,
-            fields="files(id, name, mimeType, size, modifiedTime, webViewLink)",
-            orderBy="folder, name",
-        )
-        .execute()
-    )
+    list_kwargs = {
+        "q": query,
+        "pageSize": max_results,
+        "fields": "nextPageToken, files(id, name, mimeType, size, modifiedTime, webViewLink)",
+        "orderBy": "folder, name",
+    }
+    if page_token:
+        list_kwargs["pageToken"] = page_token
 
-    click.echo(json.dumps(result.get("files", []), indent=2))
+    result = get_drive().files().list(**list_kwargs).execute()
+
+    output: dict = {"files": result.get("files", [])}
+    if next_token := result.get("nextPageToken"):
+        output["nextPageToken"] = next_token
+    click.echo(json.dumps(output, indent=2))
 
 
 @cli.command()
 @click.argument("query")
-@click.option("-n", "--max-results", default=20, help="Maximum results")
-def search(query: str, max_results: int):
-    """Search for files. Returns JSON array.
+@click.option("-n", "--max-results", default=20, help="Maximum results per page")
+@click.option("--page-token", help="Token for next page of results")
+def search(query: str, max_results: int, page_token: str):
+    """Search for files. Returns JSON with files and optional nextPageToken.
 
     QUERY: Search query (e.g., 'name contains "report"', 'mimeType = "application/pdf"')
     """
@@ -62,18 +66,20 @@ def search(query: str, max_results: int):
     elif "trashed" not in query.lower():
         query = f"({query}) and trashed = false"
 
-    result = (
-        get_drive()
-        .files()
-        .list(
-            q=query,
-            pageSize=max_results,
-            fields="files(id, name, mimeType, size, modifiedTime, webViewLink)",
-        )
-        .execute()
-    )
+    list_kwargs = {
+        "q": query,
+        "pageSize": max_results,
+        "fields": "nextPageToken, files(id, name, mimeType, size, modifiedTime, webViewLink)",
+    }
+    if page_token:
+        list_kwargs["pageToken"] = page_token
 
-    click.echo(json.dumps(result.get("files", []), indent=2))
+    result = get_drive().files().list(**list_kwargs).execute()
+
+    output: dict = {"files": result.get("files", [])}
+    if next_token := result.get("nextPageToken"):
+        output["nextPageToken"] = next_token
+    click.echo(json.dumps(output, indent=2))
 
 
 @cli.command()

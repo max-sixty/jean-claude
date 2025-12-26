@@ -1,10 +1,11 @@
 Usage: j-claude gdrive search [OPTIONS] QUERY
 
-  Search for files. Returns JSON array.
+  Search for files. Returns JSON with files and optional nextPageToken.
 
   QUERY: Search query (e.g., 'name contains "report"', 'mimeType =
   "application/pdf"')
 
 Options:
-  -n, --max-results INTEGER  Maximum results
+  -n, --max-results INTEGER  Maximum results per page
+  --page-token TEXT          Token for next page of results
   --help                     Show this message and exit.

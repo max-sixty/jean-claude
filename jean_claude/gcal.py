@@ -62,8 +62,12 @@ def cli():
 @click.option("--days", default=1, help="Number of days to show (default: 1)")
 @click.option("--from", "from_date", help="Start date (YYYY-MM-DD)")
 @click.option("--to", "to_date", help="End date (YYYY-MM-DD)")
-def list_events(days: int, from_date: str, to_date: str):
-    """List calendar events. Returns JSON array of events."""
+@click.option("-n", "--max-results", type=int, help="Maximum events to return per page")
+@click.option("--page-token", help="Token for next page of results")
+def list_events(
+    days: int, from_date: str, to_date: str, max_results: int, page_token: str
+):
+    """List calendar events. Returns JSON with events and optional nextPageToken."""
     if from_date:
         time_min = parse_datetime(from_date).replace(tzinfo=LOCAL_TZ)
     else:
@@ -79,19 +83,24 @@ def list_events(days: int, from_date: str, to_date: str):
         time_max = time_min + timedelta(days=days)
 
     service = get_calendar()
-    result = (
-        service.events()
-        .list(
-            calendarId="primary",
-            timeMin=time_min.isoformat(),
-            timeMax=time_max.isoformat(),
-            singleEvents=True,
-            orderBy="startTime",
-        )
-        .execute()
-    )
+    list_kwargs = {
+        "calendarId": "primary",
+        "timeMin": time_min.isoformat(),
+        "timeMax": time_max.isoformat(),
+        "singleEvents": True,
+        "orderBy": "startTime",
+    }
+    if max_results:
+        list_kwargs["maxResults"] = max_results
+    if page_token:
+        list_kwargs["pageToken"] = page_token
 
-    click.echo(json.dumps(result.get("items", []), indent=2))
+    result = service.events().list(**list_kwargs).execute()
+
+    output: dict = {"events": result.get("items", [])}
+    if next_token := result.get("nextPageToken"):
+        output["nextPageToken"] = next_token
+    click.echo(json.dumps(output, indent=2))
 
 
 @cli.command()
@@ -177,8 +186,10 @@ def create(
 @cli.command()
 @click.argument("query")
 @click.option("--days", default=30, help="Days to search (default: 30)")
-def search(query: str, days: int):
-    """Search calendar events. Returns JSON array of matching events.
+@click.option("-n", "--max-results", type=int, help="Maximum events to return per page")
+@click.option("--page-token", help="Token for next page of results")
+def search(query: str, days: int, max_results: int, page_token: str):
+    """Search calendar events. Returns JSON with events and optional nextPageToken.
 
     QUERY: Text to search for in event titles/descriptions
     """
@@ -186,20 +197,25 @@ def search(query: str, days: int):
     time_max = time_min + timedelta(days=days)
 
     service = get_calendar()
-    result = (
-        service.events()
-        .list(
-            calendarId="primary",
-            timeMin=time_min.isoformat(),
-            timeMax=time_max.isoformat(),
-            q=query,
-            singleEvents=True,
-            orderBy="startTime",
-        )
-        .execute()
-    )
+    list_kwargs = {
+        "calendarId": "primary",
+        "timeMin": time_min.isoformat(),
+        "timeMax": time_max.isoformat(),
+        "q": query,
+        "singleEvents": True,
+        "orderBy": "startTime",
+    }
+    if max_results:
+        list_kwargs["maxResults"] = max_results
+    if page_token:
+        list_kwargs["pageToken"] = page_token
 
-    click.echo(json.dumps(result.get("items", []), indent=2))
+    result = service.events().list(**list_kwargs).execute()
+
+    output: dict = {"events": result.get("items", [])}
+    if next_token := result.get("nextPageToken"):
+        output["nextPageToken"] = next_token
+    click.echo(json.dumps(output, indent=2))
 
 
 @cli.command()
