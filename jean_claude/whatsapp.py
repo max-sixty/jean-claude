@@ -221,26 +221,6 @@ def send_file(recipient: str | None, file_path: str | None, name: str | None):
         click.echo(json.dumps(result, indent=2))
 
 
-@cli.command("send-file")
-@click.argument("recipient")
-@click.argument("file_path", type=click.Path(exists=True))
-def send_file(recipient: str, file_path: str):
-    """Send a file attachment via WhatsApp.
-
-    RECIPIENT: Phone number with country code (e.g., +12025551234)
-    FILE_PATH: Path to the file to send
-
-    Supports images, videos, audio, and documents.
-
-    Examples:
-        jean-claude whatsapp send-file "+12025551234" ./photo.jpg
-        jean-claude whatsapp send-file "+12025551234" ./document.pdf
-    """
-    result = _run_whatsapp_cli("send-file", recipient, file_path)
-    if result:
-        click.echo(json.dumps(result, indent=2))
-
-
 @cli.command()
 @click.option("-n", "--max-results", default=50, help="Maximum chats to return")
 @click.option("--unread", is_flag=True, help="Show only chats with unread messages")
