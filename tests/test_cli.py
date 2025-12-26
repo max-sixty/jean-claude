@@ -59,10 +59,17 @@ def test_auth_logout_with_token(tmp_path, monkeypatch):
 
 def test_status_no_auth(tmp_path, monkeypatch):
     """Test status when not authenticated."""
-    from jean_claude import auth, cli as cli_module
+    from jean_claude import auth, cli as cli_module, whatsapp
+    from jean_claude.logging import JeanClaudeError
 
     monkeypatch.setattr(auth, "TOKEN_FILE", tmp_path / "nonexistent.json")
     monkeypatch.setattr(cli_module, "TOKEN_FILE", tmp_path / "nonexistent.json")
+
+    # Mock WhatsApp binary as not available (may not be built in CI)
+    def mock_get_path():
+        raise JeanClaudeError("WhatsApp CLI not found")
+
+    monkeypatch.setattr(whatsapp, "_get_whatsapp_cli_path", mock_get_path)
 
     runner = CliRunner()
     result = runner.invoke(cli, ["status"])
