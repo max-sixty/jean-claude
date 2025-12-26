@@ -19,4 +19,8 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Go binaries (built, not committed)
 whatsapp/whatsapp-cli
+whatsapp/dist/
+jean_claude/bin/

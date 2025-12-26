@@ -214,9 +214,15 @@ def _check_imessage_status() -> None:
     """Check iMessage availability (send and read capabilities)."""
     import sqlite3
     import subprocess
+    import sys
     from pathlib import Path
 
     click.echo("iMessage:")
+
+    # iMessage only available on macOS
+    if sys.platform != "darwin":
+        click.echo("  " + click.style("Not available (macOS only)", fg="yellow"))
+        return
 
     # Check send capability (AppleScript/Automation permission)
     # This script just checks if Messages.app is accessible, doesn't send anything
@@ -263,8 +269,14 @@ def _check_imessage_status() -> None:
 def _check_reminders_status() -> None:
     """Check Apple Reminders availability."""
     import subprocess
+    import sys
 
     click.echo("Reminders:")
+
+    # Reminders only available on macOS
+    if sys.platform != "darwin":
+        click.echo("  " + click.style("Not available (macOS only)", fg="yellow"))
+        return
 
     # Test AppleScript access to Reminders.app
     test_script = 'tell application "Reminders" to get name of default list'
@@ -289,14 +301,17 @@ def _check_reminders_status() -> None:
 
 def _check_whatsapp_status() -> None:
     """Check WhatsApp CLI availability and authentication."""
-    from .whatsapp import WHATSAPP_CLI, _run_whatsapp_cli
+    from .logging import JeanClaudeError
+    from .whatsapp import _get_whatsapp_cli_path, _run_whatsapp_cli
 
     click.echo("WhatsApp:")
 
     # Check if CLI binary exists
-    if not WHATSAPP_CLI.exists():
+    try:
+        _get_whatsapp_cli_path()
+    except JeanClaudeError:
         click.echo("  CLI: " + click.style("Not built", fg="yellow"))
-        click.echo("    Build with: cd whatsapp && go build -o whatsapp-cli .")
+        click.echo("    Build with: cd whatsapp && ./build.sh")
         return
 
     click.echo("  CLI: " + click.style("OK", fg="green"))

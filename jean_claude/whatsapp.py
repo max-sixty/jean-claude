@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import platform
 import subprocess
+import sys
 from pathlib import Path
 
 import click
@@ -12,8 +14,43 @@ from .logging import JeanClaudeError, get_logger
 
 logger = get_logger(__name__)
 
-# Path to the Go binary (built from whatsapp/ directory)
-WHATSAPP_CLI = Path(__file__).parent.parent / "whatsapp" / "whatsapp-cli"
+
+def _get_whatsapp_cli_path() -> Path:
+    """Find the whatsapp-cli binary for the current platform.
+
+    Looks in jean_claude/bin/ for platform-specific binaries.
+    Falls back to whatsapp/whatsapp-cli for development.
+    """
+    # Map Python platform info to Go naming conventions
+    os_name = {"darwin": "darwin", "linux": "linux", "win32": "windows"}.get(
+        sys.platform, sys.platform
+    )
+    machine = platform.machine().lower()
+    arch = {
+        "x86_64": "amd64",
+        "amd64": "amd64",
+        "arm64": "arm64",
+        "aarch64": "arm64",
+    }.get(machine, machine)
+
+    # Look for bundled binary first
+    bin_dir = Path(__file__).parent / "bin"
+    bundled = bin_dir / f"whatsapp-cli-{os_name}-{arch}"
+    if bundled.exists():
+        return bundled
+
+    # Fall back to development location
+    dev_binary = Path(__file__).parent.parent / "whatsapp" / "whatsapp-cli"
+    if dev_binary.exists():
+        return dev_binary
+
+    raise JeanClaudeError(
+        f"WhatsApp CLI not found for {os_name}/{arch}.\n"
+        f"Looked in:\n"
+        f"  - {bundled}\n"
+        f"  - {dev_binary}\n"
+        "Build with: cd whatsapp && ./build.sh"
+    )
 
 
 def _run_whatsapp_cli(*args: str, capture: bool = True) -> dict | list | None:
@@ -26,13 +63,8 @@ def _run_whatsapp_cli(*args: str, capture: bool = True) -> dict | list | None:
     Returns:
         Parsed JSON output, or None if capture=False
     """
-    if not WHATSAPP_CLI.exists():
-        raise JeanClaudeError(
-            f"WhatsApp CLI not found at {WHATSAPP_CLI}\n"
-            "Build it with: cd whatsapp && go build -o whatsapp-cli ."
-        )
-
-    cmd = [str(WHATSAPP_CLI), *args]
+    cli_path = _get_whatsapp_cli_path()
+    cmd = [str(cli_path), *args]
     logger.debug("Running whatsapp-cli", args=args)
 
     if not capture:

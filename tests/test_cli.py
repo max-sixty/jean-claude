@@ -59,10 +59,17 @@ def test_auth_logout_with_token(tmp_path, monkeypatch):
 
 def test_status_no_auth(tmp_path, monkeypatch):
     """Test status when not authenticated."""
-    from jean_claude import auth, cli as cli_module
+    from jean_claude import auth, cli as cli_module, whatsapp
+    from jean_claude.logging import JeanClaudeError
 
     monkeypatch.setattr(auth, "TOKEN_FILE", tmp_path / "nonexistent.json")
     monkeypatch.setattr(cli_module, "TOKEN_FILE", tmp_path / "nonexistent.json")
+
+    # Mock WhatsApp binary as not available (may not be built in CI)
+    def mock_get_path():
+        raise JeanClaudeError("WhatsApp CLI not found")
+
+    monkeypatch.setattr(whatsapp, "_get_whatsapp_cli_path", mock_get_path)
 
     runner = CliRunner()
     result = runner.invoke(cli, ["status"])
@@ -176,6 +183,7 @@ def test_command_reference_up_to_date(tmp_path):
         errors.append(f"Extra files in commands/ (should be removed): {extra}")
 
     # Compare content of each file
+    diffs = []
     for gen_file in generated_files:
         existing_file = existing_dir / gen_file.name
         if existing_file.exists():
@@ -183,10 +191,22 @@ def test_command_reference_up_to_date(tmp_path):
             exist_content = existing_file.read_text()
             if gen_content != exist_content:
                 errors.append(f"Content mismatch: {gen_file.name}")
+                # Show the actual diff for debugging
+                import difflib
+
+                diff = difflib.unified_diff(
+                    exist_content.splitlines(keepends=True),
+                    gen_content.splitlines(keepends=True),
+                    fromfile=f"committed/{gen_file.name}",
+                    tofile=f"generated/{gen_file.name}",
+                )
+                diffs.append("".join(diff))
 
     if errors:
         error_msg = "\n".join(errors)
+        diff_msg = "\n".join(diffs) if diffs else ""
         raise AssertionError(
             f"Command reference files are out of date:\n{error_msg}\n\n"
+            f"Diffs:\n{diff_msg}\n\n"
             "Run: uv run python scripts/generate-command-reference.py"
         )
