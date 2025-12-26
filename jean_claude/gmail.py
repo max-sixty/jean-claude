@@ -69,7 +69,7 @@ from googleapiclient.errors import HttpError
 
 from .auth import build_service
 from .logging import JeanClaudeError, get_logger
-from .paths import DRAFT_CACHE_DIR, EMAIL_CACHE_DIR
+from .paths import ATTACHMENT_CACHE_DIR, DRAFT_CACHE_DIR, EMAIL_CACHE_DIR
 
 logger = get_logger(__name__)
 
@@ -1463,16 +1463,28 @@ def attachments(message_id: str):
 @cli.command("attachment-download")
 @click.argument("message_id")
 @click.argument("attachment_id")
-@click.argument("output", type=click.Path())
-def attachment_download(message_id: str, attachment_id: str, output: str):
+@click.argument("filename")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=False),
+    help="Directory to save to (default: ~/.cache/jean-claude/attachments/)",
+)
+def attachment_download(
+    message_id: str, attachment_id: str, filename: str, output: str | None
+):
     """Download an attachment from a message.
 
-    Use 'jean-claude gmail attachments MSG_ID' to get attachment IDs.
+    Use 'jean-claude gmail attachments MSG_ID' to get attachment IDs and filenames.
+
+    By default, saves to ~/.cache/jean-claude/attachments/. Use --output to
+    save to a different directory.
 
     \b
     Example:
         jean-claude gmail attachments MSG_ID
-        jean-claude gmail attachment-download MSG_ID ATTACH_ID ./file.pdf
+        jean-claude gmail attachment-download MSG_ID ATTACH_ID report.pdf
+        jean-claude gmail attachment-download MSG_ID ATTACH_ID report.pdf -o ./
     """
     service = get_gmail()
     attachment = (
@@ -1483,6 +1495,15 @@ def attachment_download(message_id: str, attachment_id: str, output: str):
         .execute()
     )
 
+    if output:
+        output_dir = Path(output)
+    else:
+        output_dir = ATTACHMENT_CACHE_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    output_path = output_dir / filename
     data = base64.urlsafe_b64decode(attachment["data"])
-    Path(output).write_bytes(data)
-    logger.info(f"Downloaded: {output}", bytes=len(data))
+    output_path.write_bytes(data)
+
+    result = {"file": str(output_path), "bytes": len(data)}
+    click.echo(json.dumps(result, indent=2))

@@ -109,7 +109,9 @@ XDG Base Directory compliant:
 
 ~/.cache/jean-claude/            # Re-fetchable content (clearable)
 ├── emails/                      # Fetched email bodies
-└── drafts/                      # Draft files for editing
+├── drafts/                      # Draft files for editing
+├── attachments/                 # Downloaded email attachments
+└── drive/                       # Downloaded Drive files
 ```
 
 Cache can be cleared without data loss (content is re-fetchable from APIs).

@@ -27,3 +27,5 @@ WHATSAPP_MEDIA_DIR = WHATSAPP_DATA_DIR / "media"
 # Cache: re-fetchable content (can be cleared without data loss)
 EMAIL_CACHE_DIR = CACHE_DIR / "emails"
 DRAFT_CACHE_DIR = CACHE_DIR / "drafts"
+ATTACHMENT_CACHE_DIR = CACHE_DIR / "attachments"
+DRIVE_CACHE_DIR = CACHE_DIR / "drive"

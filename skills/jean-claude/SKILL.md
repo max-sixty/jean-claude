@@ -396,8 +396,11 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail trash THREAD_ID1 THREAD
 # List attachments for a message
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail attachments MESSAGE_ID
 
-# Download an attachment
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail attachment-download MESSAGE_ID ATTACHMENT_ID ./output.pdf
+# Download an attachment (saved to ~/.cache/jean-claude/attachments/)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail attachment-download MESSAGE_ID ATTACHMENT_ID filename.pdf
+
+# Download to specific directory
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail attachment-download MESSAGE_ID ATTACHMENT_ID filename.pdf --output ./
 ```
 
 ### Unsubscribing from Newsletters
@@ -531,8 +534,11 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive search "quarterly repo
 ### Download & Upload
 
 ```bash
-# Download
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive download FILE_ID output.pdf
+# Download (saved to ~/.cache/jean-claude/drive/)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive download FILE_ID
+
+# Download to specific directory
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive download FILE_ID --output ./
 
 # Upload to root
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdrive upload document.pdf

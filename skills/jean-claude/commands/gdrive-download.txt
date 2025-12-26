@@ -1,8 +1,17 @@
-Usage: jean-claude gdrive download [OPTIONS] FILE_ID OUTPUT
+Usage: jean-claude gdrive download [OPTIONS] FILE_ID
 
   Download a file.
 
-  FILE_ID: The file ID to download OUTPUT: Local path to save the file
+  By default, saves to ~/.cache/jean-claude/drive/ using the file's name from
+  Drive. Use --output to save to a different directory.
+
+  Google Docs/Sheets/Slides are exported as PDF/XLSX.
+
+  Example:
+      jean-claude gdrive download FILE_ID
+      jean-claude gdrive download FILE_ID -o ./
 
 Options:
-  --help  Show this message and exit.
+  -o, --output DIRECTORY  Directory to save to (default: ~/.cache/jean-
+                          claude/drive/)
+  --help                  Show this message and exit.

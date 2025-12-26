@@ -11,6 +11,7 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
 from .auth import build_service
 from .logging import get_logger
+from .paths import DRIVE_CACHE_DIR
 
 logger = get_logger(__name__)
 
@@ -101,30 +102,48 @@ def get(file_id: str):
 
 @cli.command()
 @click.argument("file_id")
-@click.argument("output", type=click.Path())
-def download(file_id: str, output: str):
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=False),
+    help="Directory to save to (default: ~/.cache/jean-claude/drive/)",
+)
+def download(file_id: str, output: str | None):
     """Download a file.
 
-    FILE_ID: The file ID to download
-    OUTPUT: Local path to save the file
+    By default, saves to ~/.cache/jean-claude/drive/ using the file's name
+    from Drive. Use --output to save to a different directory.
+
+    Google Docs/Sheets/Slides are exported as PDF/XLSX.
+
+    \b
+    Example:
+        jean-claude gdrive download FILE_ID
+        jean-claude gdrive download FILE_ID -o ./
     """
     service = get_drive()
 
     # Get file metadata first
     f = service.files().get(fileId=file_id, fields="name, mimeType").execute()
+    filename = f.get("name", file_id)
     mime_type = f.get("mimeType", "")
 
     # Handle Google Docs formats (export instead of download)
     export_types = {
-        "application/vnd.google-apps.document": "application/pdf",
-        "application/vnd.google-apps.spreadsheet": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/vnd.google-apps.presentation": "application/pdf",
+        "application/vnd.google-apps.document": ("application/pdf", ".pdf"),
+        "application/vnd.google-apps.spreadsheet": (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".xlsx",
+        ),
+        "application/vnd.google-apps.presentation": ("application/pdf", ".pdf"),
     }
 
     if mime_type in export_types:
-        request = service.files().export_media(
-            fileId=file_id, mimeType=export_types[mime_type]
-        )
+        export_mime, ext = export_types[mime_type]
+        request = service.files().export_media(fileId=file_id, mimeType=export_mime)
+        # Add extension if not already present
+        if not filename.endswith(ext):
+            filename += ext
     else:
         request = service.files().get_media(fileId=file_id)
 
@@ -134,9 +153,17 @@ def download(file_id: str, output: str):
     while not done:
         _, done = downloader.next_chunk()
 
-    Path(output).write_bytes(fh.getvalue())
-    logger.info("Downloaded file", path=output)
-    click.echo(json.dumps({"path": output, "fileId": file_id}, indent=2))
+    if output:
+        output_dir = Path(output)
+    else:
+        output_dir = DRIVE_CACHE_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    output_path = output_dir / filename
+    output_path.write_bytes(fh.getvalue())
+
+    result = {"file": str(output_path), "bytes": len(fh.getvalue())}
+    click.echo(json.dumps(result, indent=2))
 
 
 @cli.command()

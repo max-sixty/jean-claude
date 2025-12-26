@@ -1,13 +1,20 @@
 Usage: jean-claude gmail attachment-download [OPTIONS] MESSAGE_ID
-                                             ATTACHMENT_ID OUTPUT
+                                             ATTACHMENT_ID FILENAME
 
   Download an attachment from a message.
 
-  Use 'jean-claude gmail attachments MSG_ID' to get attachment IDs.
+  Use 'jean-claude gmail attachments MSG_ID' to get attachment IDs and
+  filenames.
+
+  By default, saves to ~/.cache/jean-claude/attachments/. Use --output to save
+  to a different directory.
 
   Example:
       jean-claude gmail attachments MSG_ID
-      jean-claude gmail attachment-download MSG_ID ATTACH_ID ./file.pdf
+      jean-claude gmail attachment-download MSG_ID ATTACH_ID report.pdf
+      jean-claude gmail attachment-download MSG_ID ATTACH_ID report.pdf -o ./
 
 Options:
-  --help  Show this message and exit.
+  -o, --output DIRECTORY  Directory to save to (default: ~/.cache/jean-
+                          claude/attachments/)
+  --help                  Show this message and exit.
