@@ -797,8 +797,8 @@ authentication (see Setup section above).
 
 ### Sync Messages
 
-WhatsApp messages are stored locally for fast access. Sync periodically to get
-new messages:
+WhatsApp messages are stored locally for fast access. The `messages --unread`
+command auto-syncs, so explicit sync is only needed for other queries:
 
 ```bash
 # Sync messages (also fetches chat names)
@@ -843,12 +843,16 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp chats -n 10
 # Recent messages (from local database)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages -n 20
 
-# Unread messages only
+# Unread messages only (auto-syncs first to ensure fresh data)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --unread
 
 # Messages from specific chat (use JID from chats command)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --chat "120363277025153496@g.us"
 ```
+
+**Note:** The `--unread` flag automatically syncs with WhatsApp before querying,
+so you always get fresh data. Other queries read from the local database only—run
+`whatsapp sync` first if you need the latest messages.
 
 ### Media Downloads
 

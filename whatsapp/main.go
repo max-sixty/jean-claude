@@ -743,18 +743,12 @@ func cmdSendFile(args []string) error {
 	return printJSON(output)
 }
 
-// cmdSync syncs messages from WhatsApp
-func cmdSync() error {
-	ctx := context.Background()
-	if err := initClient(ctx); err != nil {
-		return err
-	}
-	if err := initMessageDB(); err != nil {
-		return err
-	}
-
+// doSync performs the core sync operation: connects to WhatsApp, receives pushed
+// events, and saves them to the local database. Returns sync statistics.
+// Requires initClient and initMessageDB to be called first.
+func doSync(ctx context.Context) (messagesSaved int64, namesUpdated int, err error) {
 	if client.Store.ID == nil {
-		return fmt.Errorf("not authenticated. Run 'auth' first")
+		return 0, 0, fmt.Errorf("not authenticated. Run 'auth' first")
 	}
 
 	// Idle detection for sync completion.
@@ -873,7 +867,7 @@ func cmdSync() error {
 	})
 
 	if err := client.Connect(); err != nil {
-		return fmt.Errorf("failed to connect: %w", err)
+		return 0, 0, fmt.Errorf("failed to connect: %w", err)
 	}
 
 	// Idle-based sync completion.
@@ -918,7 +912,6 @@ SyncLoop:
 	}
 
 	// Fetch names for chats that don't have them
-	namesUpdated := 0
 	type chatToUpdate struct {
 		jid     string
 		isGroup bool
@@ -957,21 +950,35 @@ SyncLoop:
 
 	client.Disconnect()
 
+	return messageCount.Load(), namesUpdated, nil
+}
+
+func cmdSync() error {
+	ctx := context.Background()
+	if err := initClient(ctx); err != nil {
+		return err
+	}
+	if err := initMessageDB(); err != nil {
+		return err
+	}
+
+	messagesSaved, namesUpdated, err := doSync(ctx)
+	if err != nil {
+		return err
+	}
+
 	output := map[string]any{
 		"success":        true,
-		"messages_saved": messageCount.Load(),
+		"messages_saved": messagesSaved,
 		"names_updated":  namesUpdated,
 	}
 	return printJSON(output)
 }
 
-// cmdMessages lists messages from local database
+// cmdMessages lists messages from local database.
+// When --unread is specified, auto-syncs with WhatsApp first to ensure fresh data.
 func cmdMessages(args []string) error {
-	if err := initMessageDB(); err != nil {
-		return err
-	}
-
-	// Parse args
+	// Parse args first to check if we need to sync
 	var chatJID string
 	var unreadOnly bool
 	limit := 50
@@ -983,6 +990,21 @@ func cmdMessages(args []string) error {
 			fmt.Sscanf(strings.TrimPrefix(args[i], "--max-results="), "%d", &limit)
 		case args[i] == "--unread":
 			unreadOnly = true
+		}
+	}
+
+	if err := initMessageDB(); err != nil {
+		return err
+	}
+
+	// Auto-sync when checking unread messages to ensure fresh data
+	if unreadOnly {
+		ctx := context.Background()
+		if err := initClient(ctx); err != nil {
+			return err
+		}
+		if _, _, err := doSync(ctx); err != nil {
+			return err
 		}
 	}
 
