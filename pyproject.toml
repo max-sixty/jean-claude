@@ -1,5 +1,5 @@
 [project]
-name = "j-claude"
+name = "jean-claude-code"
 # No version - this is a plugin, not a published package
 version = "0.1.1"
 description = "Google Workspace (Gmail, Calendar, Drive) and iMessage integration for Claude Code"
