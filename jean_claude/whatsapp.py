@@ -92,7 +92,12 @@ def _run_whatsapp_cli(*args: str, capture: bool = True) -> dict | list | None:
     try:
         return json.loads(stdout)
     except json.JSONDecodeError:
-        # Some commands output text, not JSON
+        # Log unexpected non-JSON output for debugging
+        logger.warning(
+            "whatsapp-cli returned non-JSON output",
+            args=args,
+            stdout_preview=stdout[:200] if len(stdout) > 200 else stdout,
+        )
         return None
 
 

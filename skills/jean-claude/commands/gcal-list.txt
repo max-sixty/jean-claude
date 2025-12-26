@@ -1,9 +1,11 @@
 Usage: jean-claude gcal list [OPTIONS]
 
-  List calendar events. Returns JSON array of events.
+  List calendar events. Returns JSON with events and optional nextPageToken.
 
 Options:
-  --days INTEGER  Number of days to show (default: 1)
-  --from TEXT     Start date (YYYY-MM-DD)
-  --to TEXT       End date (YYYY-MM-DD)
-  --help          Show this message and exit.
+  --days INTEGER             Number of days to show (default: 1)
+  --from TEXT                Start date (YYYY-MM-DD)
+  --to TEXT                  End date (YYYY-MM-DD)
+  -n, --max-results INTEGER  Maximum events to return per page
+  --page-token TEXT          Token for next page of results
+  --help                     Show this message and exit.

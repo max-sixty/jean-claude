@@ -250,6 +250,72 @@ class TestGmailDraftOperations:
             f"From header missing display name format: {from_line}"
         )
 
+    def test_draft_update_preserves_from_header(self, runner, my_email, draft_cleanup):
+        """Test that draft update preserves From header when not explicitly changed."""
+        # Create initial draft
+        draft_data = json.dumps(
+            {
+                "to": my_email,
+                "subject": "Test Update Preserves From",
+                "body": "Initial body.",
+            }
+        )
+        result = runner.invoke(cli, ["gmail", "draft", "create"], input=draft_data)
+        assert result.exit_code == 0
+
+        # Find the draft
+        result = runner.invoke(cli, ["gmail", "draft", "list", "-n", "10"])
+        assert result.exit_code == 0
+        drafts = json.loads(result.stdout)
+
+        test_draft = None
+        for draft in drafts:
+            if "Initial body" in draft["snippet"]:
+                test_draft = draft
+                break
+
+        assert test_draft is not None, "Test draft not found"
+        draft_id = test_draft["id"]
+        draft_cleanup(draft_id)
+
+        # Get original From header
+        result = runner.invoke(cli, ["gmail", "draft", "get", draft_id])
+        assert result.exit_code == 0
+        draft_file = result.stdout.strip()
+
+        with open(draft_file) as f:
+            original_content = f.read()
+
+        original_from = next(
+            line for line in original_content.split("\n") if line.startswith("From:")
+        )
+
+        # Update the draft body only (not From)
+        update_data = json.dumps({"body": "Updated body content."})
+        result = runner.invoke(
+            cli, ["gmail", "draft", "update", draft_id], input=update_data
+        )
+        assert result.exit_code == 0
+
+        # Get updated draft and verify From is preserved
+        result = runner.invoke(cli, ["gmail", "draft", "get", draft_id])
+        assert result.exit_code == 0
+        draft_file = result.stdout.strip()
+
+        with open(draft_file) as f:
+            updated_content = f.read()
+
+        updated_from = next(
+            line for line in updated_content.split("\n") if line.startswith("From:")
+        )
+
+        assert original_from == updated_from, (
+            f"From header changed during update: '{original_from}' -> '{updated_from}'"
+        )
+
+        # Verify body was updated
+        assert "Updated body content" in updated_content
+
 
 class TestGmailSearch:
     """Test search functionality."""
