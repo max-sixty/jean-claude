@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 	"github.com/mdp/qrterminal/v3"
 	"github.com/skip2/go-qrcode"
 	"go.mau.fi/whatsmeow"
@@ -141,7 +141,7 @@ func initClient(ctx context.Context) error {
 	}
 
 	dbPath := filepath.Join(dataDir, "whatsapp.db")
-	container, err := sqlstore.New(ctx, "sqlite3", "file:"+dbPath+"?_foreign_keys=on", logger)
+	container, err := sqlstore.New(ctx, "sqlite", "file:"+dbPath+"?_pragma=foreign_keys(1)", logger)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -163,7 +163,7 @@ func initClient(ctx context.Context) error {
 func initMessageDB() error {
 	dbPath := filepath.Join(dataDir, "messages.db")
 	var err error
-	messageDB, err = sql.Open("sqlite3", dbPath)
+	messageDB, err = sql.Open("sqlite", dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open message database: %w", err)
 	}

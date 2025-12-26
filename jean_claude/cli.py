@@ -289,14 +289,17 @@ def _check_reminders_status() -> None:
 
 def _check_whatsapp_status() -> None:
     """Check WhatsApp CLI availability and authentication."""
-    from .whatsapp import WHATSAPP_CLI, _run_whatsapp_cli
+    from .logging import JeanClaudeError
+    from .whatsapp import _get_whatsapp_cli_path, _run_whatsapp_cli
 
     click.echo("WhatsApp:")
 
     # Check if CLI binary exists
-    if not WHATSAPP_CLI.exists():
+    try:
+        _get_whatsapp_cli_path()
+    except JeanClaudeError:
         click.echo("  CLI: " + click.style("Not built", fg="yellow"))
-        click.echo("    Build with: cd whatsapp && go build -o whatsapp-cli .")
+        click.echo("    Build with: cd whatsapp && ./build.sh")
         return
 
     click.echo("  CLI: " + click.style("OK", fg="green"))
