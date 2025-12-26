@@ -33,11 +33,8 @@ structure (`gmail-draft.txt` for `gmail draft`, etc.).
 ## Development Workflow
 
 ```bash
-# Run tests
-uv run pytest
-
-# Run lints
-pre-commit run --all-files
+uv run pytest                # Run tests (integration tests excluded by default)
+pre-commit run --all-files   # Run lints
 ```
 
 ## Testing Commands
@@ -136,3 +133,25 @@ numbers must fail if there's ambiguity:
 
 Sending a message to the wrong person is worse than not sending. Fail loudly
 and show options rather than silently picking one.
+
+## Integration Tests
+
+Integration tests in `tests/integration/` make real Gmail API calls — **they
+send actual emails** to yourself. Run as a final check before major changes,
+not on every edit.
+
+```bash
+uv run pytest -m integration
+```
+
+**Prerequisites:** Valid OAuth credentials (`jean-claude auth` + `jean-claude status`)
+
+**Cleanup:** Test messages are trashed (auto-deleted by Gmail after 30 days).
+Drafts created during tests are permanently deleted.
+
+**Gotchas:**
+
+- **Use `result.stdout`** not `result.output` — the latter mixes stdout/stderr
+- **Find drafts by snippet** — Gmail API header casing bug causes empty subjects
+- **Thread vs message IDs** — `archive`, `mark-read` use threads; `star`, `get` use messages
+- **Nested fixtures** — `sent_message` → `test_message` ensures cleanup even if polling fails

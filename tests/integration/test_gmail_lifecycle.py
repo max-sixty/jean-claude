@@ -89,7 +89,9 @@ class TestGmailMessageOperations:
 class TestGmailArchive:
     """Test archive and unarchive operations."""
 
-    def test_archive_and_unarchive(self, runner, test_message, test_thread, test_subject):
+    def test_archive_and_unarchive(
+        self, runner, test_message, test_thread, test_subject
+    ):
         """Test archiving and unarchiving a thread."""
         # Archive (operates on threads)
         result = runner.invoke(cli, ["gmail", "archive", test_thread])
@@ -149,10 +151,12 @@ class TestGmailDraftOperations:
 
     def test_forward_draft(self, runner, test_message, my_email, draft_cleanup):
         """Test creating a forward draft."""
-        forward_data = json.dumps({
-            "to": my_email,
-            "body": "FYI - forwarding this test message.",
-        })
+        forward_data = json.dumps(
+            {
+                "to": my_email,
+                "body": "FYI - forwarding this test message.",
+            }
+        )
         result = runner.invoke(
             cli, ["gmail", "draft", "forward", test_message], input=forward_data
         )
