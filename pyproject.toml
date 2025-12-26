@@ -1,5 +1,5 @@
 [project]
-name = "jean-claude"
+name = "j-claude"
 # No version - this is a plugin, not a published package
 version = "0.1.0"
 description = "Google Workspace (Gmail, Calendar, Drive) and iMessage integration for Claude Code"
@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-jean-claude = "jean_claude.cli:cli"
+j-claude = "jean_claude.cli:cli"
 
 [dependency-groups]
 dev = ["pytest", "pre-commit", "ty"]
