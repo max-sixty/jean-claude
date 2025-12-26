@@ -21,6 +21,7 @@ import (
 	"github.com/skip2/go-qrcode"
 	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/proto/waWeb"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
@@ -196,7 +197,6 @@ func initMessageDB() error {
 			name TEXT,
 			is_group INTEGER NOT NULL,
 			last_message_time INTEGER,
-			unread_count INTEGER NOT NULL DEFAULT 0,
 			marked_as_unread INTEGER NOT NULL DEFAULT 0,
 			updated_at INTEGER NOT NULL
 		);
@@ -257,12 +257,7 @@ func initMessageDB() error {
 		}
 	}
 
-	// Migration: add unread_count and marked_as_unread columns to chats if they don't exist
-	if !hasColumn(messageDB, "chats", "unread_count") {
-		if _, err = messageDB.Exec(`ALTER TABLE chats ADD COLUMN unread_count INTEGER NOT NULL DEFAULT 0`); err != nil {
-			return fmt.Errorf("failed to add unread_count column: %w", err)
-		}
-	}
+	// Migration: add marked_as_unread column to chats if it doesn't exist
 	if !hasColumn(messageDB, "chats", "marked_as_unread") {
 		if _, err = messageDB.Exec(`ALTER TABLE chats ADD COLUMN marked_as_unread INTEGER NOT NULL DEFAULT 0`); err != nil {
 			return fmt.Errorf("failed to add marked_as_unread column: %w", err)
@@ -516,9 +511,9 @@ func cmdSync() error {
 				// Get chat name (from DB cache or fetch from WhatsApp)
 				chatName := getChatName(ctx, chatJID, isGroup)
 
-				// Save chat with name and unread count
+				// Save chat with name (unread_count computed from messages table)
 				if latestTimestamp > 0 || chatName != "" {
-					if err := saveChatWithUnread(chatJID, chatName, isGroup, latestTimestamp, unreadCount, conv.GetMarkedAsUnread()); err != nil {
+					if err := saveChat(chatJID, chatName, isGroup, latestTimestamp, conv.GetMarkedAsUnread()); err != nil {
 						fmt.Fprintf(os.Stderr, "Warning: failed to save chat %s: %v\n", chatJID, err)
 					}
 				}
@@ -541,18 +536,11 @@ func cmdSync() error {
 			// Only process if the action is marking as read (not unread)
 			if v.Action != nil && v.Action.GetRead() {
 				chatJID := v.JID.String()
-				// Use transaction to ensure both updates succeed or fail together
-				if tx, err := messageDB.Begin(); err == nil {
-					if _, err := tx.Exec(`UPDATE messages SET is_read = 1 WHERE chat_jid = ? AND is_read = 0`, chatJID); err != nil {
-						fmt.Fprintf(os.Stderr, "Warning: failed to mark chat messages read: %v\n", err)
-						tx.Rollback()
-					} else if _, err := tx.Exec(`UPDATE chats SET unread_count = 0, marked_as_unread = 0 WHERE jid = ?`, chatJID); err != nil {
-						fmt.Fprintf(os.Stderr, "Warning: failed to reset chat unread count: %v\n", err)
-						tx.Rollback()
-					} else if err := tx.Commit(); err != nil {
-						fmt.Fprintf(os.Stderr, "Warning: failed to commit mark-read: %v\n", err)
-					}
+				if _, err := messageDB.Exec(`UPDATE messages SET is_read = 1 WHERE chat_jid = ? AND is_read = 0`, chatJID); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to mark chat messages read: %v\n", err)
 				}
+				// Clear the "marked as unread" flag
+				_, _ = messageDB.Exec(`UPDATE chats SET marked_as_unread = 0 WHERE jid = ?`, chatJID)
 			}
 		}
 	})
@@ -754,6 +742,7 @@ func cmdChats() error {
 	// Join with contacts to get names for DM chats
 	// For groups: use chat name only (don't fall back to sender name)
 	// For DMs: try contact name, then sender name from messages
+	// Compute unread_count from messages table (single source of truth)
 	rows, err := messageDB.Query(`
 		SELECT c.jid,
 			CASE
@@ -768,7 +757,10 @@ func cmdChats() error {
 					''
 				)
 			END,
-			c.is_group, c.last_message_time, c.unread_count, c.marked_as_unread
+			c.is_group,
+			c.last_message_time,
+			(SELECT COUNT(*) FROM messages m WHERE m.chat_jid = c.jid AND m.is_read = 0 AND m.is_from_me = 0),
+			c.marked_as_unread
 		FROM chats c
 		LEFT JOIN contacts ct ON c.jid = ct.jid
 		ORDER BY c.last_message_time DESC
@@ -916,30 +908,16 @@ func cmdMarkRead(args []string) error {
 		return err
 	}
 
-	// Use transaction to ensure both updates succeed or fail together
-	tx, err := messageDB.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
 	// Mark all messages in the chat as read
-	result, err := tx.Exec(`UPDATE messages SET is_read = 1 WHERE chat_jid = ? AND is_read = 0`, chatJID)
+	result, err := messageDB.Exec(`UPDATE messages SET is_read = 1 WHERE chat_jid = ? AND is_read = 0`, chatJID)
 	if err != nil {
 		return fmt.Errorf("failed to mark messages as read: %w", err)
 	}
 
 	affected, _ := result.RowsAffected()
 
-	// Also reset unread count on the chat
-	_, err = tx.Exec(`UPDATE chats SET unread_count = 0, marked_as_unread = 0 WHERE jid = ?`, chatJID)
-	if err != nil {
-		return fmt.Errorf("failed to update chat: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit: %w", err)
-	}
+	// Clear the "marked as unread" flag if set
+	_, _ = messageDB.Exec(`UPDATE chats SET marked_as_unread = 0 WHERE jid = ?`, chatJID)
 
 	output := map[string]any{
 		"success":         true,
@@ -1045,41 +1023,7 @@ func parseJID(phone string) (types.JID, error) {
 
 func saveMessage(evt *events.Message) error {
 	info := evt.Info
-
-	var text string
-	var mediaType string
-
-	// Extract text based on message type
-	switch {
-	case evt.Message.GetConversation() != "":
-		text = evt.Message.GetConversation()
-	case evt.Message.GetExtendedTextMessage() != nil:
-		text = evt.Message.GetExtendedTextMessage().GetText()
-	case evt.Message.GetImageMessage() != nil:
-		mediaType = "image"
-		text = evt.Message.GetImageMessage().GetCaption()
-	case evt.Message.GetVideoMessage() != nil:
-		mediaType = "video"
-		text = evt.Message.GetVideoMessage().GetCaption()
-	case evt.Message.GetAudioMessage() != nil:
-		mediaType = "audio"
-	case evt.Message.GetDocumentMessage() != nil:
-		mediaType = "document"
-		text = evt.Message.GetDocumentMessage().GetCaption()
-	case evt.Message.GetStickerMessage() != nil:
-		mediaType = "sticker"
-	case evt.Message.GetContactMessage() != nil:
-		mediaType = "contact"
-		text = evt.Message.GetContactMessage().GetDisplayName()
-	case evt.Message.GetLocationMessage() != nil:
-		mediaType = "location"
-		loc := evt.Message.GetLocationMessage()
-		if loc.GetName() != "" {
-			text = loc.GetName()
-		} else if loc.GetAddress() != "" {
-			text = loc.GetAddress()
-		}
-	}
+	text, mediaType := extractMessageContent(evt.Message)
 
 	// New messages from others are unread; messages from self are read
 	// UPSERT: insert new messages, preserve read status if already marked read (MAX prevents read→unread)
@@ -1094,9 +1038,8 @@ func saveMessage(evt *events.Message) error {
 	`, info.ID, info.Chat.String(), info.Sender.String(), info.PushName, info.Timestamp.Unix(), text, mediaType, boolToInt(info.IsFromMe), isRead, time.Now().Unix())
 
 	if err == nil {
-		// Update chat (best-effort, don't fail message save)
-		// Increment unread count only for incoming messages (not from me)
-		_ = saveChat(info.Chat.String(), "", info.Chat.Server == types.GroupServer, info.Timestamp.Unix(), !info.IsFromMe)
+		// Update chat timestamp (best-effort, don't fail message save)
+		_ = saveChat(info.Chat.String(), "", info.Chat.Server == types.GroupServer, info.Timestamp.Unix(), false)
 	}
 
 	return err
@@ -1115,40 +1058,7 @@ func saveHistoryMessageWithReadStatus(chatJID string, msg *waWeb.WebMessageInfo,
 		return nil
 	}
 
-	var text string
-	var mediaType string
-	if m := msg.GetMessage(); m != nil {
-		switch {
-		case m.GetConversation() != "":
-			text = m.GetConversation()
-		case m.GetExtendedTextMessage() != nil:
-			text = m.GetExtendedTextMessage().GetText()
-		case m.GetImageMessage() != nil:
-			mediaType = "image"
-			text = m.GetImageMessage().GetCaption()
-		case m.GetVideoMessage() != nil:
-			mediaType = "video"
-			text = m.GetVideoMessage().GetCaption()
-		case m.GetAudioMessage() != nil:
-			mediaType = "audio"
-		case m.GetDocumentMessage() != nil:
-			mediaType = "document"
-			text = m.GetDocumentMessage().GetCaption()
-		case m.GetStickerMessage() != nil:
-			mediaType = "sticker"
-		case m.GetContactMessage() != nil:
-			mediaType = "contact"
-			text = m.GetContactMessage().GetDisplayName()
-		case m.GetLocationMessage() != nil:
-			mediaType = "location"
-			loc := m.GetLocationMessage()
-			if loc.GetName() != "" {
-				text = loc.GetName()
-			} else if loc.GetAddress() != "" {
-				text = loc.GetAddress()
-			}
-		}
-	}
+	text, mediaType := extractMessageContent(msg.GetMessage())
 
 	timestamp := int64(msg.GetMessageTimestamp())
 	if timestamp == 0 {
@@ -1186,42 +1096,62 @@ func saveContact(jid, name, pushName string) error {
 	return err
 }
 
-func saveChat(jid, name string, isGroup bool, lastMessageTime int64, incrementUnread bool) error {
-	// UPSERT: preserve unread_count, optionally increment for incoming messages
-	unreadIncrement := 0
-	if incrementUnread {
-		unreadIncrement = 1
-	}
+func saveChat(jid, name string, isGroup bool, lastMessageTime int64, markedAsUnread bool) error {
+	// UPSERT: preserve name if we have it, update marked_as_unread only if setting to true
+	// (unread_count is computed from messages table, not stored here)
 	_, err := messageDB.Exec(`
-		INSERT INTO chats (jid, name, is_group, last_message_time, unread_count, marked_as_unread, updated_at)
-		VALUES (?, ?, ?, ?, ?, 0, ?)
+		INSERT INTO chats (jid, name, is_group, last_message_time, marked_as_unread, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(jid) DO UPDATE SET
 			name = CASE WHEN excluded.name != '' THEN excluded.name ELSE chats.name END,
 			last_message_time = COALESCE(MAX(chats.last_message_time, excluded.last_message_time), excluded.last_message_time),
-			unread_count = chats.unread_count + ?,
+			marked_as_unread = MAX(chats.marked_as_unread, excluded.marked_as_unread),
 			updated_at = excluded.updated_at
-	`, jid, name, boolToInt(isGroup), lastMessageTime, unreadIncrement, time.Now().Unix(), unreadIncrement)
-	return err
-}
-
-func saveChatWithUnread(jid, name string, isGroup bool, lastMessageTime int64, unreadCount int, markedAsUnread bool) error {
-	// UPSERT: preserve name if we have it, take the higher unread_count (history sync may be stale)
-	_, err := messageDB.Exec(`
-		INSERT INTO chats (jid, name, is_group, last_message_time, unread_count, marked_as_unread, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(jid) DO UPDATE SET
-			name = CASE WHEN excluded.name != '' THEN excluded.name ELSE chats.name END,
-			last_message_time = COALESCE(MAX(chats.last_message_time, excluded.last_message_time), excluded.last_message_time),
-			unread_count = COALESCE(MAX(chats.unread_count, excluded.unread_count), excluded.unread_count),
-			marked_as_unread = COALESCE(MAX(chats.marked_as_unread, excluded.marked_as_unread), excluded.marked_as_unread),
-			updated_at = excluded.updated_at
-	`, jid, name, boolToInt(isGroup), lastMessageTime, unreadCount, boolToInt(markedAsUnread), time.Now().Unix())
+	`, jid, name, boolToInt(isGroup), lastMessageTime, boolToInt(markedAsUnread), time.Now().Unix())
 	return err
 }
 
 func markMessageRead(msgID string) error {
 	_, err := messageDB.Exec(`UPDATE messages SET is_read = 1 WHERE id = ?`, msgID)
 	return err
+}
+
+// extractMessageContent extracts text and media type from a WhatsApp message.
+func extractMessageContent(m *waE2E.Message) (text, mediaType string) {
+	if m == nil {
+		return "", ""
+	}
+	switch {
+	case m.GetConversation() != "":
+		text = m.GetConversation()
+	case m.GetExtendedTextMessage() != nil:
+		text = m.GetExtendedTextMessage().GetText()
+	case m.GetImageMessage() != nil:
+		mediaType = "image"
+		text = m.GetImageMessage().GetCaption()
+	case m.GetVideoMessage() != nil:
+		mediaType = "video"
+		text = m.GetVideoMessage().GetCaption()
+	case m.GetAudioMessage() != nil:
+		mediaType = "audio"
+	case m.GetDocumentMessage() != nil:
+		mediaType = "document"
+		text = m.GetDocumentMessage().GetCaption()
+	case m.GetStickerMessage() != nil:
+		mediaType = "sticker"
+	case m.GetContactMessage() != nil:
+		mediaType = "contact"
+		text = m.GetContactMessage().GetDisplayName()
+	case m.GetLocationMessage() != nil:
+		mediaType = "location"
+		loc := m.GetLocationMessage()
+		if loc.GetName() != "" {
+			text = loc.GetName()
+		} else if loc.GetAddress() != "" {
+			text = loc.GetAddress()
+		}
+	}
+	return text, mediaType
 }
 
 func boolToInt(b bool) int {
