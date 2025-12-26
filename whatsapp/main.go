@@ -392,14 +392,61 @@ func openFile(path string) {
 
 // cmdSend sends a message
 func cmdSend(args []string) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: send <phone> <message>")
+	// Parse args: send [--name] [--reply-to=ID] <recipient> <message...>
+	var name string
+	var replyTo string
+	var positionalArgs []string
+
+	for i := 0; i < len(args); i++ {
+		switch {
+		case args[i] == "--name" && i+1 < len(args):
+			name = args[i+1]
+			i++ // skip next arg
+		case strings.HasPrefix(args[i], "--name="):
+			name = strings.TrimPrefix(args[i], "--name=")
+		case strings.HasPrefix(args[i], "--reply-to="):
+			replyTo = strings.TrimPrefix(args[i], "--reply-to=")
+		default:
+			positionalArgs = append(positionalArgs, args[i])
+		}
 	}
 
-	phone := args[0]
-	message := strings.Join(args[1:], " ")
+	if len(positionalArgs) < 1 && name == "" {
+		return fmt.Errorf("usage: send [--name=NAME | <phone>] [--reply-to=MSG_ID] <message>")
+	}
+
+	var phone string
+	var message string
+
+	if name != "" {
+		// --name mode: first positional is message
+		if len(positionalArgs) < 1 {
+			return fmt.Errorf("usage: send --name=NAME [--reply-to=MSG_ID] <message>")
+		}
+		message = strings.Join(positionalArgs, " ")
+	} else {
+		// Normal mode: first positional is phone, rest is message
+		if len(positionalArgs) < 2 {
+			return fmt.Errorf("usage: send <phone> [--reply-to=MSG_ID] <message>")
+		}
+		phone = positionalArgs[0]
+		message = strings.Join(positionalArgs[1:], " ")
+	}
 
 	ctx := context.Background()
+
+	// If --name provided, look up contact first (before connecting to WhatsApp)
+	if name != "" {
+		if err := initMessageDB(); err != nil {
+			return err
+		}
+		var err error
+		phone, err = lookupContactByName(name)
+		if err != nil {
+			return err
+		}
+	}
+
 	if err := initClient(ctx); err != nil {
 		return err
 	}
@@ -422,10 +469,28 @@ func cmdSend(args []string) error {
 		return err
 	}
 
-	// Send message
-	resp, err := client.SendMessage(ctx, jid, &waProto.Message{
+	// Build message
+	msg := &waProto.Message{
 		Conversation: &message,
-	})
+	}
+
+	// If replying to a message, add context info
+	if replyTo != "" {
+		contextInfo, err := getQuotedContext(replyTo, jid.String())
+		if err != nil {
+			return fmt.Errorf("failed to get quoted message: %w", err)
+		}
+		// Use ExtendedTextMessage for replies (Conversation doesn't support ContextInfo)
+		msg = &waProto.Message{
+			ExtendedTextMessage: &waProto.ExtendedTextMessage{
+				Text:        &message,
+				ContextInfo: contextInfo,
+			},
+		}
+	}
+
+	// Send message
+	resp, err := client.SendMessage(ctx, jid, msg)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %w", err)
 	}
@@ -436,17 +501,59 @@ func cmdSend(args []string) error {
 		"timestamp": resp.Timestamp.Unix(),
 		"recipient": jid.String(),
 	}
+	if replyTo != "" {
+		output["reply_to"] = replyTo
+	}
 	return printJSON(output)
 }
 
 // cmdSendFile sends a file attachment
 func cmdSendFile(args []string) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: send-file <phone> <file-path>")
+	// Parse args: send-file [--name=NAME] <recipient> <file-path>
+	var name string
+	var positionalArgs []string
+
+	for i := 0; i < len(args); i++ {
+		switch {
+		case args[i] == "--name" && i+1 < len(args):
+			name = args[i+1]
+			i++ // skip next arg
+		case strings.HasPrefix(args[i], "--name="):
+			name = strings.TrimPrefix(args[i], "--name=")
+		default:
+			positionalArgs = append(positionalArgs, args[i])
+		}
 	}
 
-	phone := args[0]
-	filePath := args[1]
+	var phone string
+	var filePath string
+
+	if name != "" {
+		// --name mode: only file path needed
+		if len(positionalArgs) < 1 {
+			return fmt.Errorf("usage: send-file --name=NAME <file-path>")
+		}
+		filePath = positionalArgs[0]
+	} else {
+		// Normal mode: phone and file path
+		if len(positionalArgs) < 2 {
+			return fmt.Errorf("usage: send-file <phone> <file-path>")
+		}
+		phone = positionalArgs[0]
+		filePath = positionalArgs[1]
+	}
+
+	// If --name provided, look up contact first
+	if name != "" {
+		if err := initMessageDB(); err != nil {
+			return err
+		}
+		var err error
+		phone, err = lookupContactByName(name)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Read file
 	data, err := os.ReadFile(filePath)
@@ -1215,7 +1322,7 @@ func cmdRefresh() error {
 	return printJSON(output)
 }
 
-// cmdMarkRead marks all messages in a chat as read
+// cmdMarkRead marks all messages in a chat as read (local + sends read receipts to WhatsApp)
 func cmdMarkRead(args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: mark-read <chat-jid>")
@@ -1227,7 +1334,73 @@ func cmdMarkRead(args []string) error {
 		return err
 	}
 
-	// Mark all messages in the chat as read
+	// Get unread message IDs and sender JIDs for sending read receipts
+	rows, err := messageDB.Query(`
+		SELECT id, sender_jid FROM messages
+		WHERE chat_jid = ? AND is_read = 0 AND is_from_me = 0
+		ORDER BY timestamp DESC
+	`, chatJID)
+	if err != nil {
+		return fmt.Errorf("failed to query unread messages: %w", err)
+	}
+
+	var messageIDs []string
+	var senderJID string
+	for rows.Next() {
+		var id, sender string
+		if err := rows.Scan(&id, &sender); err != nil {
+			rows.Close()
+			return fmt.Errorf("failed to scan row: %w", err)
+		}
+		messageIDs = append(messageIDs, id)
+		if senderJID == "" {
+			senderJID = sender
+		}
+	}
+	rows.Close()
+
+	// Send read receipts to WhatsApp if there are unread messages
+	receiptsSent := 0
+	if len(messageIDs) > 0 {
+		ctx := context.Background()
+		if err := initClient(ctx); err != nil {
+			return err
+		}
+
+		if client.Store.ID != nil {
+			if err := client.Connect(); err == nil {
+				defer client.Disconnect()
+				time.Sleep(2 * time.Second)
+
+				// Parse chat JID
+				jid, err := types.ParseJID(chatJID)
+				if err == nil {
+					// For groups, we need the sender JID; for DMs, sender is the chat JID
+					var sender types.JID
+					if strings.Contains(chatJID, "@g.us") && senderJID != "" {
+						sender, _ = types.ParseJID(senderJID)
+					} else {
+						sender = jid
+					}
+
+					// Convert string IDs to MessageID type
+					msgIDs := make([]types.MessageID, len(messageIDs))
+					for i, id := range messageIDs {
+						msgIDs[i] = types.MessageID(id)
+					}
+
+					// Send read receipt
+					if err := client.MarkRead(ctx, msgIDs, time.Now(), jid, sender); err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: failed to send read receipts: %v\n", err)
+					} else {
+						receiptsSent = len(messageIDs)
+					}
+				}
+			}
+		}
+	}
+
+	// Mark all messages in the chat as read in local DB
 	result, err := messageDB.Exec(`UPDATE messages SET is_read = 1 WHERE chat_jid = ? AND is_read = 0`, chatJID)
 	if err != nil {
 		return fmt.Errorf("failed to mark messages as read: %w", err)
@@ -1242,6 +1415,7 @@ func cmdMarkRead(args []string) error {
 		"success":         true,
 		"chat_jid":        chatJID,
 		"messages_marked": affected,
+		"receipts_sent":   receiptsSent,
 	}
 	return printJSON(output)
 }
@@ -1338,6 +1512,97 @@ func parseJID(phone string) (types.JID, error) {
 
 	// Assume individual contact
 	return types.NewJID(phone, types.DefaultUserServer), nil
+}
+
+// lookupContactByName looks up a contact by name in the local database.
+// Returns an error if no contacts match or if multiple contacts match.
+func lookupContactByName(name string) (string, error) {
+	// Search for contacts matching the name (case-insensitive)
+	// Check both contacts table and chats table for names
+	query := `
+		SELECT DISTINCT jid, COALESCE(name, push_name, '') as display_name
+		FROM (
+			SELECT jid, name, push_name FROM contacts
+			WHERE name LIKE ? OR push_name LIKE ?
+			UNION
+			SELECT jid, name, '' as push_name FROM chats
+			WHERE name LIKE ? AND is_group = 0
+		)
+		ORDER BY display_name
+	`
+	pattern := "%" + name + "%"
+	rows, err := messageDB.Query(query, pattern, pattern, pattern)
+	if err != nil {
+		return "", fmt.Errorf("failed to search contacts: %w", err)
+	}
+	defer rows.Close()
+
+	type match struct {
+		jid  string
+		name string
+	}
+	var matches []match
+	for rows.Next() {
+		var m match
+		if err := rows.Scan(&m.jid, &m.name); err != nil {
+			return "", fmt.Errorf("failed to scan contact: %w", err)
+		}
+		// Only include individual contacts (not groups)
+		if !strings.Contains(m.jid, "@g.us") {
+			matches = append(matches, m)
+		}
+	}
+
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no contact found matching '%s'", name)
+	}
+
+	if len(matches) > 1 {
+		var suggestions []string
+		for _, m := range matches {
+			// Extract phone number from JID
+			phone := strings.Split(m.jid, "@")[0]
+			if m.name != "" {
+				suggestions = append(suggestions, fmt.Sprintf("  %s (+%s)", m.name, phone))
+			} else {
+				suggestions = append(suggestions, fmt.Sprintf("  +%s", phone))
+			}
+		}
+		return "", fmt.Errorf("multiple contacts match '%s':\n%s\nUse a more specific name or phone number", name, strings.Join(suggestions, "\n"))
+	}
+
+	// Extract phone number from JID (remove @s.whatsapp.net)
+	phone := strings.Split(matches[0].jid, "@")[0]
+	return phone, nil
+}
+
+// getQuotedContext retrieves context info for replying to a specific message
+func getQuotedContext(messageID, chatJID string) (*waProto.ContextInfo, error) {
+	// Look up the message in the database
+	var senderJID, text string
+	err := messageDB.QueryRow(`
+		SELECT sender_jid, text FROM messages
+		WHERE id = ? AND chat_jid = ?
+	`, messageID, chatJID).Scan(&senderJID, &text)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("message not found: %s", messageID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to look up message: %w", err)
+	}
+
+	// Parse sender JID
+	participant, err := types.ParseJID(senderJID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid sender JID: %w", err)
+	}
+	participantStr := participant.String()
+
+	return &waProto.ContextInfo{
+		StanzaID:      &messageID,
+		Participant:   &participantStr,
+		QuotedMessage: &waProto.Message{Conversation: &text},
+	}, nil
 }
 
 func saveMessage(evt *events.Message) error {

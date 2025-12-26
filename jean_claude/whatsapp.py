@@ -140,18 +140,83 @@ def sync():
 
 
 @cli.command()
-@click.argument("recipient")
-@click.argument("message")
-def send(recipient: str, message: str):
+@click.argument("recipient", required=False)
+@click.argument("message", required=False)
+@click.option(
+    "--name", help="Look up recipient by contact name instead of phone number"
+)
+@click.option("--reply-to", help="Message ID to reply to (creates quoted reply)")
+def send(
+    recipient: str | None, message: str | None, name: str | None, reply_to: str | None
+):
     """Send a WhatsApp message.
 
     RECIPIENT: Phone number with country code (e.g., +12025551234)
     MESSAGE: The message text to send
 
+    Use --name to send by contact name instead of phone number.
+    Use --reply-to to create a quoted reply to a specific message.
+
     Examples:
         jean-claude whatsapp send "+12025551234" "Hello!"
+        jean-claude whatsapp send --name "John Doe" "Hello!"
+        jean-claude whatsapp send "+12025551234" --reply-to "MSG_ID" "Reply text"
     """
-    result = _run_whatsapp_cli("send", recipient, message)
+    args = ["send"]
+    if name:
+        args.append(f"--name={name}")
+        if not message and recipient:
+            # If --name is used, recipient is actually the message
+            message = recipient
+            recipient = None
+    if reply_to:
+        args.append(f"--reply-to={reply_to}")
+    if recipient:
+        args.append(recipient)
+    if message:
+        args.append(message)
+    else:
+        raise click.UsageError("Message is required")
+
+    result = _run_whatsapp_cli(*args)
+    if result:
+        click.echo(json.dumps(result, indent=2))
+
+
+@cli.command("send-file")
+@click.argument("recipient", required=False)
+@click.argument("file_path", required=False, type=click.Path(exists=True))
+@click.option(
+    "--name", help="Look up recipient by contact name instead of phone number"
+)
+def send_file(recipient: str | None, file_path: str | None, name: str | None):
+    """Send a file attachment via WhatsApp.
+
+    RECIPIENT: Phone number with country code (e.g., +12025551234)
+    FILE_PATH: Path to the file to send
+
+    Supports images, videos, audio, and documents.
+    Use --name to send by contact name instead of phone number.
+
+    Examples:
+        jean-claude whatsapp send-file "+12025551234" ./photo.jpg
+        jean-claude whatsapp send-file --name "John Doe" ./document.pdf
+    """
+    args = ["send-file"]
+    if name:
+        args.append(f"--name={name}")
+        if not file_path and recipient:
+            # If --name is used, recipient is actually the file path
+            file_path = recipient
+            recipient = None
+    if recipient:
+        args.append(recipient)
+    if file_path:
+        args.append(file_path)
+    else:
+        raise click.UsageError("File path is required")
+
+    result = _run_whatsapp_cli(*args)
     if result:
         click.echo(json.dumps(result, indent=2))
 
