@@ -149,8 +149,10 @@ class TestGmailDraftOperations:
         assert reply_draft is not None, "Reply draft not found"
         draft_cleanup(reply_draft["id"])
 
-    def test_forward_draft(self, runner, test_message, my_email, draft_cleanup):
-        """Test creating a forward draft."""
+    def test_forward_draft_includes_original_message(
+        self, runner, test_message, my_email, draft_cleanup
+    ):
+        """Test that forward draft includes original message body and proper From header."""
         forward_data = json.dumps(
             {
                 "to": my_email,
@@ -175,7 +177,78 @@ class TestGmailDraftOperations:
                 break
 
         assert forward_draft is not None, "Forward draft not found"
-        draft_cleanup(forward_draft["id"])
+        draft_id = forward_draft["id"]
+        draft_cleanup(draft_id)
+
+        # Get full draft content to verify original message is included
+        result = runner.invoke(cli, ["gmail", "draft", "get", draft_id])
+        assert result.exit_code == 0
+        draft_file = result.stdout.strip()
+
+        with open(draft_file) as f:
+            draft_content = f.read()
+
+        # Verify the forwarded message separator is present
+        assert "---------- Forwarded message ----------" in draft_content, (
+            "Forward draft missing forwarded message separator"
+        )
+
+        # Verify original message body is included (from test fixture)
+        assert "automated integration test message" in draft_content, (
+            "Forward draft missing original message body"
+        )
+
+        # Verify From header has display name (not just email)
+        # Format should be "From: Name <email>" or similar with a name
+        from_line = next(
+            line for line in draft_content.split("\n") if line.startswith("From:")
+        )
+        assert "<" in from_line and ">" in from_line, (
+            f"From header missing display name format: {from_line}"
+        )
+
+    def test_draft_create_has_from_header(self, runner, my_email, draft_cleanup):
+        """Test that draft create sets proper From header with display name."""
+        draft_data = json.dumps(
+            {
+                "to": my_email,
+                "subject": "Test From Header",
+                "body": "Testing From header format.",
+            }
+        )
+        result = runner.invoke(cli, ["gmail", "draft", "create"], input=draft_data)
+        assert result.exit_code == 0
+
+        # List drafts and find ours
+        result = runner.invoke(cli, ["gmail", "draft", "list", "-n", "10"])
+        assert result.exit_code == 0
+        drafts = json.loads(result.stdout)
+
+        test_draft = None
+        for draft in drafts:
+            if "Testing From header" in draft["snippet"]:
+                test_draft = draft
+                break
+
+        assert test_draft is not None, "Test draft not found"
+        draft_id = test_draft["id"]
+        draft_cleanup(draft_id)
+
+        # Get full draft content
+        result = runner.invoke(cli, ["gmail", "draft", "get", draft_id])
+        assert result.exit_code == 0
+        draft_file = result.stdout.strip()
+
+        with open(draft_file) as f:
+            draft_content = f.read()
+
+        # Verify From header has display name format
+        from_line = next(
+            line for line in draft_content.split("\n") if line.startswith("From:")
+        )
+        assert "<" in from_line and ">" in from_line, (
+            f"From header missing display name format: {from_line}"
+        )
 
 
 class TestGmailSearch:

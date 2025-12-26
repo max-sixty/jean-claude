@@ -84,17 +84,32 @@ def get_people():
 def get_my_from_address(service=None) -> str:
     """Get the user's From address with display name.
 
-    Uses the Google People API to get the user's profile name, which is the same
-    name Gmail uses when sending emails from the web interface.
+    Checks sources in order of preference:
+    1. Gmail send-as displayName (explicit user configuration)
+    2. Google Account profile name via People API (requires userinfo.profile scope)
+    3. Just the email address (fallback)
 
     Returns formatted as "Name <email>" or just "email" if no name found.
     """
     if service is None:
         service = get_gmail()
 
-    my_email = service.users().getProfile(userId="me").execute()["emailAddress"]
+    # Get primary email and any configured display name from send-as settings
+    send_as = service.users().settings().sendAs().list(userId="me").execute()
+    email = ""
+    for alias in send_as.get("sendAs", []):
+        if alias.get("isPrimary"):
+            email = alias.get("sendAsEmail", "")
+            display_name = alias.get("displayName", "")
+            if display_name:
+                return formataddr((display_name, email))
+            break
 
-    # Get display name from Google People API (same source Gmail web UI uses)
+    if not email:
+        email = service.users().getProfile(userId="me").execute()["emailAddress"]
+
+    # Fallback: try Google Account profile name via People API
+    # This mirrors Gmail's behavior when send-as displayName is empty
     try:
         people = get_people()
         profile = (
@@ -103,19 +118,17 @@ def get_my_from_address(service=None) -> str:
             .execute()
         )
         names = profile.get("names", [])
-        # Find the primary name (or first available)
         for name in names:
             if name.get("metadata", {}).get("primary", False):
-                display_name = name.get("displayName")
-                if display_name:
-                    return formataddr((display_name, my_email))
-        # Fall back to first name if no primary
-        if names and names[0].get("displayName"):
-            return formataddr((names[0]["displayName"], my_email))
+                if display_name := name.get("displayName"):
+                    return formataddr((display_name, email))
+        if names and (display_name := names[0].get("displayName")):
+            return formataddr((display_name, email))
     except Exception as e:
+        # People API requires userinfo.profile scope - user may need to re-auth
         logger.debug("Could not retrieve display name from People API", error=str(e))
 
-    return my_email
+    return email
 
 
 def _wrap_batch_error(request_id: str, exception: Exception) -> NoReturn:
@@ -721,7 +734,9 @@ def draft_create():
         if field not in data:
             raise click.UsageError(f"Missing required field: {field}")
 
+    service = get_gmail()
     msg = MIMEText(data["body"])
+    msg["from"] = get_my_from_address(service)
     msg["to"] = data["to"]
     msg["subject"] = data["subject"]
     if data.get("cc"):
@@ -731,8 +746,7 @@ def draft_create():
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     result = (
-        get_gmail()
-        .users()
+        service.users()
         .drafts()
         .create(userId="me", body={"message": {"raw": raw}})
         .execute()
@@ -1050,6 +1064,7 @@ def draft_forward(message_id: str):
     fwd_body += original_body
 
     msg = MIMEText(fwd_body)
+    msg["from"] = get_my_from_address(service)
     msg["to"] = data["to"]
     msg["subject"] = subject
 
