@@ -29,6 +29,8 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["integration: tests requiring Google API credentials (deselected by default)"]
+addopts = "-m 'not integration'"
 
 [tool.typos.default.extend-words]
 # BA is a valid spreadsheet column (A-Z, AA-AZ, BA-BZ, etc.)
