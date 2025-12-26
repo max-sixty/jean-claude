@@ -1,4 +1,4 @@
-Usage: jean-claude gcal delete [OPTIONS] EVENT_ID
+Usage: j-claude gcal delete [OPTIONS] EVENT_ID
 
   Delete/cancel a calendar event.
 

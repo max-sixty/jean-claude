@@ -1,4 +1,4 @@
-Usage: jean-claude gsheets create [OPTIONS] TITLE
+Usage: j-claude gsheets create [OPTIONS] TITLE
 
   Create a new spreadsheet.
 

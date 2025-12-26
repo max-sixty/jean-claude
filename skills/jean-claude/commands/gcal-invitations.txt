@@ -1,4 +1,4 @@
-Usage: jean-claude gcal invitations [OPTIONS]
+Usage: j-claude gcal invitations [OPTIONS]
 
   List pending calendar invitations. Returns JSON array.
 

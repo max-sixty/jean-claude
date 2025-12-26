@@ -1,4 +1,4 @@
-Usage: jean-claude imessage participants [OPTIONS] CHAT_ID
+Usage: j-claude imessage participants [OPTIONS] CHAT_ID
 
   List participants of a group chat.
 

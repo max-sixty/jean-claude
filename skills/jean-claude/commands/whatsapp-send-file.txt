@@ -1,0 +1,16 @@
+Usage: j-claude whatsapp send-file [OPTIONS] [RECIPIENT] [FILE_PATH]
+
+  Send a file attachment via WhatsApp.
+
+  RECIPIENT: Phone number with country code (e.g., +12025551234) FILE_PATH:
+  Path to the file to send
+
+  Supports images, videos, audio, and documents. Use --name to send by contact
+  name instead of phone number.
+
+  Examples:     jean-claude whatsapp send-file "+12025551234" ./photo.jpg
+  jean-claude whatsapp send-file --name "John Doe" ./document.pdf
+
+Options:
+  --name TEXT  Look up recipient by contact name instead of phone number
+  --help       Show this message and exit.

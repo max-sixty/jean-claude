@@ -1,4 +1,4 @@
-Usage: jean-claude whatsapp messages [OPTIONS]
+Usage: j-claude whatsapp messages [OPTIONS]
 
   List messages from local database.
 

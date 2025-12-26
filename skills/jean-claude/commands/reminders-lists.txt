@@ -1,4 +1,4 @@
-Usage: jean-claude reminders lists [OPTIONS]
+Usage: j-claude reminders lists [OPTIONS]
 
   List all reminder lists.
 

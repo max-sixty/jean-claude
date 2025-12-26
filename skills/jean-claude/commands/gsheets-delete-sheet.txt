@@ -1,4 +1,4 @@
-Usage: jean-claude gsheets delete-sheet [OPTIONS] SPREADSHEET_ID SHEET_NAME
+Usage: j-claude gsheets delete-sheet [OPTIONS] SPREADSHEET_ID SHEET_NAME
 
   Delete a sheet from a spreadsheet.
 

@@ -1,4 +1,4 @@
-Usage: jean-claude gcal list [OPTIONS]
+Usage: j-claude gcal list [OPTIONS]
 
   List calendar events. Returns JSON array of events.
 

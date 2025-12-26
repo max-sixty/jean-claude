@@ -1,4 +1,4 @@
-Usage: jean-claude gsheets info [OPTIONS] SPREADSHEET_ID
+Usage: j-claude gsheets info [OPTIONS] SPREADSHEET_ID
 
   Get spreadsheet metadata. Returns JSON.
 

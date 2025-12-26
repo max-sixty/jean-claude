@@ -1,4 +1,4 @@
-Usage: jean-claude imessage history [OPTIONS] [CHAT_ID]
+Usage: j-claude imessage history [OPTIONS] [CHAT_ID]
 
   Get message history for a specific chat (requires Full Disk Access).
 

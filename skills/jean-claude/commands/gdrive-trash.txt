@@ -1,4 +1,4 @@
-Usage: jean-claude gdrive trash [OPTIONS] FILE_ID
+Usage: j-claude gdrive trash [OPTIONS] FILE_ID
 
   Move a file to trash.
 

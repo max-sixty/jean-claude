@@ -1,4 +1,4 @@
-Usage: jean-claude imessage open [OPTIONS] CHAT_ID
+Usage: j-claude imessage open [OPTIONS] CHAT_ID
 
   Open a chat in Messages.app (marks messages as read).
 

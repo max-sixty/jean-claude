@@ -1,4 +1,4 @@
-Usage: jean-claude gmail inbox [OPTIONS]
+Usage: j-claude gmail inbox [OPTIONS]
 
   List threads in inbox.
 

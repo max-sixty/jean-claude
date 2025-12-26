@@ -1,4 +1,4 @@
-Usage: jean-claude gdrive list [OPTIONS]
+Usage: j-claude gdrive list [OPTIONS]
 
   List files in a folder. Returns JSON array.
 

@@ -140,31 +140,100 @@ def sync():
 
 
 @cli.command()
-@click.argument("recipient")
-@click.argument("message")
-def send(recipient: str, message: str):
+@click.argument("recipient", required=False)
+@click.argument("message", required=False)
+@click.option(
+    "--name", help="Look up recipient by contact name instead of phone number"
+)
+@click.option("--reply-to", help="Message ID to reply to (creates quoted reply)")
+def send(
+    recipient: str | None, message: str | None, name: str | None, reply_to: str | None
+):
     """Send a WhatsApp message.
 
     RECIPIENT: Phone number with country code (e.g., +12025551234)
     MESSAGE: The message text to send
 
+    Use --name to send by contact name instead of phone number.
+    Use --reply-to to create a quoted reply to a specific message.
+
     Examples:
         jean-claude whatsapp send "+12025551234" "Hello!"
+        jean-claude whatsapp send --name "John Doe" "Hello!"
+        jean-claude whatsapp send "+12025551234" --reply-to "MSG_ID" "Reply text"
     """
-    result = _run_whatsapp_cli("send", recipient, message)
+    args = ["send"]
+    if name:
+        args.append(f"--name={name}")
+        if not message and recipient:
+            # If --name is used, recipient is actually the message
+            message = recipient
+            recipient = None
+    if reply_to:
+        args.append(f"--reply-to={reply_to}")
+    if recipient:
+        args.append(recipient)
+    if message:
+        args.append(message)
+    else:
+        raise click.UsageError("Message is required")
+
+    result = _run_whatsapp_cli(*args)
+    if result:
+        click.echo(json.dumps(result, indent=2))
+
+
+@cli.command("send-file")
+@click.argument("recipient", required=False)
+@click.argument("file_path", required=False, type=click.Path(exists=True))
+@click.option(
+    "--name", help="Look up recipient by contact name instead of phone number"
+)
+def send_file(recipient: str | None, file_path: str | None, name: str | None):
+    """Send a file attachment via WhatsApp.
+
+    RECIPIENT: Phone number with country code (e.g., +12025551234)
+    FILE_PATH: Path to the file to send
+
+    Supports images, videos, audio, and documents.
+    Use --name to send by contact name instead of phone number.
+
+    Examples:
+        jean-claude whatsapp send-file "+12025551234" ./photo.jpg
+        jean-claude whatsapp send-file --name "John Doe" ./document.pdf
+    """
+    args = ["send-file"]
+    if name:
+        args.append(f"--name={name}")
+        if not file_path and recipient:
+            # If --name is used, recipient is actually the file path
+            file_path = recipient
+            recipient = None
+    if recipient:
+        args.append(recipient)
+    if file_path:
+        args.append(file_path)
+    else:
+        raise click.UsageError("File path is required")
+
+    result = _run_whatsapp_cli(*args)
     if result:
         click.echo(json.dumps(result, indent=2))
 
 
 @cli.command()
 @click.option("-n", "--max-results", default=50, help="Maximum chats to return")
-def chats(max_results: int):
+@click.option("--unread", is_flag=True, help="Show only chats with unread messages")
+def chats(max_results: int, unread: bool):
     """List WhatsApp chats.
 
     Shows recent chats with names (for groups and contacts) and last
-    message timestamps.
+    message timestamps. Use --unread to show only chats with unread messages.
     """
-    result = _run_whatsapp_cli("chats")
+    args = ["chats"]
+    if unread:
+        args.append("--unread")
+    result = _run_whatsapp_cli(*args)
     if result and isinstance(result, list):
         # Apply limit
         chats_list = result[:max_results]
@@ -187,7 +256,7 @@ def messages(chat_jid: str | None, max_results: int, unread: bool):
         jean-claude whatsapp messages --chat "120363277025153496@g.us"
         jean-claude whatsapp messages --unread
     """
-    args = ["messages", f"--limit={max_results}"]
+    args = ["messages", f"--max-results={max_results}"]
     if chat_jid:
         args.append(f"--chat={chat_jid}")
     if unread:
@@ -202,6 +271,38 @@ def messages(chat_jid: str | None, max_results: int, unread: bool):
 def contacts():
     """List WhatsApp contacts from local database."""
     result = _run_whatsapp_cli("contacts")
+    if result:
+        click.echo(json.dumps(result, indent=2))
+
+
+@cli.command()
+@click.argument("query")
+@click.option("-n", "--max-results", default=50, help="Maximum results to return")
+def search(query: str, max_results: int):
+    """Search message history.
+
+    QUERY: Search term (searches message text)
+
+    Examples:
+        jean-claude whatsapp search "dinner plans"
+        jean-claude whatsapp search "meeting" -n 20
+    """
+    result = _run_whatsapp_cli("search", query, f"--max-results={max_results}")
+    if result:
+        click.echo(json.dumps(result, indent=2))
+
+
+@cli.command()
+@click.argument("group_jid")
+def participants(group_jid: str):
+    """List participants of a group chat.
+
+    GROUP_JID: The group JID (e.g., "120363277025153496@g.us")
+
+    Examples:
+        jean-claude whatsapp participants "120363277025153496@g.us"
+    """
+    result = _run_whatsapp_cli("participants", group_jid)
     if result:
         click.echo(json.dumps(result, indent=2))
 

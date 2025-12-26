@@ -84,17 +84,32 @@ def get_people():
 def get_my_from_address(service=None) -> str:
     """Get the user's From address with display name.
 
-    Uses the Google People API to get the user's profile name, which is the same
-    name Gmail uses when sending emails from the web interface.
+    Checks sources in order of preference:
+    1. Gmail send-as displayName (explicit user configuration)
+    2. Google Account profile name via People API (requires userinfo.profile scope)
+    3. Just the email address (fallback)
 
     Returns formatted as "Name <email>" or just "email" if no name found.
     """
     if service is None:
         service = get_gmail()
 
-    my_email = service.users().getProfile(userId="me").execute()["emailAddress"]
+    # Get primary email and any configured display name from send-as settings
+    send_as = service.users().settings().sendAs().list(userId="me").execute()
+    email = ""
+    for alias in send_as.get("sendAs", []):
+        if alias.get("isPrimary"):
+            email = alias.get("sendAsEmail", "")
+            display_name = alias.get("displayName", "")
+            if display_name:
+                return formataddr((display_name, email))
+            break
 
-    # Get display name from Google People API (same source Gmail web UI uses)
+    if not email:
+        email = service.users().getProfile(userId="me").execute()["emailAddress"]
+
+    # Fallback: try Google Account profile name via People API
+    # This mirrors Gmail's behavior when send-as displayName is empty
     try:
         people = get_people()
         profile = (
@@ -103,19 +118,17 @@ def get_my_from_address(service=None) -> str:
             .execute()
         )
         names = profile.get("names", [])
-        # Find the primary name (or first available)
         for name in names:
             if name.get("metadata", {}).get("primary", False):
-                display_name = name.get("displayName")
-                if display_name:
-                    return formataddr((display_name, my_email))
-        # Fall back to first name if no primary
-        if names and names[0].get("displayName"):
-            return formataddr((names[0]["displayName"], my_email))
+                if display_name := name.get("displayName"):
+                    return formataddr((display_name, email))
+        if names and (display_name := names[0].get("displayName")):
+            return formataddr((display_name, email))
     except Exception as e:
+        # People API requires userinfo.profile scope - user may need to re-auth
         logger.debug("Could not retrieve display name from People API", error=str(e))
 
-    return my_email
+    return email
 
 
 def _wrap_batch_error(request_id: str, exception: Exception) -> NoReturn:
@@ -721,7 +734,9 @@ def draft_create():
         if field not in data:
             raise click.UsageError(f"Missing required field: {field}")
 
+    service = get_gmail()
     msg = MIMEText(data["body"])
+    msg["from"] = get_my_from_address(service)
     msg["to"] = data["to"]
     msg["subject"] = data["subject"]
     if data.get("cc"):
@@ -731,8 +746,7 @@ def draft_create():
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     result = (
-        get_gmail()
-        .users()
+        service.users()
         .drafts()
         .create(userId="me", body={"message": {"raw": raw}})
         .execute()
@@ -827,6 +841,75 @@ def _build_html_quoted_reply(
 <blockquote class="gmail_quote" style="margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex">
 {quoted_content}
 </blockquote>
+</div>"""
+
+
+def _build_forward_text(
+    body: str, original_body: str, from_addr: str, date: str, subject: str
+) -> str:
+    """Build plain text forward body with Gmail-style header.
+
+    Format:
+        [user's message]
+
+        ---------- Forwarded message ----------
+        From: Sender Name <sender@example.com>
+        Date: Mon, 22 Dec 2025 at 02:50
+        Subject: Original subject
+
+        [original message content]
+    """
+    formatted_date = _format_gmail_date(date)
+
+    fwd_body = body
+    if fwd_body:
+        fwd_body += "\n\n"
+    fwd_body += "---------- Forwarded message ----------\n"
+    fwd_body += f"From: {from_addr}\n"
+    fwd_body += f"Date: {formatted_date}\n"
+    fwd_body += f"Subject: {subject}\n\n"
+    fwd_body += original_body
+    return fwd_body
+
+
+def _build_forward_html(
+    body: str,
+    original_html: str | None,
+    original_text: str,
+    from_addr: str,
+    date: str,
+    subject: str,
+) -> str:
+    """Build HTML forward body with Gmail-style formatting.
+
+    Format matches Gmail's HTML forwards.
+    If original was plain text, converts it to HTML.
+    """
+    formatted_date = _format_gmail_date(date)
+
+    # Convert forward body to HTML
+    body_html = _text_to_html(body) if body else ""
+
+    # Use original HTML if available, otherwise convert plain text
+    if original_html:
+        quoted_content = original_html
+    else:
+        quoted_content = _text_to_html(original_text)
+
+    # Escape header values for HTML safety
+    safe_from = html.escape(from_addr)
+    safe_date = html.escape(formatted_date)
+    safe_subject = html.escape(subject)
+
+    return f"""<div dir="ltr">{body_html}</div>
+<br>
+<div class="gmail_quote gmail_quote_container">
+<div dir="ltr">---------- Forwarded message ----------<br>
+From: {safe_from}<br>
+Date: {safe_date}<br>
+Subject: {safe_subject}<br><br>
+</div>
+{quoted_content}
 </div>"""
 
 
@@ -1032,26 +1115,39 @@ def draft_forward(message_id: str):
         h["name"].lower(): h["value"]
         for h in original.get("payload", {}).get("headers", [])
     }
-    subject = headers.get("subject", "")
+    orig_subject = headers.get("subject", "")
     from_addr = headers.get("from", "")
     date = headers.get("date", "")
-    original_body = decode_body(original.get("payload", {}))
 
-    if not subject.lower().startswith("fwd:"):
-        subject = f"Fwd: {subject}"
+    # Get both plain text and HTML for proper forwarding
+    payload = original.get("payload", {})
+    original_text, original_html = extract_body(payload)
 
-    fwd_body = data.get("body", "")
-    if fwd_body:
-        fwd_body += "\n\n"
-    fwd_body += "---------- Forwarded message ----------\n"
-    fwd_body += f"From: {from_addr}\n"
-    fwd_body += f"Date: {date}\n"
-    fwd_body += f"Subject: {headers.get('subject', '')}\n\n"
-    fwd_body += original_body
+    # Build forward subject
+    if orig_subject.lower().startswith("fwd:"):
+        subject = orig_subject
+    else:
+        subject = f"Fwd: {orig_subject}"
 
-    msg = MIMEText(fwd_body)
+    user_body = data.get("body", "")
+
+    # Build both plain text and HTML versions (like replies)
+    plain_body = _build_forward_text(
+        user_body, original_text, from_addr, date, orig_subject
+    )
+    html_body = _build_forward_html(
+        user_body, original_html, original_text, from_addr, date, orig_subject
+    )
+
+    # Create multipart/alternative with both versions
+    msg = MIMEMultipart("alternative")
+    msg["from"] = get_my_from_address(service)
     msg["to"] = data["to"]
     msg["subject"] = subject
+
+    # Attach plain text first, then HTML (email clients prefer later parts)
+    msg.attach(MIMEText(plain_body, "plain"))
+    msg.attach(MIMEText(html_body, "html"))
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     result = (

@@ -1,4 +1,4 @@
-Usage: jean-claude gdocs read [OPTIONS] DOCUMENT_ID
+Usage: j-claude gdocs read [OPTIONS] DOCUMENT_ID
 
   Read document structure. Returns JSON.
 

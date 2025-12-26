@@ -1,4 +1,4 @@
-Usage: jean-claude gmail attachments [OPTIONS] MESSAGE_ID
+Usage: j-claude gmail attachments [OPTIONS] MESSAGE_ID
 
   List attachments for a message.
 

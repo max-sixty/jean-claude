@@ -1,4 +1,4 @@
-Usage: jean-claude imessage send-file [OPTIONS] [RECIPIENT] [FILE_PATH]
+Usage: j-claude imessage send-file [OPTIONS] [RECIPIENT] [FILE_PATH]
 
   Send a file attachment via iMessage.
 

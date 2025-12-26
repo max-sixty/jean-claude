@@ -1,4 +1,4 @@
-Usage: jean-claude imessage unread [OPTIONS]
+Usage: j-claude imessage unread [OPTIONS]
 
   List unread messages (requires Full Disk Access).
 
