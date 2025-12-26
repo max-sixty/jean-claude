@@ -575,6 +575,7 @@ def get(message_id: str):
     Fetches the full message content and writes it to ~/.cache/jean-claude/emails/.
     Returns the message summary JSON to stdout.
 
+    \b
     Example:
         jean-claude gmail get 19b51f93fcf3f8ca
     """
@@ -681,6 +682,7 @@ def draft_create():
 
     JSON fields: to (required), subject (required), body (required), cc, bcc
 
+    \b
     Example:
         echo '{"to": "x@y.com", "subject": "Hi!", "body": "Hello!"}' | jean-claude gmail draft create
     """
@@ -716,6 +718,7 @@ def draft_create():
 def draft_send(draft_id: str):
     """Send an existing draft.
 
+    \b
     Example:
         jean-claude gmail draft send r-123456789
     """
@@ -1015,9 +1018,9 @@ def draft_reply(message_id: str, cc: str | None):
 
     Body is read from stdin.
 
+    \b
     Examples:
         echo "Thanks!" | jean-claude gmail draft reply MSG_ID
-
         cat << 'EOF' | jean-claude gmail draft reply MSG_ID --cc "other@example.com"
         Thanks for the update!
         EOF
@@ -1044,9 +1047,9 @@ def draft_reply_all(message_id: str, cc: str | None):
 
     Body is read from stdin.
 
+    \b
     Examples:
         echo "Thanks everyone!" | jean-claude gmail draft reply-all MSG_ID
-
         cat << 'EOF' | jean-claude gmail draft reply-all MSG_ID
         Thanks for the update!
         EOF
@@ -1069,13 +1072,12 @@ def draft_forward(message_id: str, to: str):
 
     Body is read from stdin (can be empty for forwarding without adding text).
 
+    \b
     Examples:
         echo "FYI" | jean-claude gmail draft forward MSG_ID someone@example.com
-
         cat << 'EOF' | jean-claude gmail draft forward MSG_ID someone@example.com
         Please see the message below.
         EOF
-
         # Forward without adding text
         jean-claude gmail draft forward MSG_ID someone@example.com < /dev/null
     """
@@ -1141,6 +1143,7 @@ def draft_forward(message_id: str, to: str):
 def draft_list(max_results: int, page_token: str | None):
     """List drafts.
 
+    \b
     Example:
         jean-claude gmail draft list
     """
@@ -1188,11 +1191,13 @@ def draft_get(draft_id: str):
     Writes JSON that can be edited and piped directly to 'draft update'.
     File is written to ~/.cache/jean-claude/drafts/.
 
+    \b
     Workflow:
         jean-claude gmail draft get DRAFT_ID
         # Edit the body field with Edit tool
         cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
 
+    \b
     Example:
         jean-claude gmail draft get r-123456789
     """
@@ -1237,11 +1242,13 @@ def draft_update(draft_id: str):
 
     JSON fields (all optional): to, cc, bcc, subject, body
 
+    \b
     Workflow for iterating on long emails:
         jean-claude gmail draft get DRAFT_ID
         # Edit the body field with Edit tool
         cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
 
+    \b
     Example:
         echo '{"cc": "new@example.com"}' | jean-claude gmail draft update DRAFT_ID
         echo '{"subject": "New subject", "body": "New body"}' | jean-claude gmail draft update DRAFT_ID
@@ -1295,6 +1302,7 @@ def draft_update(draft_id: str):
 def draft_delete(draft_id: str):
     """Permanently delete a draft.
 
+    \b
     Example:
         jean-claude gmail draft delete r-123456789
     """
@@ -1341,6 +1349,7 @@ def archive(thread_ids: tuple[str, ...], query: str | None, max_results: int):
 
     Accepts thread IDs (from inbox/search output) or a query.
 
+    \b
     Examples:
         jean-claude gmail archive THREAD_ID1 THREAD_ID2
         jean-claude gmail archive --query "from:newsletter@example.com"
@@ -1454,6 +1463,7 @@ def _extract_attachments(parts: list, attachments: list) -> None:
 def attachments(message_id: str):
     """List attachments for a message.
 
+    \b
     Example:
         jean-claude gmail attachments MSG_ID
     """

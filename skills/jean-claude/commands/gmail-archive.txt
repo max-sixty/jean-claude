@@ -7,8 +7,9 @@ Usage: jean-claude gmail archive [OPTIONS] [THREAD_IDS]...
 
   Accepts thread IDs (from inbox/search output) or a query.
 
-  Examples:     jean-claude gmail archive THREAD_ID1 THREAD_ID2     jean-
-  claude gmail archive --query "from:newsletter@example.com"
+  Examples:
+      jean-claude gmail archive THREAD_ID1 THREAD_ID2
+      jean-claude gmail archive --query "from:newsletter@example.com"
 
 Options:
   -q, --query TEXT           Archive all inbox messages matching query (e.g.,

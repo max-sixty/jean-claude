@@ -5,7 +5,8 @@ Usage: jean-claude gmail get [OPTIONS] MESSAGE_ID
   Fetches the full message content and writes it to ~/.cache/jean-
   claude/emails/. Returns the message summary JSON to stdout.
 
-  Example:     jean-claude gmail get 19b51f93fcf3f8ca
+  Example:
+      jean-claude gmail get 19b51f93fcf3f8ca
 
 Options:
   --help  Show this message and exit.

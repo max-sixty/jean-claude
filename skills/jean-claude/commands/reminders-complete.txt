@@ -4,7 +4,8 @@ Usage: jean-claude reminders complete [OPTIONS] REMINDER_ID
 
   REMINDER_ID: The reminder ID (from 'reminders list' output)
 
-  Example:     jean-claude reminders complete "x-apple-reminder://..."
+  Example:
+      jean-claude reminders complete "x-apple-reminder://..."
 
 Options:
   --help  Show this message and exit.

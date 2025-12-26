@@ -6,9 +6,9 @@ Usage: jean-claude gsheets append [OPTIONS] SPREADSHEET_ID
 
   Input format: JSON array of rows, where each row is an array of cell values.
 
-  Examples:     echo '[["Alice", 100], ["Bob", 200]]' | jean-claude gsheets
-  append SPREADSHEET_ID     cat data.json | jean-claude gsheets append
-  SPREADSHEET_ID --sheet 'Data'
+  Examples:
+      echo '[["Alice", 100], ["Bob", 200]]' | jean-claude gsheets append SPREADSHEET_ID
+      cat data.json | jean-claude gsheets append SPREADSHEET_ID --sheet 'Data'
 
 Options:
   --sheet TEXT  Sheet name (default: Sheet1)

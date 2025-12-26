@@ -4,7 +4,8 @@ Usage: jean-claude imessage participants [OPTIONS] CHAT_ID
 
   CHAT_ID: The chat ID (e.g., any;+;chat123456789)
 
-  Example:     jean-claude imessage participants "any;+;chat123456789"
+  Example:
+      jean-claude imessage participants "any;+;chat123456789"
 
 Options:
   --help  Show this message and exit.

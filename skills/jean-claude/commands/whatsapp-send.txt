@@ -6,10 +6,11 @@ Usage: jean-claude whatsapp send [OPTIONS] RECIPIENT
 
   Message body is read from stdin.
 
-  Examples:     echo "Hello!" | jean-claude whatsapp send "+12025551234"
-
-      cat << 'EOF' | jean-claude whatsapp send "+12025551234"     It's great
-      to hear from you!     EOF
+  Examples:
+      echo "Hello!" | jean-claude whatsapp send "+12025551234"
+      cat << 'EOF' | jean-claude whatsapp send "+12025551234"
+      It's great to hear from you!
+      EOF
 
 Options:
   --reply-to TEXT  Message ID to reply to

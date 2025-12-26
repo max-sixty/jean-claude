@@ -6,10 +6,12 @@ Usage: jean-claude imessage messages [OPTIONS]
   --name to filter to a specific conversation. Use --unread to show only
   unread messages.
 
-  Examples:     jean-claude imessage messages -n 20     jean-claude imessage
-  messages --chat "any;-;+12025551234"     jean-claude imessage messages
-  --name "Kevin Seals"     jean-claude imessage messages --unread     jean-
-  claude imessage messages --unread --include-spam
+  Examples:
+      jean-claude imessage messages -n 20
+      jean-claude imessage messages --chat "any;-;+12025551234"
+      jean-claude imessage messages --name "Kevin Seals"
+      jean-claude imessage messages --unread
+      jean-claude imessage messages --unread --include-spam
 
 Options:
   --chat TEXT                Filter to specific chat ID or phone number

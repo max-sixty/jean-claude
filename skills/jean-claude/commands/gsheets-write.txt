@@ -7,9 +7,9 @@ Usage: jean-claude gsheets write [OPTIONS] SPREADSHEET_ID RANGE_
 
   Input format: JSON array of rows, where each row is an array of cell values.
 
-  Examples:     echo '[["Name", "Score"], ["Alice", 100]]' | jean-claude
-  gsheets write SPREADSHEET_ID 'Sheet1!A1:B2'     cat data.json | jean-claude
-  gsheets write SPREADSHEET_ID 'Data!A1'
+  Examples:
+      echo '[["Name", "Score"], ["Alice", 100]]' | jean-claude gsheets write SPREADSHEET_ID 'Sheet1!A1:B2'
+      cat data.json | jean-claude gsheets write SPREADSHEET_ID 'Data!A1'
 
 Options:
   --help  Show this message and exit.

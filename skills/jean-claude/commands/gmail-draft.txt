@@ -27,8 +27,8 @@ Usage: jean-claude gmail draft create [OPTIONS]
 
   JSON fields: to (required), subject (required), body (required), cc, bcc
 
-  Example:     echo '{"to": "x@y.com", "subject": "Hi!", "body": "Hello!"}' |
-  jean-claude gmail draft create
+  Example:
+      echo '{"to": "x@y.com", "subject": "Hi!", "body": "Hello!"}' | jean-claude gmail draft create
 
 Options:
   --help  Show this message and exit.
@@ -40,7 +40,8 @@ Usage: jean-claude gmail draft delete [OPTIONS] DRAFT_ID
 
   Permanently delete a draft.
 
-  Example:     jean-claude gmail draft delete r-123456789
+  Example:
+      jean-claude gmail draft delete r-123456789
 
 Options:
   --help  Show this message and exit.
@@ -56,14 +57,13 @@ Usage: jean-claude gmail draft forward [OPTIONS] MESSAGE_ID TO
 
   Body is read from stdin (can be empty for forwarding without adding text).
 
-  Examples:     echo "FYI" | jean-claude gmail draft forward MSG_ID
-  someone@example.com
-
-      cat << 'EOF' | jean-claude gmail draft forward MSG_ID
-      someone@example.com     Please see the message below.     EOF
-
-      # Forward without adding text     jean-claude gmail draft forward MSG_ID
-      someone@example.com < /dev/null
+  Examples:
+      echo "FYI" | jean-claude gmail draft forward MSG_ID someone@example.com
+      cat << 'EOF' | jean-claude gmail draft forward MSG_ID someone@example.com
+      Please see the message below.
+      EOF
+      # Forward without adding text
+      jean-claude gmail draft forward MSG_ID someone@example.com < /dev/null
 
 Options:
   --help  Show this message and exit.
@@ -78,11 +78,13 @@ Usage: jean-claude gmail draft get [OPTIONS] DRAFT_ID
   Writes JSON that can be edited and piped directly to 'draft update'. File is
   written to ~/.cache/jean-claude/drafts/.
 
-  Workflow:     jean-claude gmail draft get DRAFT_ID     # Edit the body field
-  with Edit tool     cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.json |
-  jean-claude gmail draft update DRAFT_ID
+  Workflow:
+      jean-claude gmail draft get DRAFT_ID
+      # Edit the body field with Edit tool
+      cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
 
-  Example:     jean-claude gmail draft get r-123456789
+  Example:
+      jean-claude gmail draft get r-123456789
 
 Options:
   --help  Show this message and exit.
@@ -94,7 +96,8 @@ Usage: jean-claude gmail draft list [OPTIONS]
 
   List drafts.
 
-  Example:     jean-claude gmail draft list
+  Example:
+      jean-claude gmail draft list
 
 Options:
   -n, --max-results INTEGER  Maximum results
@@ -115,10 +118,11 @@ Usage: jean-claude gmail draft reply [OPTIONS] MESSAGE_ID
 
   Body is read from stdin.
 
-  Examples:     echo "Thanks!" | jean-claude gmail draft reply MSG_ID
-
-      cat << 'EOF' | jean-claude gmail draft reply MSG_ID --cc
-      "other@example.com"     Thanks for the update!     EOF
+  Examples:
+      echo "Thanks!" | jean-claude gmail draft reply MSG_ID
+      cat << 'EOF' | jean-claude gmail draft reply MSG_ID --cc "other@example.com"
+      Thanks for the update!
+      EOF
 
 Options:
   --cc TEXT  Additional CC recipients (comma-separated)
@@ -138,11 +142,11 @@ Usage: jean-claude gmail draft reply-all [OPTIONS] MESSAGE_ID
 
   Body is read from stdin.
 
-  Examples:     echo "Thanks everyone!" | jean-claude gmail draft reply-all
-  MSG_ID
-
-      cat << 'EOF' | jean-claude gmail draft reply-all MSG_ID     Thanks for
-      the update!     EOF
+  Examples:
+      echo "Thanks everyone!" | jean-claude gmail draft reply-all MSG_ID
+      cat << 'EOF' | jean-claude gmail draft reply-all MSG_ID
+      Thanks for the update!
+      EOF
 
 Options:
   --cc TEXT  Override CC recipients (comma-separated)
@@ -155,7 +159,8 @@ Usage: jean-claude gmail draft send [OPTIONS] DRAFT_ID
 
   Send an existing draft.
 
-  Example:     jean-claude gmail draft send r-123456789
+  Example:
+      jean-claude gmail draft send r-123456789
 
 Options:
   --help  Show this message and exit.
@@ -173,13 +178,14 @@ Usage: jean-claude gmail draft update [OPTIONS] DRAFT_ID
 
   JSON fields (all optional): to, cc, bcc, subject, body
 
-  Workflow for iterating on long emails:     jean-claude gmail draft get
-  DRAFT_ID     # Edit the body field with Edit tool     cat ~/.cache/jean-
-  claude/drafts/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
+  Workflow for iterating on long emails:
+      jean-claude gmail draft get DRAFT_ID
+      # Edit the body field with Edit tool
+      cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
 
-  Example:     echo '{"cc": "new@example.com"}' | jean-claude gmail draft
-  update DRAFT_ID     echo '{"subject": "New subject", "body": "New body"}' |
-  jean-claude gmail draft update DRAFT_ID
+  Example:
+      echo '{"cc": "new@example.com"}' | jean-claude gmail draft update DRAFT_ID
+      echo '{"subject": "New subject", "body": "New body"}' | jean-claude gmail draft update DRAFT_ID
 
 Options:
   --help  Show this message and exit.

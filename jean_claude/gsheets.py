@@ -68,6 +68,7 @@ def read(spreadsheet_id: str, range_: str, sheet: str | None):
 
     SPREADSHEET_ID: The spreadsheet ID (from the URL)
 
+    \b
     Examples:
         jean-claude gsheets read 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
         jean-claude gsheets read 1BxiM... --range 'Sheet1!A1:D10'
@@ -132,6 +133,7 @@ def create(title: str, sheet: str):
 
     TITLE: Title of the new spreadsheet
 
+    \b
     Examples:
         jean-claude gsheets create "My New Spreadsheet"
         jean-claude gsheets create "Budget 2025" --sheet "January"
@@ -173,6 +175,7 @@ def append(spreadsheet_id: str, sheet: str):
 
     Input format: JSON array of rows, where each row is an array of cell values.
 
+    \b
     Examples:
         echo '[["Alice", 100], ["Bob", 200]]' | jean-claude gsheets append SPREADSHEET_ID
         cat data.json | jean-claude gsheets append SPREADSHEET_ID --sheet 'Data'
@@ -218,6 +221,7 @@ def write(spreadsheet_id: str, range_: str):
 
     Input format: JSON array of rows, where each row is an array of cell values.
 
+    \b
     Examples:
         echo '[["Name", "Score"], ["Alice", 100]]' | jean-claude gsheets write SPREADSHEET_ID 'Sheet1!A1:B2'
         cat data.json | jean-claude gsheets write SPREADSHEET_ID 'Data!A1'
@@ -264,6 +268,7 @@ def clear(spreadsheet_id: str, range_: str):
     SPREADSHEET_ID: The spreadsheet ID (from the URL)
     RANGE: A1 notation range (e.g., 'Sheet1!A1:C10')
 
+    \b
     Examples:
         jean-claude gsheets clear SPREADSHEET_ID 'Sheet1!A2:Z1000'
         jean-claude gsheets clear SPREADSHEET_ID 'Data!A:Z'
@@ -296,6 +301,7 @@ def add_sheet(spreadsheet_id: str, sheet_name: str, index: int | None):
     SPREADSHEET_ID: The spreadsheet ID (from the URL)
     SHEET_NAME: Name for the new sheet
 
+    \b
     Examples:
         jean-claude gsheets add-sheet SPREADSHEET_ID "February"
         jean-claude gsheets add-sheet SPREADSHEET_ID "Summary" --index 0
@@ -337,6 +343,7 @@ def delete_sheet(spreadsheet_id: str, sheet_name: str):
     SPREADSHEET_ID: The spreadsheet ID (from the URL)
     SHEET_NAME: Name of the sheet to delete
 
+    \b
     Examples:
         jean-claude gsheets delete-sheet SPREADSHEET_ID "Old Data"
     """
@@ -379,6 +386,7 @@ def sort(spreadsheet_id: str, range_: str, columns: tuple[str, ...], header: boo
     SPREADSHEET_ID: The spreadsheet ID (from the URL)
     RANGE: A1 notation range (e.g., 'Sheet1!A1:D100')
 
+    \b
     Examples:
         jean-claude gsheets sort SPREADSHEET_ID 'Sheet1!A1:D100' --by A
         jean-claude gsheets sort SPREADSHEET_ID 'Data!A1:Z50' --by B --by 'C desc'

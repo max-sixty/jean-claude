@@ -4,8 +4,9 @@ Usage: jean-claude imessage open [OPTIONS] CHAT_ID
 
   CHAT_ID: The chat ID (e.g., any;-;+12025551234 or any;+;chat123...)
 
-  Example:     jean-claude imessage open "any;-;+12025551234"     jean-claude
-  imessage open "any;+;chat123456789"
+  Example:
+      jean-claude imessage open "any;-;+12025551234"
+      jean-claude imessage open "any;+;chat123456789"
 
 Options:
   --help  Show this message and exit.

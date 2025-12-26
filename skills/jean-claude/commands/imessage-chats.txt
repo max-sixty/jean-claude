@@ -5,7 +5,8 @@ Usage: jean-claude imessage chats [OPTIONS]
   Shows chat name (or contact name for 1:1 chats) and chat ID. Use chat ID to
   send to groups.
 
-  Example:     jean-claude imessage chats
+  Example:
+      jean-claude imessage chats
 
 Options:
   -n, --max-results INTEGER  Maximum chats to list

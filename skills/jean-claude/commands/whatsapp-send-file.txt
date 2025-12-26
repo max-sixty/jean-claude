@@ -7,8 +7,9 @@ Usage: jean-claude whatsapp send-file [OPTIONS] RECIPIENT FILE_PATH
 
   Supports images, videos, audio, and documents.
 
-  Examples:     jean-claude whatsapp send-file "+12025551234" ./photo.jpg
-  jean-claude whatsapp send-file "+12025551234" ./document.pdf
+  Examples:
+      jean-claude whatsapp send-file "+12025551234" ./photo.jpg
+      jean-claude whatsapp send-file "+12025551234" ./document.pdf
 
 Options:
   --help  Show this message and exit.

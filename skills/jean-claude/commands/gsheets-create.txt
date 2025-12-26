@@ -4,8 +4,9 @@ Usage: jean-claude gsheets create [OPTIONS] TITLE
 
   TITLE: Title of the new spreadsheet
 
-  Examples:     jean-claude gsheets create "My New Spreadsheet"     jean-
-  claude gsheets create "Budget 2025" --sheet "January"
+  Examples:
+      jean-claude gsheets create "My New Spreadsheet"
+      jean-claude gsheets create "Budget 2025" --sheet "January"
 
 Options:
   --sheet TEXT  Initial sheet name (default: Sheet1)

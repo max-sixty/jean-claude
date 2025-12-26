@@ -4,7 +4,8 @@ Usage: jean-claude reminders search [OPTIONS] QUERY
 
   QUERY: Search term (searches reminder titles)
 
-  Example:     jean-claude reminders search "groceries"
+  Example:
+      jean-claude reminders search "groceries"
 
 Options:
   -n, --max-results INTEGER  Maximum results to return

@@ -91,6 +91,7 @@ def create(
 
     TITLE: The reminder title/name
 
+    \b
     Examples:
         jean-claude reminders create "Buy groceries"
         jean-claude reminders create "Call doctor" --due "2025-12-27 14:00"
@@ -177,6 +178,7 @@ def list_reminders(list_name: str | None, max_results: int, completed: bool):
 
     Shows incomplete reminders by default. Use --completed to show completed ones.
 
+    \b
     Examples:
         jean-claude reminders list
         jean-claude reminders list --list Work
@@ -265,6 +267,7 @@ end run"""
 def lists():
     """List all reminder lists.
 
+    \b
     Example:
         jean-claude reminders lists
     """
@@ -302,6 +305,7 @@ def complete(reminder_id: str):
 
     REMINDER_ID: The reminder ID (from 'reminders list' output)
 
+    \b
     Example:
         jean-claude reminders complete "x-apple-reminder://..."
     """
@@ -334,6 +338,7 @@ def delete(reminder_id: str):
 
     REMINDER_ID: The reminder ID (from 'reminders list' output)
 
+    \b
     Example:
         jean-claude reminders delete "x-apple-reminder://..."
     """
@@ -368,6 +373,7 @@ def search(query: str, max_results: int):
 
     QUERY: Search term (searches reminder titles)
 
+    \b
     Example:
         jean-claude reminders search "groceries"
     """

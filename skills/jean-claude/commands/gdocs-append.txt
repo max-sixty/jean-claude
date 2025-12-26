@@ -6,8 +6,8 @@ Usage: jean-claude gdocs append [OPTIONS] DOCUMENT_ID
 
   JSON fields: text (required)
 
-  Example:     echo '{"text": "New paragraph"}' | jean-claude gdocs append
-  1abc...xyz
+  Example:
+      echo '{"text": "New paragraph"}' | jean-claude gdocs append 1abc...xyz
 
 Options:
   --help  Show this message and exit.

@@ -7,8 +7,9 @@ Usage: jean-claude whatsapp download [OPTIONS] MESSAGE_ID
   Downloads media to ~/.local/share/jean-claude/whatsapp/media/ by default.
   Uses content hash as filename for deduplication.
 
-  Examples:     jean-claude whatsapp download "3EB0ABC123..."     jean-claude
-  whatsapp download "3EB0ABC123..." --output ./photo.jpg
+  Examples:
+      jean-claude whatsapp download "3EB0ABC123..."
+      jean-claude whatsapp download "3EB0ABC123..." --output ./photo.jpg
 
 Options:
   --output PATH  Output file path (defaults to XDG data dir)

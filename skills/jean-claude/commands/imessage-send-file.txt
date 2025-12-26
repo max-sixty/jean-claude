@@ -5,9 +5,10 @@ Usage: jean-claude imessage send-file [OPTIONS] RECIPIENT FILE_PATH
   RECIPIENT: Phone number, chat ID, email/Apple ID, or contact name.
   FILE_PATH: Path to file to send
 
-  Examples:     jean-claude imessage send-file "+12025551234" ./document.pdf
-  jean-claude imessage send-file "any;+;chat123456789" ./photo.jpg     jean-
-  claude imessage send-file "Kevin Seals" ./photo.jpg
+  Examples:
+      jean-claude imessage send-file "+12025551234" ./document.pdf
+      jean-claude imessage send-file "any;+;chat123456789" ./photo.jpg
+      jean-claude imessage send-file "Kevin Seals" ./photo.jpg
 
 Options:
   --help  Show this message and exit.

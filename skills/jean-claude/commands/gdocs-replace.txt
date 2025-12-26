@@ -4,9 +4,9 @@ Usage: jean-claude gdocs replace [OPTIONS] DOCUMENT_ID
 
   DOCUMENT_ID: The document ID (from the URL)
 
-  Examples:     jean-claude gdocs replace 1abc...xyz --find "old text"
-  --replace-with "new text"     jean-claude gdocs replace 1abc...xyz --find
-  "TODO" --replace-with "DONE" --match-case
+  Examples:
+      jean-claude gdocs replace 1abc...xyz --find "old text" --replace-with "new text"
+      jean-claude gdocs replace 1abc...xyz --find "TODO" --replace-with "DONE" --match-case
 
 Options:
   --find TEXT          Text to find  [required]

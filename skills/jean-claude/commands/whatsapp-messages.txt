@@ -6,9 +6,10 @@ Usage: jean-claude whatsapp messages [OPTIONS]
   filter to a specific conversation. Use --unread to show only unread
   messages.
 
-  Examples:     jean-claude whatsapp messages -n 20     jean-claude whatsapp
-  messages --chat "120363277025153496@g.us"     jean-claude whatsapp messages
-  --unread
+  Examples:
+      jean-claude whatsapp messages -n 20
+      jean-claude whatsapp messages --chat "120363277025153496@g.us"
+      jean-claude whatsapp messages --unread
 
 Options:
   --chat TEXT                Filter to specific chat JID

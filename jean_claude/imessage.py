@@ -649,11 +649,11 @@ def send(recipients: tuple[str, ...]):
 
     Message body is read from stdin.
 
+    \b
     Examples:
         echo "Hello!" | jean-claude imessage send "+12025551234"
         echo "Hello team!" | jean-claude imessage send "Team OA"
         echo "Hello!" | jean-claude imessage send "+12025551234" "+16467194457"
-
         cat << 'EOF' | jean-claude imessage send "+12025551234"
         It's great to hear from you!
         EOF
@@ -727,6 +727,7 @@ def send_file(recipient: str, file_path: Path):
     RECIPIENT: Phone number, chat ID, email/Apple ID, or contact name.
     FILE_PATH: Path to file to send
 
+    \b
     Examples:
         jean-claude imessage send-file "+12025551234" ./document.pdf
         jean-claude imessage send-file "any;+;chat123456789" ./photo.jpg
@@ -765,6 +766,7 @@ def chats(max_results: int):
     Shows chat name (or contact name for 1:1 chats) and chat ID.
     Use chat ID to send to groups.
 
+    \b
     Example:
         jean-claude imessage chats
     """
@@ -827,6 +829,7 @@ def participants(chat_id: str):
 
     CHAT_ID: The chat ID (e.g., any;+;chat123456789)
 
+    \b
     Example:
         jean-claude imessage participants "any;+;chat123456789"
     """
@@ -881,6 +884,7 @@ def open_chat(chat_id: str):
 
     CHAT_ID: The chat ID (e.g., any;-;+12025551234 or any;+;chat123...)
 
+    \b
     Example:
         jean-claude imessage open "any;-;+12025551234"
         jean-claude imessage open "any;+;chat123456789"
@@ -915,6 +919,7 @@ def messages(
     Use --chat or --name to filter to a specific conversation.
     Use --unread to show only unread messages.
 
+    \b
     Examples:
         jean-claude imessage messages -n 20
         jean-claude imessage messages --chat "any;-;+12025551234"
@@ -982,6 +987,7 @@ def search(query: str | None, max_results: int):
 
     QUERY: Search term (searches message text)
 
+    \b
     Examples:
         jean-claude imessage search "dinner plans"
         jean-claude imessage search -n 50

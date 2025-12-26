@@ -317,9 +317,9 @@ def send(recipient: str, reply_to: str | None):
 
     Message body is read from stdin.
 
+    \b
     Examples:
         echo "Hello!" | jean-claude whatsapp send "+12025551234"
-
         cat << 'EOF' | jean-claude whatsapp send "+12025551234"
         It's great to hear from you!
         EOF
@@ -346,6 +346,7 @@ def send_file(recipient: str, file_path: str):
 
     Supports images, videos, audio, and documents.
 
+    \b
     Examples:
         jean-claude whatsapp send-file "+12025551234" ./photo.jpg
         jean-claude whatsapp send-file "+12025551234" ./document.pdf
@@ -385,6 +386,7 @@ def messages(chat_jid: str | None, max_results: int, unread: bool):
     Use --chat to filter to a specific conversation.
     Use --unread to show only unread messages.
 
+    \b
     Examples:
         jean-claude whatsapp messages -n 20
         jean-claude whatsapp messages --chat "120363277025153496@g.us"
@@ -417,6 +419,7 @@ def search(query: str, max_results: int):
 
     QUERY: Search term (searches message text)
 
+    \b
     Examples:
         jean-claude whatsapp search "dinner plans"
         jean-claude whatsapp search "meeting" -n 20
@@ -433,6 +436,7 @@ def participants(group_jid: str):
 
     GROUP_JID: The group JID (e.g., "120363277025153496@g.us")
 
+    \b
     Examples:
         jean-claude whatsapp participants "120363277025153496@g.us"
     """
@@ -448,6 +452,7 @@ def mark_read(chat_jid: str):
 
     CHAT_JID: The chat JID (e.g., "120363277025153496@g.us")
 
+    \b
     Examples:
         jean-claude whatsapp mark-read "120363277025153496@g.us"
     """
@@ -469,6 +474,7 @@ def download(message_id: str, output: str | None):
     Downloads media to ~/.local/share/jean-claude/whatsapp/media/ by default.
     Uses content hash as filename for deduplication.
 
+    \b
     Examples:
         jean-claude whatsapp download "3EB0ABC123..."
         jean-claude whatsapp download "3EB0ABC123..." --output ./photo.jpg

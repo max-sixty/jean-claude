@@ -5,10 +5,10 @@ Usage: jean-claude gsheets sort [OPTIONS] SPREADSHEET_ID RANGE_
   SPREADSHEET_ID: The spreadsheet ID (from the URL) RANGE: A1 notation range
   (e.g., 'Sheet1!A1:D100')
 
-  Examples:     jean-claude gsheets sort SPREADSHEET_ID 'Sheet1!A1:D100' --by
-  A     jean-claude gsheets sort SPREADSHEET_ID 'Data!A1:Z50' --by B --by 'C
-  desc'     jean-claude gsheets sort SPREADSHEET_ID 'Sheet1!A1:D100' --by A
-  --header
+  Examples:
+      jean-claude gsheets sort SPREADSHEET_ID 'Sheet1!A1:D100' --by A
+      jean-claude gsheets sort SPREADSHEET_ID 'Data!A1:Z50' --by B --by 'C desc'
+      jean-claude gsheets sort SPREADSHEET_ID 'Sheet1!A1:D100' --by A --header
 
 Options:
   --by TEXT  Column to sort by (e.g., 'A', 'B desc'). Can be repeated.

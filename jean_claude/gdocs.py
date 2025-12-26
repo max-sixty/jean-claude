@@ -42,6 +42,7 @@ def read(document_id: str):
 
     DOCUMENT_ID: The document ID (from the URL)
 
+    \b
     Examples:
         jean-claude gdocs read 1abc...xyz
     """
@@ -57,6 +58,7 @@ def create(title: str):
 
     TITLE: Title of the new document
 
+    \b
     Examples:
         jean-claude gdocs create "My Document"
         jean-claude gdocs create "Meeting Notes 2025-01-15"
@@ -80,6 +82,7 @@ def append(document_id: str):
 
     JSON fields: text (required)
 
+    \b
     Example:
         echo '{"text": "New paragraph"}' | jean-claude gdocs append 1abc...xyz
     """
@@ -127,6 +130,7 @@ def replace(document_id: str, find_text: str, replace_text: str, match_case: boo
 
     DOCUMENT_ID: The document ID (from the URL)
 
+    \b
     Examples:
         jean-claude gdocs replace 1abc...xyz --find "old text" --replace-with "new text"
         jean-claude gdocs replace 1abc...xyz --find "TODO" --replace-with "DONE" --match-case
