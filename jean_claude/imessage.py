@@ -206,6 +206,63 @@ end run"""
     return result if result else None
 
 
+def normalize_phone(phone: str) -> str:
+    """Normalize phone number to digits only (with leading + if present)."""
+    has_plus = phone.startswith("+")
+    digits = "".join(c for c in phone if c.isdigit())
+    return f"+{digits}" if has_plus else digits
+
+
+def find_group_chat_with_participants(participants: list[str]) -> str | None:
+    """Find an existing group chat containing exactly the given participants.
+
+    Args:
+        participants: List of phone numbers/handles to find
+
+    Returns:
+        Chat ID (e.g., "any;+;chat123456") if found, None otherwise.
+    """
+    if len(participants) < 2:
+        return None
+
+    # Normalize the requested participants for comparison
+    requested = {normalize_phone(p) for p in participants}
+
+    # Query the database for group chats (style = 43) and their participants
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get all group chats with their participants
+    cursor.execute("""
+        SELECT
+            c.chat_identifier,
+            c.guid,
+            GROUP_CONCAT(h.id, '|') as participants
+        FROM chat c
+        JOIN chat_handle_join chj ON c.ROWID = chj.chat_id
+        JOIN handle h ON chj.handle_id = h.ROWID
+        WHERE c.style = 43
+        GROUP BY c.ROWID
+    """)
+
+    for row in cursor.fetchall():
+        chat_identifier, guid, participants_str = row
+        if not participants_str:
+            continue
+
+        # Normalize the chat's participants
+        chat_participants = {normalize_phone(p) for p in participants_str.split("|")}
+
+        # Check if the participants match exactly
+        if chat_participants == requested:
+            conn.close()
+            # Build the chat ID in Messages.app format
+            return f"iMessage;+;{chat_identifier}"
+
+    conn.close()
+    return None
+
+
 def resolve_phones_to_names(phones: list[str]) -> dict[str, str]:
     """Resolve phone numbers to contact names via Messages.app.
 
@@ -310,20 +367,42 @@ end run"""
     return [(c["name"], c["phones"]) for c in contacts_data]
 
 
+def find_chat_by_name(name: str) -> str | None:
+    """Find a chat (group or individual) by its display name.
+
+    Returns the chat ID if found, None otherwise.
+    """
+    script = """on run {chatName}
+tell application "Messages"
+    repeat with c in chats
+        try
+            if name of c is chatName then
+                return id of c
+            end if
+        end try
+    end repeat
+end tell
+return ""
+end run"""
+    result = run_applescript(script, name)
+    return result if result else None
+
+
 def resolve_recipient_from_string(value: str) -> str:
     """Resolve a 'to' value to a phone/chat ID or iMessage handle.
 
     Auto-detects whether the value is:
-    - A chat ID (starts with "any;")
+    - A chat ID (starts with "any;" or "iMessage;")
     - An email/Apple ID (contains "@" - passed directly as iMessage handle)
     - A phone number (starts with "+" followed by digits, or digit-only string)
-    - A contact name (anything else - will be looked up in Contacts.app)
+    - A chat name (looked up in Messages.app)
+    - A contact name (looked up in Contacts.app)
 
     Phone number detection uses formatting-stripped values for matching but
     returns the original value to preserve any user formatting.
     """
     # Chat IDs pass through directly
-    if value.startswith("any;"):
+    if value.startswith("any;") or value.startswith("iMessage;"):
         return value
 
     # Email addresses / Apple IDs pass through directly (iMessage handles)
@@ -347,7 +426,12 @@ def resolve_recipient_from_string(value: str) -> str:
     if cleaned.isdigit() and len(cleaned) >= 7:
         return value
 
-    # Otherwise treat as contact name
+    # Try chat name first (groups and named individual chats)
+    chat_id = find_chat_by_name(value)
+    if chat_id:
+        return chat_id
+
+    # Fall back to contact name lookup
     return resolve_contact_to_phone(value)
 
 
@@ -556,36 +640,41 @@ def cli():
 
 
 @cli.command()
-@click.argument("recipient")
-def send(recipient: str):
-    """Send an iMessage to a phone number, chat ID, or contact name.
+@click.argument("recipients", nargs=-1, required=True)
+def send(recipients: tuple[str, ...]):
+    """Send an iMessage to one or more recipients.
 
-    RECIPIENT: Phone number (+1234567890), chat ID (any;+;chat123...),
-    email/Apple ID, or contact name.
+    RECIPIENTS: Phone numbers, chat IDs, group names, or contact names.
+    Multiple recipients sends to an existing group chat with those participants.
 
     Message body is read from stdin.
 
     Examples:
         echo "Hello!" | jean-claude imessage send "+12025551234"
+        echo "Hello team!" | jean-claude imessage send "Team OA"
+        echo "Hello!" | jean-claude imessage send "+12025551234" "+16467194457"
 
         cat << 'EOF' | jean-claude imessage send "+12025551234"
         It's great to hear from you!
         EOF
     """
     message = read_body_stdin()
-    recipient = resolve_recipient_from_string(recipient)
 
-    if recipient.startswith("any;"):
-        # Chat ID - send directly to chat
-        script = """on run {chatId, msg}
+    # Handle single recipient (existing behavior)
+    if len(recipients) == 1:
+        recipient = resolve_recipient_from_string(recipients[0])
+
+        if recipient.startswith("any;"):
+            # Chat ID - send directly to chat
+            script = """on run {chatId, msg}
   tell application "Messages"
     set targetChat to chat id chatId
     send msg to targetChat
   end tell
 end run"""
-    else:
-        # Phone number - use buddy
-        script = """on run {phoneNumber, msg}
+        else:
+            # Phone number - use buddy
+            script = """on run {phoneNumber, msg}
   tell application "Messages"
     set targetService to 1st service whose service type = iMessage
     set targetBuddy to buddy phoneNumber of targetService
@@ -593,8 +682,40 @@ end run"""
   end tell
 end run"""
 
-    run_applescript(script, recipient, message)
-    click.echo(f"Sent to {recipient}")
+        run_applescript(script, recipient, message)
+        click.echo(f"Sent to {recipient}")
+        return
+
+    # Multiple recipients - find existing group chat or error
+    resolved = [resolve_recipient_from_string(r) for r in recipients]
+
+    # Can't use chat IDs with multiple recipients
+    if any(r.startswith("any;") for r in resolved):
+        raise JeanClaudeError(
+            "Cannot use chat IDs with multiple recipients. "
+            "Use a single chat ID to send to an existing group."
+        )
+
+    # Find an existing group chat with these participants
+    chat_id = find_group_chat_with_participants(resolved)
+    if not chat_id:
+        raise JeanClaudeError(
+            f"No existing group chat found with: {', '.join(resolved)}\n"
+            "macOS doesn't allow creating group chats programmatically.\n"
+            "Send a message to these recipients manually in Messages.app first,\n"
+            "then this command will find and use that group chat."
+        )
+
+    # Send to the existing group chat
+    script = """on run {chatId, msg}
+  tell application "Messages"
+    set targetChat to chat id chatId
+    send msg to targetChat
+  end tell
+end run"""
+
+    run_applescript(script, chat_id, message)
+    click.echo(f"Sent to group ({chat_id}): {', '.join(resolved)}")
 
 
 @cli.command()

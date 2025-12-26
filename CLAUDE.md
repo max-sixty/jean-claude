@@ -29,6 +29,31 @@ SKILL.md documents what the CLI does. CLAUDE.md documents how it works.
 The skill is the only API. Breaking changes to the library are fine — just keep
 the skill in sync.
 
+## Testing Is Real
+
+**Every command you run sends real messages to real people.**
+
+When developing messaging features (iMessage, WhatsApp, Gmail), "testing" still
+means sending actual messages. There's no sandbox. Getting into a "just testing
+the code" mindset is dangerous — test messages go to real recipients.
+
+**Before running any send command, ask for permission:**
+
+> **Test message I'd like to send:**
+> - To: [recipient]
+> - Body: "[message content]"
+>
+> Can I send this?
+
+This applies even when:
+- You're "just checking if the code works"
+- The message seems trivial ("test", "hello")
+- You're iterating on a bug fix
+- The recipient is a group chat
+
+Read-only commands (`list`, `search`, `messages`, `chats`) are safe to run
+freely. Anything that sends, creates, or modifies requires explicit approval.
+
 ## Updating the Skill
 
 When modifying CLI commands or adding features:

@@ -700,7 +700,7 @@ chats use `any;+;chat123...`. Get these from `imessage chats`.
 ### Send Messages
 
 Message body is read from stdin (avoids shell escaping issues with apostrophes
-and special characters). Recipient is a positional argument.
+and special characters). Supports one or more recipients.
 
 ```bash
 # Send to phone number
@@ -709,22 +709,38 @@ echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send
 # Send to contact by name (must match exactly one contact with one phone)
 echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "Kevin Seals"
 
+# Send to group chat by name
+echo "Hello team!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "Team OA"
+
 # Multiline message with heredoc
 cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234"
 It's great to hear from you!
 Let me know when you're free.
 EOF
 
-# Send to group chat
+# Send to group chat by ID
 echo "Hello group!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "any;+;chat123456789"
 
-# Send file (recipient auto-detects phone vs contact name)
+# Send to multiple recipients (uses existing group with those participants)
+echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234" "+16467194457"
+
+# Send file (recipient auto-detects phone, contact name, or group name)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file "+12025551234" ./document.pdf
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file "Kevin Seals" ./photo.jpg
 ```
 
-**Contact lookup:** The recipient auto-detects phone numbers vs contact names.
-Fails if:
+**Recipient resolution:** Auto-detects the recipient type:
+1. Chat IDs (e.g., `any;+;chat123...`) - used directly
+2. Phone numbers (e.g., `+12025551234`) - sent to that number
+3. Group/chat names (e.g., `Team OA`) - looked up in Messages.app
+4. Contact names (e.g., `Kevin Seals`) - looked up in Contacts.app
+
+**Multiple recipients:** When you specify multiple recipients, the command finds
+an existing group chat with those exact participants and sends to it. If no
+group exists, you'll be prompted to create one manually in Messages.app first
+(macOS doesn't allow creating group chats programmatically).
+
+**Contact lookup fails if:**
 - Multiple contacts match (e.g., "Kevin" matches "Kevin Seals" and "Kevin Smith")
 - One contact has multiple phone numbers
 
