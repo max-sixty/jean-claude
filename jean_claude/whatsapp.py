@@ -264,6 +264,69 @@ def _run_whatsapp_cli(*args: str, capture: bool = True) -> dict | list | None:
         return None
 
 
+def _get_all_chats() -> list[dict]:
+    """Get all chats from the database."""
+    result = _run_whatsapp_cli("chats")
+    if result and isinstance(result, list):
+        return result
+    return []
+
+
+def find_chat_by_name(name: str) -> str | None:
+    """Find a chat by its display name.
+
+    Returns the JID if exactly one match, None if no matches.
+    Raises JeanClaudeError if multiple chats have the same name.
+    """
+    chats = _get_all_chats()
+    matches = [(c["jid"], c["name"]) for c in chats if c.get("name") == name]
+
+    if not matches:
+        return None
+
+    if len(matches) > 1:
+        matches_str = "\n".join(f"  - {m[1]} ({m[0]})" for m in matches)
+        raise JeanClaudeError(
+            f"Multiple chats match '{name}':\n{matches_str}\n"
+            "Use the ID to send to a specific chat."
+        )
+
+    return matches[0][0]
+
+
+def resolve_recipient(value: str) -> str:
+    """Resolve a recipient to a JID or phone number.
+
+    Auto-detects whether the value is:
+    - A JID (contains "@" - passed through directly)
+    - A phone number (starts with "+" followed by digits)
+    - A chat name (looked up in chats database)
+
+    Returns the JID or phone number to use for sending.
+    """
+    # JIDs pass through directly (individual @s.whatsapp.net or group @g.us)
+    if "@" in value:
+        return value
+
+    # Phone numbers: + followed by digits
+    cleaned = value.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    if cleaned.startswith("+") and cleaned[1:].isdigit() and len(cleaned) >= 8:
+        return value
+
+    # Try chat name lookup
+    jid = find_chat_by_name(value)
+    if jid:
+        logger.info(f"Found chat: {value} ({jid})")
+        return jid
+
+    raise JeanClaudeError(
+        f"Could not resolve '{value}' to a WhatsApp recipient.\n"
+        "Use a phone number (+12025551234), "
+        "an ID from 'whatsapp chats' (e.g., 123@g.us), "
+        "or a chat name."
+    )
+
+
 @click.group()
 def cli():
     """WhatsApp CLI - send messages and list chats.
@@ -313,20 +376,24 @@ def sync():
 def send(recipient: str, reply_to: str | None):
     """Send a WhatsApp message.
 
-    RECIPIENT: Phone number with country code (e.g., +12025551234).
+    RECIPIENT: Phone number, ID, or chat name.
 
     Message body is read from stdin.
 
     \b
     Examples:
         echo "Hello!" | jean-claude whatsapp send "+12025551234"
+        echo "Hello!" | jean-claude whatsapp send "Dialog Brain Trust"
+        echo "Hello!" | jean-claude whatsapp send "120363277025153496@g.us"
+
         cat << 'EOF' | jean-claude whatsapp send "+12025551234"
         It's great to hear from you!
         EOF
     """
     body = read_body_stdin()
+    resolved = resolve_recipient(recipient)
 
-    args = ["send", recipient, body]
+    args = ["send", resolved, body]
     if reply_to:
         args.insert(1, f"--reply-to={reply_to}")
 
@@ -341,7 +408,7 @@ def send(recipient: str, reply_to: str | None):
 def send_file(recipient: str, file_path: str):
     """Send a file attachment via WhatsApp.
 
-    RECIPIENT: Phone number with country code (e.g., +12025551234)
+    RECIPIENT: Phone number, ID, or chat name.
     FILE_PATH: Path to the file to send
 
     Supports images, videos, audio, and documents.
@@ -349,9 +416,10 @@ def send_file(recipient: str, file_path: str):
     \b
     Examples:
         jean-claude whatsapp send-file "+12025551234" ./photo.jpg
-        jean-claude whatsapp send-file "+12025551234" ./document.pdf
+        jean-claude whatsapp send-file "Dialog Brain Trust" ./document.pdf
     """
-    result = _run_whatsapp_cli("send-file", recipient, file_path)
+    resolved = resolve_recipient(recipient)
+    result = _run_whatsapp_cli("send-file", resolved, file_path)
     if result:
         click.echo(json.dumps(result, indent=2))
 
@@ -370,17 +438,26 @@ def chats(max_results: int, unread: bool):
         args.append("--unread")
     result = _run_whatsapp_cli(*args)
     if result and isinstance(result, list):
-        # Apply limit
-        chats_list = result[:max_results]
+        # Transform output: rename 'jid' to 'id' for consistency with iMessage
+        chats_list = [
+            {
+                "id": chat["jid"],
+                "name": chat["name"],
+                "is_group": chat["is_group"],
+                "last_message_time": chat["last_message_time"],
+                "unread_count": chat.get("unread_count", 0),
+            }
+            for chat in result[:max_results]
+        ]
         click.echo(json.dumps(chats_list, indent=2))
 
 
 @cli.command()
-@click.option("--chat", "chat_jid", help="Filter to specific chat JID")
+@click.option("--chat", "chat_id", help="Filter to specific chat ID")
 @click.option("-n", "--max-results", default=50, help="Maximum messages to return")
 @click.option("--unread", is_flag=True, help="Show only unread messages")
 @click.option("--with-media", is_flag=True, help="Auto-download media files")
-def messages(chat_jid: str | None, max_results: int, unread: bool, with_media: bool):
+def messages(chat_id: str | None, max_results: int, unread: bool, with_media: bool):
     """List messages from local database.
 
     Shows messages with sender, timestamp, and text content.
@@ -401,8 +478,8 @@ def messages(chat_jid: str | None, max_results: int, unread: bool, with_media: b
         jean-claude whatsapp messages --chat "..." --with-media
     """
     args = ["messages", f"--max-results={max_results}"]
-    if chat_jid:
-        args.append(f"--chat={chat_jid}")
+    if chat_id:
+        args.append(f"--chat={chat_id}")
     if unread:
         args.append("--unread")
     if with_media:
@@ -440,33 +517,33 @@ def search(query: str, max_results: int):
 
 
 @cli.command()
-@click.argument("group_jid")
-def participants(group_jid: str):
+@click.argument("chat_id")
+def participants(chat_id: str):
     """List participants of a group chat.
 
-    GROUP_JID: The group JID (e.g., "120363277025153496@g.us")
+    CHAT_ID: The group chat ID (e.g., "120363277025153496@g.us")
 
     \b
     Examples:
         jean-claude whatsapp participants "120363277025153496@g.us"
     """
-    result = _run_whatsapp_cli("participants", group_jid)
+    result = _run_whatsapp_cli("participants", chat_id)
     if result:
         click.echo(json.dumps(result, indent=2))
 
 
 @cli.command("mark-read")
-@click.argument("chat_jid")
-def mark_read(chat_jid: str):
+@click.argument("chat_id")
+def mark_read(chat_id: str):
     """Mark all messages in a chat as read.
 
-    CHAT_JID: The chat JID (e.g., "120363277025153496@g.us")
+    CHAT_ID: The chat ID (e.g., "120363277025153496@g.us")
 
     \b
     Examples:
         jean-claude whatsapp mark-read "120363277025153496@g.us"
     """
-    result = _run_whatsapp_cli("mark-read", chat_jid)
+    result = _run_whatsapp_cli("mark-read", chat_id)
     if result:
         click.echo(json.dumps(result, indent=2))
 

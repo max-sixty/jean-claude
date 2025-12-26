@@ -2,15 +2,17 @@ Usage: jean-claude whatsapp send [OPTIONS] RECIPIENT
 
   Send a WhatsApp message.
 
-  RECIPIENT: Phone number with country code (e.g., +12025551234).
+  RECIPIENT: Phone number, ID, or chat name.
 
   Message body is read from stdin.
 
   Examples:
       echo "Hello!" | jean-claude whatsapp send "+12025551234"
-      cat << 'EOF' | jean-claude whatsapp send "+12025551234"
-      It's great to hear from you!
-      EOF
+      echo "Hello!" | jean-claude whatsapp send "Dialog Brain Trust"
+      echo "Hello!" | jean-claude whatsapp send "120363277025153496@g.us"
+
+      cat << 'EOF' | jean-claude whatsapp send "+12025551234"     It's great
+      to hear from you!     EOF
 
 Options:
   --reply-to TEXT  Message ID to reply to

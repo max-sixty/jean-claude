@@ -139,6 +139,33 @@ is written to XDG cache with the path included in the JSON response.
 - **Iteration** — Edit files with standard tools, pipe back to update commands
 - **No project pollution** — Cache files don't clutter working directories
 
+### Input/Output Format Consistency
+
+**Copy-paste principle:** Any ID in command output should work as input to other
+commands. If `chats` outputs `{"id": "abc123", "name": "Team"}`, then
+`send "abc123"` and `send "Team"` should both work.
+
+**Fail on ambiguity:** When resolving names to IDs, never guess. If multiple
+items match a name, fail with a list of options rather than picking one. Sending
+to the wrong recipient is worse than not sending.
+
+**Consistent schemas:** Similar commands across services should have matching
+output structures. iMessage and WhatsApp `chats` commands use the same fields:
+
+```json
+{"id": "...", "name": "...", "is_group": true, "last_message_time": 1234567890, "unread_count": 5}
+```
+
+**Field naming:**
+- `id` — primary identifier (not `chat_id`, `jid`, `message_id` in list output)
+- `name` — display name
+- `is_group` — boolean for group vs individual
+- `last_message_time` — Unix timestamp
+- `unread_count` — integer
+
+When adding new list commands, follow this schema. When modifying existing
+commands, ensure input accepts both `id` and `name` from output.
+
 ## Storage Layout
 
 XDG Base Directory compliant:
@@ -230,13 +257,14 @@ def read(spreadsheet_id: str):
     click.echo(json.dumps(result["values"]))
 ```
 
-## iMessage Safety Principles
+## Messaging Safety Principles
 
-When adding or modifying iMessage features:
+When adding or modifying messaging features (iMessage, WhatsApp, Gmail):
 
-**Never send to ambiguous recipients.** Any code that resolves names to phone
-numbers must fail if there's ambiguity:
+**Never send to ambiguous recipients.** Any code that resolves names to IDs
+must fail if there's ambiguity:
 
+- Multiple chats match a name → fail, list all matches with IDs
 - Multiple contacts match a name → fail, list all matches
 - One contact has multiple phone numbers → fail, list all numbers
 - Never pick "the first one" or guess — require explicit disambiguation

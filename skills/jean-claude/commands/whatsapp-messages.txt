@@ -18,7 +18,7 @@ Usage: jean-claude whatsapp messages [OPTIONS]
       jean-claude whatsapp messages --chat "..." --with-media
 
 Options:
-  --chat TEXT                Filter to specific chat JID
+  --chat TEXT                Filter to specific chat ID
   -n, --max-results INTEGER  Maximum messages to return
   --unread                   Show only unread messages
   --with-media               Auto-download media files

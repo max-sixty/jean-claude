@@ -2,14 +2,14 @@ Usage: jean-claude whatsapp send-file [OPTIONS] RECIPIENT FILE_PATH
 
   Send a file attachment via WhatsApp.
 
-  RECIPIENT: Phone number with country code (e.g., +12025551234) FILE_PATH:
-  Path to the file to send
+  RECIPIENT: Phone number, ID, or chat name. FILE_PATH: Path to the file to
+  send
 
   Supports images, videos, audio, and documents.
 
   Examples:
       jean-claude whatsapp send-file "+12025551234" ./photo.jpg
-      jean-claude whatsapp send-file "+12025551234" ./document.pdf
+      jean-claude whatsapp send-file "Dialog Brain Trust" ./document.pdf
 
 Options:
   --help  Show this message and exit.

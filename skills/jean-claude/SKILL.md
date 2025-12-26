@@ -862,7 +862,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages -n 20
 # Unread messages (auto-syncs and downloads all media)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --unread
 
-# Messages from specific chat (use JID from chats command)
+# Messages from specific chat (use ID from chats command)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --chat "120363277025153496@g.us"
 
 # Explicitly download media for non-unread queries

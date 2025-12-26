@@ -1,8 +1,8 @@
-Usage: jean-claude whatsapp participants [OPTIONS] GROUP_JID
+Usage: jean-claude whatsapp participants [OPTIONS] CHAT_ID
 
   List participants of a group chat.
 
-  GROUP_JID: The group JID (e.g., "120363277025153496@g.us")
+  CHAT_ID: The group chat ID (e.g., "120363277025153496@g.us")
 
   Examples:
       jean-claude whatsapp participants "120363277025153496@g.us"

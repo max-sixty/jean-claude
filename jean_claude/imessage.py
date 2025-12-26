@@ -367,25 +367,62 @@ end run"""
     return [(c["name"], c["phones"]) for c in contacts_data]
 
 
+def find_chats_by_name(name: str) -> list[tuple[str, str]]:
+    """Find all chats matching a display name.
+
+    Returns list of (chat_id, display_name) tuples.
+    """
+    script = """use framework "Foundation"
+
+on run {chatName}
+    set matchList to current application's NSMutableArray's new()
+
+    tell application "Messages"
+        repeat with c in chats
+            try
+                if name of c is chatName then
+                    set matchDict to current application's NSMutableDictionary's new()
+                    matchDict's setValue:(id of c) forKey:"id"
+                    matchDict's setValue:(name of c) forKey:"name"
+                    matchList's addObject:matchDict
+                end if
+            end try
+        end repeat
+    end tell
+
+    set jsonData to current application's NSJSONSerialization's dataWithJSONObject:matchList options:0 |error|:(missing value)
+    set jsonString to current application's NSString's alloc()'s initWithData:jsonData encoding:(current application's NSUTF8StringEncoding)
+    return jsonString as text
+end run"""
+    output = run_applescript(script, name)
+    if not output:
+        return []
+    try:
+        matches = json.loads(output)
+        return [(m["id"], m["name"]) for m in matches]
+    except (json.JSONDecodeError, KeyError):
+        return []
+
+
 def find_chat_by_name(name: str) -> str | None:
     """Find a chat (group or individual) by its display name.
 
-    Returns the chat ID if found, None otherwise.
+    Returns the chat ID if exactly one match, None if no matches.
+    Raises JeanClaudeError if multiple chats have the same name.
     """
-    script = """on run {chatName}
-tell application "Messages"
-    repeat with c in chats
-        try
-            if name of c is chatName then
-                return id of c
-            end if
-        end try
-    end repeat
-end tell
-return ""
-end run"""
-    result = run_applescript(script, name)
-    return result if result else None
+    matches = find_chats_by_name(name)
+
+    if not matches:
+        return None
+
+    if len(matches) > 1:
+        matches_str = "\n".join(f"  - {m[1]} ({m[0]})" for m in matches)
+        raise JeanClaudeError(
+            f"Multiple chats match '{name}':\n{matches_str}\n"
+            "Use the chat ID to send to a specific chat."
+        )
+
+    return matches[0][0]
 
 
 def resolve_recipient_from_string(value: str) -> str:
@@ -758,31 +795,23 @@ end run"""
     click.echo(f"Sent {file_path.name} to {recipient}")
 
 
-@cli.command()
-@click.option("-n", "--max-results", default=50, help="Maximum chats to list")
-def chats(max_results: int):
-    """List available iMessage chats.
+def get_chat_names_from_applescript(max_results: int) -> dict[str, str]:
+    """Get chat ID -> display name mapping from Messages.app.
 
-    Shows chat name (or contact name for 1:1 chats) and chat ID.
-    Use chat ID to send to groups.
-
-    \b
-    Example:
-        jean-claude imessage chats
+    Messages.app has access to contact names that aren't in the database.
+    Returns dict mapping chat_id to display name.
     """
     script = f"""use framework "Foundation"
 
 tell application "Messages"
-    set chatList to current application's NSMutableArray's new()
+    set chatDict to current application's NSMutableDictionary's new()
     set chatCount to 0
 
     repeat with c in chats
         if chatCount >= {max_results} then exit repeat
 
         try
-            set chatDict to current application's NSMutableDictionary's new()
             set chatId to id of c as text
-            chatDict's setValue:chatId forKey:"chat_id"
 
             -- Get chat name or participant name for 1:1 chats
             set chatName to name of c
@@ -795,31 +824,113 @@ tell application "Messages"
                 end if
             end if
             if chatName is not missing value then
-                chatDict's setValue:chatName forKey:"name"
+                chatDict's setValue:chatName forKey:chatId
             end if
 
-            chatList's addObject:chatDict
             set chatCount to chatCount + 1
         end try
     end repeat
 end tell
 
-set jsonData to current application's NSJSONSerialization's dataWithJSONObject:chatList options:0 |error|:(missing value)
+set jsonData to current application's NSJSONSerialization's dataWithJSONObject:chatDict options:0 |error|:(missing value)
 set jsonString to current application's NSString's alloc()'s initWithData:jsonData encoding:(current application's NSUTF8StringEncoding)
 return jsonString as text"""
 
-    output = run_applescript(script)
-    if not output:
+    try:
+        output = run_applescript(script)
+        if output:
+            return json.loads(output)
+    except (JeanClaudeError, json.JSONDecodeError):
+        pass
+    return {}
+
+
+@cli.command()
+@click.option("-n", "--max-results", default=50, help="Maximum chats to list")
+def chats(max_results: int):
+    """List available iMessage chats.
+
+    Shows chat name, ID, group status, and message timestamps.
+    Use chat ID or name to send to groups.
+
+    Example:
+        jean-claude imessage chats
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Query chats with stats from database
+    # style = 43 is group chat, 45 is individual
+    cursor.execute(
+        """
+        SELECT
+            c.guid,
+            c.chat_identifier,
+            c.display_name,
+            c.style,
+            (SELECT MAX(m.date) FROM message m
+             JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
+             WHERE cmj.chat_id = c.ROWID) as last_message_date,
+            (SELECT COUNT(*) FROM message m
+             JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
+             WHERE cmj.chat_id = c.ROWID
+               AND m.is_read = 0 AND m.is_from_me = 0) as unread_count
+        FROM chat c
+        ORDER BY last_message_date DESC
+        LIMIT ?
+        """,
+        (max_results,),
+    )
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    if not rows:
         logger.info("No chats found")
-        click.echo(json.dumps({"chats": []}))
+        click.echo(json.dumps([]))
         return
 
-    try:
-        chats_list = json.loads(output)
-        click.echo(json.dumps({"chats": chats_list}, indent=2))
-    except json.JSONDecodeError:
-        logger.debug("Failed to parse chats from Messages.app")
-        click.echo(json.dumps({"chats": []}))
+    # Get display names from Messages.app (has contact name access)
+    name_map = get_chat_names_from_applescript(max_results)
+
+    chats_list = []
+    for (
+        guid,
+        chat_identifier,
+        display_name,
+        style,
+        last_message_date,
+        unread_count,
+    ) in rows:
+        # Build Messages.app-style chat ID
+        # guid format: "iMessage;-;+12345" or "iMessage;+;chat12345"
+        # We convert to "any;" prefix for compatibility
+        if guid.startswith("iMessage;"):
+            chat_id = "any" + guid[8:]  # Replace "iMessage" with "any"
+        else:
+            chat_id = guid
+
+        # Prefer AppleScript name (has contact names), fall back to database
+        name = name_map.get(chat_id) or display_name or chat_identifier
+
+        # Convert Apple epoch to Unix timestamp
+        last_message_time = None
+        if last_message_date:
+            last_message_time = int(
+                last_message_date / 1_000_000_000 + APPLE_EPOCH_OFFSET
+            )
+
+        chats_list.append(
+            {
+                "id": chat_id,
+                "name": name,
+                "is_group": style == IMESSAGE_GROUP_CHAT_STYLE,
+                "last_message_time": last_message_time,
+                "unread_count": unread_count or 0,
+            }
+        )
+
+    click.echo(json.dumps(chats_list, indent=2))
 
 
 @cli.command()
