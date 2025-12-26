@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import platform
+import shutil
 import subprocess
 import sys
+import tempfile
+import urllib.error
+import urllib.request
+import zipfile
 from pathlib import Path
 
 import click
@@ -15,13 +22,8 @@ from .logging import JeanClaudeError, get_logger
 logger = get_logger(__name__)
 
 
-def _get_whatsapp_cli_path() -> Path:
-    """Find the whatsapp-cli binary for the current platform.
-
-    Looks in jean_claude/bin/ for platform-specific binaries.
-    Falls back to whatsapp/whatsapp-cli for development.
-    """
-    # Map Python platform info to Go naming conventions
+def _get_platform_info() -> tuple[str, str]:
+    """Get OS and architecture names in Go naming conventions."""
     os_name = {"darwin": "darwin", "linux": "linux", "win32": "windows"}.get(
         sys.platform, sys.platform
     )
@@ -32,24 +34,184 @@ def _get_whatsapp_cli_path() -> Path:
         "arm64": "arm64",
         "aarch64": "arm64",
     }.get(machine, machine)
+    return os_name, arch
 
-    # Look for bundled binary first
+
+def _try_compile_binary(bin_dir: Path, os_name: str, arch: str) -> Path | None:
+    """Try to compile the Go binary from source.
+
+    Returns the path to the compiled binary, or None if compilation fails.
+    """
+    whatsapp_dir = Path(__file__).parent.parent / "whatsapp"
+    if not (whatsapp_dir / "main.go").exists():
+        return None
+
+    # Check if Go is available
+    if not shutil.which("go"):
+        logger.debug("Go not installed, skipping compilation")
+        return None
+
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    output = bin_dir / f"whatsapp-cli-{os_name}-{arch}"
+
+    logger.info("Compiling whatsapp-cli from source...")
+    try:
+        subprocess.run(
+            [
+                "go",
+                "build",
+                "-ldflags=-s -w",
+                "-o",
+                str(output),
+                ".",
+            ],
+            cwd=whatsapp_dir,
+            check=True,
+            capture_output=True,
+            env={**os.environ, "CGO_ENABLED": "0"},
+        )
+        logger.info("Compiled whatsapp-cli successfully", path=str(output))
+        return output
+    except subprocess.CalledProcessError as e:
+        logger.warning(
+            "Failed to compile whatsapp-cli",
+            stderr=e.stderr.decode() if e.stderr else None,
+        )
+        return None
+
+
+def _try_download_from_pypi(bin_dir: Path, os_name: str, arch: str) -> Path | None:
+    """Try to download the binary from PyPI wheel.
+
+    Downloads the platform-specific wheel and extracts the binary.
+    Returns the path to the extracted binary, or None if download fails.
+    """
+    # Map to PyPI platform tags (substring match in wheel filename)
+    platform_tags = {
+        ("darwin", "arm64"): "macosx_11_0_arm64",
+        ("darwin", "amd64"): "macosx_10_9_x86_64",
+        ("linux", "amd64"): "manylinux2014_x86_64",
+        ("linux", "arm64"): "manylinux2014_aarch64",
+    }
+    platform_tag = platform_tags.get((os_name, arch))
+    if not platform_tag:
+        logger.debug("No PyPI wheel available for platform", os=os_name, arch=arch)
+        return None
+
+    wheel_path: Path | None = None
+    try:
+        # Get package info from PyPI JSON API
+        with urllib.request.urlopen(
+            "https://pypi.org/pypi/jean-claude-code/json", timeout=30
+        ) as response:
+            package_info = json.loads(response.read())
+
+        # Find wheel URL and hash for our platform
+        wheel_url = None
+        expected_sha256 = None
+        for file_info in package_info["urls"]:
+            filename = file_info["filename"]
+            if filename.endswith(".whl") and platform_tag in filename:
+                wheel_url = file_info["url"]
+                expected_sha256 = file_info["digests"]["sha256"]
+                break
+
+        if not wheel_url:
+            logger.debug("No wheel found for platform on PyPI", platform=platform_tag)
+            return None
+
+        logger.info("Downloading whatsapp-cli from PyPI...", url=wheel_url)
+
+        # Download the wheel to a temp file
+        with tempfile.NamedTemporaryFile(suffix=".whl", delete=False) as tmp:
+            wheel_path = Path(tmp.name)
+            with urllib.request.urlopen(wheel_url, timeout=60) as response:
+                wheel_data = response.read()
+                tmp.write(wheel_data)
+
+        # Verify SHA256 hash
+        actual_sha256 = hashlib.sha256(wheel_data).hexdigest()
+        if actual_sha256 != expected_sha256:
+            logger.warning(
+                "Wheel hash mismatch",
+                expected=expected_sha256,
+                actual=actual_sha256,
+            )
+            return None
+
+        # Extract the binary from the wheel
+        binary_name = f"whatsapp-cli-{os_name}-{arch}"
+        binary_in_wheel = f"jean_claude/bin/{binary_name}"
+
+        with zipfile.ZipFile(wheel_path) as zf:
+            if binary_in_wheel not in zf.namelist():
+                logger.debug("Binary not found in wheel", expected=binary_in_wheel)
+                return None
+
+            bin_dir.mkdir(parents=True, exist_ok=True)
+            output = bin_dir / binary_name
+
+            # Write to temp file first, then atomic rename
+            with tempfile.NamedTemporaryFile(
+                dir=bin_dir, delete=False, prefix=".tmp-"
+            ) as tmp_out:
+                with zf.open(binary_in_wheel) as src:
+                    tmp_out.write(src.read())
+                tmp_binary = Path(tmp_out.name)
+
+            tmp_binary.chmod(0o755)
+            tmp_binary.rename(output)  # atomic on same filesystem
+
+            logger.info("Extracted whatsapp-cli from PyPI", path=str(output))
+            return output
+
+    except (
+        urllib.error.URLError,
+        json.JSONDecodeError,
+        zipfile.BadZipFile,
+        KeyError,
+        OSError,
+    ) as e:
+        logger.warning("Failed to download from PyPI", error=str(e))
+        return None
+    finally:
+        if wheel_path:
+            wheel_path.unlink(missing_ok=True)
+
+
+def _get_whatsapp_cli_path() -> Path:
+    """Find or provision the whatsapp-cli binary for the current platform.
+
+    Lookup order:
+    1. Existing binary in jean_claude/bin/
+    2. Compile from source (if Go is installed)
+    3. Download from PyPI wheel
+    """
+    os_name, arch = _get_platform_info()
     bin_dir = Path(__file__).parent / "bin"
-    bundled = bin_dir / f"whatsapp-cli-{os_name}-{arch}"
-    if bundled.exists():
-        return bundled
+    binary_path = bin_dir / f"whatsapp-cli-{os_name}-{arch}"
 
-    # Fall back to development location
-    dev_binary = Path(__file__).parent.parent / "whatsapp" / "whatsapp-cli"
-    if dev_binary.exists():
-        return dev_binary
+    # 1. Check for existing binary (bundled or previously compiled/downloaded)
+    if binary_path.exists():
+        return binary_path
+
+    # 2. Try to compile from source
+    compiled = _try_compile_binary(bin_dir, os_name, arch)
+    if compiled:
+        return compiled
+
+    # 3. Try to download from PyPI
+    downloaded = _try_download_from_pypi(bin_dir, os_name, arch)
+    if downloaded:
+        return downloaded
 
     raise JeanClaudeError(
         f"WhatsApp CLI not found for {os_name}/{arch}.\n"
-        f"Looked in:\n"
-        f"  - {bundled}\n"
-        f"  - {dev_binary}\n"
-        "Build with: cd whatsapp && ./build.sh"
+        f"Tried:\n"
+        f"  - Binary: {binary_path}\n"
+        f"  - Compile from source: Go not installed or compilation failed\n"
+        f"  - Download from PyPI: Failed\n"
+        "Install Go and run: cd whatsapp && ./build.sh"
     )
 
 
