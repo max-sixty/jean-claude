@@ -844,6 +844,75 @@ def _build_html_quoted_reply(
 </div>"""
 
 
+def _build_forward_text(
+    body: str, original_body: str, from_addr: str, date: str, subject: str
+) -> str:
+    """Build plain text forward body with Gmail-style header.
+
+    Format:
+        [user's message]
+
+        ---------- Forwarded message ----------
+        From: Sender Name <sender@example.com>
+        Date: Mon, 22 Dec 2025 at 02:50
+        Subject: Original subject
+
+        [original message content]
+    """
+    formatted_date = _format_gmail_date(date)
+
+    fwd_body = body
+    if fwd_body:
+        fwd_body += "\n\n"
+    fwd_body += "---------- Forwarded message ----------\n"
+    fwd_body += f"From: {from_addr}\n"
+    fwd_body += f"Date: {formatted_date}\n"
+    fwd_body += f"Subject: {subject}\n\n"
+    fwd_body += original_body
+    return fwd_body
+
+
+def _build_forward_html(
+    body: str,
+    original_html: str | None,
+    original_text: str,
+    from_addr: str,
+    date: str,
+    subject: str,
+) -> str:
+    """Build HTML forward body with Gmail-style formatting.
+
+    Format matches Gmail's HTML forwards.
+    If original was plain text, converts it to HTML.
+    """
+    formatted_date = _format_gmail_date(date)
+
+    # Convert forward body to HTML
+    body_html = _text_to_html(body) if body else ""
+
+    # Use original HTML if available, otherwise convert plain text
+    if original_html:
+        quoted_content = original_html
+    else:
+        quoted_content = _text_to_html(original_text)
+
+    # Escape header values for HTML safety
+    safe_from = html.escape(from_addr)
+    safe_date = html.escape(formatted_date)
+    safe_subject = html.escape(subject)
+
+    return f"""<div dir="ltr">{body_html}</div>
+<br>
+<div class="gmail_quote gmail_quote_container">
+<div dir="ltr">---------- Forwarded message ----------<br>
+From: {safe_from}<br>
+Date: {safe_date}<br>
+Subject: {safe_subject}<br><br>
+</div>
+{quoted_content}
+</div>"""
+
+
 def _create_reply_draft(
     message_id: str, body: str, *, include_cc: bool, custom_cc: str | None = None
 ) -> tuple[str, str]:
@@ -1046,27 +1115,39 @@ def draft_forward(message_id: str):
         h["name"].lower(): h["value"]
         for h in original.get("payload", {}).get("headers", [])
     }
-    subject = headers.get("subject", "")
+    orig_subject = headers.get("subject", "")
     from_addr = headers.get("from", "")
     date = headers.get("date", "")
-    original_body = decode_body(original.get("payload", {}))
 
-    if not subject.lower().startswith("fwd:"):
-        subject = f"Fwd: {subject}"
+    # Get both plain text and HTML for proper forwarding
+    payload = original.get("payload", {})
+    original_text, original_html = extract_body(payload)
 
-    fwd_body = data.get("body", "")
-    if fwd_body:
-        fwd_body += "\n\n"
-    fwd_body += "---------- Forwarded message ----------\n"
-    fwd_body += f"From: {from_addr}\n"
-    fwd_body += f"Date: {date}\n"
-    fwd_body += f"Subject: {headers.get('subject', '')}\n\n"
-    fwd_body += original_body
+    # Build forward subject
+    if orig_subject.lower().startswith("fwd:"):
+        subject = orig_subject
+    else:
+        subject = f"Fwd: {orig_subject}"
 
-    msg = MIMEText(fwd_body)
+    user_body = data.get("body", "")
+
+    # Build both plain text and HTML versions (like replies)
+    plain_body = _build_forward_text(
+        user_body, original_text, from_addr, date, orig_subject
+    )
+    html_body = _build_forward_html(
+        user_body, original_html, original_text, from_addr, date, orig_subject
+    )
+
+    # Create multipart/alternative with both versions
+    msg = MIMEMultipart("alternative")
     msg["from"] = get_my_from_address(service)
     msg["to"] = data["to"]
     msg["subject"] = subject
+
+    # Attach plain text first, then HTML (email clients prefer later parts)
+    msg.attach(MIMEText(plain_body, "plain"))
+    msg.attach(MIMEText(html_body, "html"))
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     result = (
