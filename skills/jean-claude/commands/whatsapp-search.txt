@@ -1,0 +1,12 @@
+Usage: jean-claude whatsapp search [OPTIONS] QUERY
+
+  Search message history.
+
+  QUERY: Search term (searches message text)
+
+  Examples:     jean-claude whatsapp search "dinner plans"     jean-claude
+  whatsapp search "meeting" -n 20
+
+Options:
+  -n, --max-results INTEGER  Maximum results to return
+  --help                     Show this message and exit.

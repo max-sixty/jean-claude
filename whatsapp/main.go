@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"mime"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -83,6 +84,8 @@ func main() {
 		err = cmdAuth()
 	case "send":
 		err = cmdSend(args)
+	case "send-file":
+		err = cmdSendFile(args)
 	case "sync":
 		err = cmdSync()
 	case "messages":
@@ -90,7 +93,11 @@ func main() {
 	case "contacts":
 		err = cmdContacts()
 	case "chats":
-		err = cmdChats()
+		err = cmdChats(args)
+	case "search":
+		err = cmdSearch(args)
+	case "participants":
+		err = cmdParticipants(args)
 	case "refresh":
 		err = cmdRefresh()
 	case "mark-read":
@@ -120,16 +127,19 @@ Usage:
   whatsapp-cli <command> [options]
 
 Commands:
-  auth       Authenticate with WhatsApp (scan QR code)
-  send       Send a message: send <phone> <message>
-  sync       Sync messages from WhatsApp to local database
-  messages   List messages from local database
-  contacts   List contacts from local database
-  chats      List recent chats
-  refresh    Fetch chat/group names from WhatsApp
-  mark-read  Mark messages in a chat as read: mark-read <chat-jid>
-  status     Show connection status
-  logout     Log out and clear credentials
+  auth          Authenticate with WhatsApp (scan QR code)
+  send          Send a message: send <phone> <message>
+  send-file     Send a file: send-file <phone> <file-path>
+  sync          Sync messages from WhatsApp to local database
+  messages      List messages from local database
+  search        Search message history: search <query>
+  contacts      List contacts from local database
+  chats         List recent chats
+  participants  List group participants: participants <group-jid>
+  refresh       Fetch chat/group names from WhatsApp
+  mark-read     Mark messages in a chat as read: mark-read <chat-jid>
+  status        Show connection status
+  logout        Log out and clear credentials
 
 Options:
   -v, --verbose   Enable verbose logging`)
@@ -429,6 +439,144 @@ func cmdSend(args []string) error {
 	return printJSON(output)
 }
 
+// cmdSendFile sends a file attachment
+func cmdSendFile(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: send-file <phone> <file-path>")
+	}
+
+	phone := args[0]
+	filePath := args[1]
+
+	// Read file
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Detect MIME type from extension
+	ext := filepath.Ext(filePath)
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
+	// Determine media type for upload
+	var mediaType whatsmeow.MediaType
+	if strings.HasPrefix(mimeType, "image/") {
+		mediaType = whatsmeow.MediaImage
+	} else if strings.HasPrefix(mimeType, "video/") {
+		mediaType = whatsmeow.MediaVideo
+	} else if strings.HasPrefix(mimeType, "audio/") {
+		mediaType = whatsmeow.MediaAudio
+	} else {
+		mediaType = whatsmeow.MediaDocument
+	}
+
+	ctx := context.Background()
+	if err := initClient(ctx); err != nil {
+		return err
+	}
+
+	if client.Store.ID == nil {
+		return fmt.Errorf("not authenticated. Run 'auth' first")
+	}
+
+	if err := client.Connect(); err != nil {
+		return fmt.Errorf("failed to connect: %w", err)
+	}
+	defer client.Disconnect()
+
+	// Wait for connection
+	time.Sleep(2 * time.Second)
+
+	// Upload file to WhatsApp servers
+	uploadResp, err := client.Upload(ctx, data, mediaType)
+	if err != nil {
+		return fmt.Errorf("failed to upload file: %w", err)
+	}
+
+	// Parse recipient JID
+	jid, err := parseJID(phone)
+	if err != nil {
+		return err
+	}
+
+	// Build message based on media type
+	fileName := filepath.Base(filePath)
+	fileLen := uint64(len(data))
+	var msg *waProto.Message
+
+	switch mediaType {
+	case whatsmeow.MediaImage:
+		msg = &waProto.Message{
+			ImageMessage: &waProto.ImageMessage{
+				URL:           &uploadResp.URL,
+				DirectPath:    &uploadResp.DirectPath,
+				MediaKey:      uploadResp.MediaKey,
+				Mimetype:      &mimeType,
+				FileEncSHA256: uploadResp.FileEncSHA256,
+				FileSHA256:    uploadResp.FileSHA256,
+				FileLength:    &fileLen,
+			},
+		}
+	case whatsmeow.MediaVideo:
+		msg = &waProto.Message{
+			VideoMessage: &waProto.VideoMessage{
+				URL:           &uploadResp.URL,
+				DirectPath:    &uploadResp.DirectPath,
+				MediaKey:      uploadResp.MediaKey,
+				Mimetype:      &mimeType,
+				FileEncSHA256: uploadResp.FileEncSHA256,
+				FileSHA256:    uploadResp.FileSHA256,
+				FileLength:    &fileLen,
+			},
+		}
+	case whatsmeow.MediaAudio:
+		msg = &waProto.Message{
+			AudioMessage: &waProto.AudioMessage{
+				URL:           &uploadResp.URL,
+				DirectPath:    &uploadResp.DirectPath,
+				MediaKey:      uploadResp.MediaKey,
+				Mimetype:      &mimeType,
+				FileEncSHA256: uploadResp.FileEncSHA256,
+				FileSHA256:    uploadResp.FileSHA256,
+				FileLength:    &fileLen,
+			},
+		}
+	default:
+		msg = &waProto.Message{
+			DocumentMessage: &waProto.DocumentMessage{
+				URL:           &uploadResp.URL,
+				DirectPath:    &uploadResp.DirectPath,
+				MediaKey:      uploadResp.MediaKey,
+				Mimetype:      &mimeType,
+				FileEncSHA256: uploadResp.FileEncSHA256,
+				FileSHA256:    uploadResp.FileSHA256,
+				FileLength:    &fileLen,
+				FileName:      &fileName,
+			},
+		}
+	}
+
+	// Send message
+	resp, err := client.SendMessage(ctx, jid, msg)
+	if err != nil {
+		return fmt.Errorf("failed to send file: %w", err)
+	}
+
+	output := map[string]any{
+		"success":   true,
+		"id":        resp.ID,
+		"timestamp": resp.Timestamp.Unix(),
+		"recipient": jid.String(),
+		"file":      fileName,
+		"size":      fileLen,
+		"mime_type": mimeType,
+	}
+	return printJSON(output)
+}
+
 // cmdSync syncs messages from WhatsApp
 func cmdSync() error {
 	ctx := context.Background()
@@ -623,8 +771,8 @@ func cmdMessages(args []string) error {
 		switch {
 		case strings.HasPrefix(args[i], "--chat="):
 			chatJID = strings.TrimPrefix(args[i], "--chat=")
-		case strings.HasPrefix(args[i], "--limit="):
-			fmt.Sscanf(strings.TrimPrefix(args[i], "--limit="), "%d", &limit)
+		case strings.HasPrefix(args[i], "--max-results="):
+			fmt.Sscanf(strings.TrimPrefix(args[i], "--max-results="), "%d", &limit)
 		case args[i] == "--unread":
 			unreadOnly = true
 		}
@@ -734,16 +882,24 @@ func cmdContacts() error {
 }
 
 // cmdChats lists chats from local database
-func cmdChats() error {
+func cmdChats(args []string) error {
 	if err := initMessageDB(); err != nil {
 		return err
+	}
+
+	// Parse args
+	var unreadOnly bool
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--unread" {
+			unreadOnly = true
+		}
 	}
 
 	// Join with contacts to get names for DM chats
 	// For groups: use chat name only (don't fall back to sender name)
 	// For DMs: try contact name, then sender name from messages
 	// Compute unread_count from messages table (single source of truth)
-	rows, err := messageDB.Query(`
+	query := `
 		SELECT c.jid,
 			CASE
 				WHEN c.is_group = 1 THEN COALESCE(NULLIF(c.name, ''), '')
@@ -759,12 +915,19 @@ func cmdChats() error {
 			END,
 			c.is_group,
 			c.last_message_time,
-			(SELECT COUNT(*) FROM messages m WHERE m.chat_jid = c.jid AND m.is_read = 0 AND m.is_from_me = 0),
+			(SELECT COUNT(*) FROM messages m WHERE m.chat_jid = c.jid AND m.is_read = 0 AND m.is_from_me = 0) as unread_count,
 			c.marked_as_unread
 		FROM chats c
-		LEFT JOIN contacts ct ON c.jid = ct.jid
-		ORDER BY c.last_message_time DESC
-	`)
+		LEFT JOIN contacts ct ON c.jid = ct.jid`
+	if unreadOnly {
+		query += `
+		WHERE (SELECT COUNT(*) FROM messages m WHERE m.chat_jid = c.jid AND m.is_read = 0 AND m.is_from_me = 0) > 0
+		   OR c.marked_as_unread = 1`
+	}
+	query += `
+		ORDER BY c.last_message_time DESC`
+
+	rows, err := messageDB.Query(query)
 	if err != nil {
 		return fmt.Errorf("failed to query chats: %w", err)
 	}
@@ -799,6 +962,162 @@ func cmdChats() error {
 	}
 
 	return printJSON(chats)
+}
+
+// cmdSearch searches message history
+func cmdSearch(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: search <query> [--max-results=N]")
+	}
+
+	if err := initMessageDB(); err != nil {
+		return err
+	}
+
+	// Parse args - first non-flag arg is query
+	var query string
+	limit := 50
+	for i := 0; i < len(args); i++ {
+		switch {
+		case strings.HasPrefix(args[i], "--max-results="):
+			fmt.Sscanf(strings.TrimPrefix(args[i], "--max-results="), "%d", &limit)
+		case !strings.HasPrefix(args[i], "--"):
+			if query == "" {
+				query = args[i]
+			}
+		}
+	}
+
+	if query == "" {
+		return fmt.Errorf("usage: search <query> [--max-results=N]")
+	}
+
+	// Search messages with LIKE query
+	sqlQuery := `SELECT m.id, m.chat_jid, m.sender_jid, m.sender_name, m.timestamp, m.text, m.media_type, m.is_from_me, m.is_read,
+		CASE
+			WHEN c.is_group = 1 THEN COALESCE(NULLIF(c.name, ''), '')
+			ELSE COALESCE(NULLIF(c.name, ''), ct.name, ct.push_name, '')
+		END as chat_name
+		FROM messages m
+		LEFT JOIN chats c ON m.chat_jid = c.jid
+		LEFT JOIN contacts ct ON m.chat_jid = ct.jid
+		WHERE m.text LIKE ?
+		ORDER BY m.timestamp DESC
+		LIMIT ?`
+
+	rows, err := messageDB.Query(sqlQuery, "%"+query+"%", limit)
+	if err != nil {
+		return fmt.Errorf("failed to search messages: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []map[string]any
+	for rows.Next() {
+		var id, chatJID, senderJID string
+		var senderName, text, mediaType, chatName sql.NullString
+		var timestamp int64
+		var isFromMe, isRead int
+
+		if err := rows.Scan(&id, &chatJID, &senderJID, &senderName, &timestamp, &text, &mediaType, &isFromMe, &isRead, &chatName); err != nil {
+			return fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		msg := map[string]any{
+			"id":         id,
+			"chat_jid":   chatJID,
+			"sender_jid": senderJID,
+			"timestamp":  timestamp,
+			"is_from_me": isFromMe == 1,
+			"is_read":    isRead == 1,
+		}
+		if chatName.Valid && chatName.String != "" {
+			msg["chat_name"] = chatName.String
+		}
+		if senderName.Valid {
+			msg["sender_name"] = senderName.String
+		}
+		if text.Valid {
+			msg["text"] = text.String
+		}
+		if mediaType.Valid && mediaType.String != "" {
+			msg["media_type"] = mediaType.String
+		}
+		messages = append(messages, msg)
+	}
+
+	return printJSON(messages)
+}
+
+// cmdParticipants lists group participants
+func cmdParticipants(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: participants <group-jid>")
+	}
+
+	groupJID := args[0]
+
+	ctx := context.Background()
+	if err := initClient(ctx); err != nil {
+		return err
+	}
+
+	if client.Store.ID == nil {
+		return fmt.Errorf("not authenticated. Run 'auth' first")
+	}
+
+	if err := client.Connect(); err != nil {
+		return fmt.Errorf("failed to connect: %w", err)
+	}
+	defer client.Disconnect()
+
+	// Wait for connection
+	time.Sleep(2 * time.Second)
+
+	// Parse group JID
+	jid, err := types.ParseJID(groupJID)
+	if err != nil {
+		return fmt.Errorf("invalid group JID: %w", err)
+	}
+
+	if !strings.Contains(groupJID, "@g.us") {
+		return fmt.Errorf("not a group JID (must end with @g.us)")
+	}
+
+	// Get group info
+	groupInfo, err := client.GetGroupInfo(ctx, jid)
+	if err != nil {
+		return fmt.Errorf("failed to get group info: %w", err)
+	}
+
+	var participants []map[string]any
+	for _, p := range groupInfo.Participants {
+		participant := map[string]any{
+			"jid": p.JID.String(),
+		}
+		if p.IsAdmin {
+			participant["is_admin"] = true
+		}
+		if p.IsSuperAdmin {
+			participant["is_super_admin"] = true
+		}
+		// Try to get contact name
+		contact, err := client.Store.Contacts.GetContact(ctx, p.JID)
+		if err == nil {
+			if contact.FullName != "" {
+				participant["name"] = contact.FullName
+			} else if contact.PushName != "" {
+				participant["name"] = contact.PushName
+			}
+		}
+		participants = append(participants, participant)
+	}
+
+	output := map[string]any{
+		"group_jid":    groupJID,
+		"group_name":   groupInfo.Name,
+		"participants": participants,
+	}
+	return printJSON(output)
 }
 
 // cmdRefresh fetches chat names from WhatsApp

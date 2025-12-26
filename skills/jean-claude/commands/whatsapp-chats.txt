@@ -3,8 +3,9 @@ Usage: jean-claude whatsapp chats [OPTIONS]
   List WhatsApp chats.
 
   Shows recent chats with names (for groups and contacts) and last message
-  timestamps.
+  timestamps. Use --unread to show only chats with unread messages.
 
 Options:
   -n, --max-results INTEGER  Maximum chats to return
+  --unread                   Show only chats with unread messages
   --help                     Show this message and exit.

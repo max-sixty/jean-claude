@@ -9,13 +9,16 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  auth       Authenticate with WhatsApp by scanning QR code.
-  chats      List WhatsApp chats.
-  contacts   List WhatsApp contacts from local database.
-  logout     Log out and clear WhatsApp credentials.
-  mark-read  Mark all messages in a chat as read.
-  messages   List messages from local database.
-  refresh    Fetch chat and group names from WhatsApp.
-  send       Send a WhatsApp message.
-  status     Show WhatsApp connection status.
-  sync       Sync messages from WhatsApp to local database.
+  auth          Authenticate with WhatsApp by scanning QR code.
+  chats         List WhatsApp chats.
+  contacts      List WhatsApp contacts from local database.
+  logout        Log out and clear WhatsApp credentials.
+  mark-read     Mark all messages in a chat as read.
+  messages      List messages from local database.
+  participants  List participants of a group chat.
+  refresh       Fetch chat and group names from WhatsApp.
+  search        Search message history.
+  send          Send a WhatsApp message.
+  send-file     Send a file attachment via WhatsApp.
+  status        Show WhatsApp connection status.
+  sync          Sync messages from WhatsApp to local database.

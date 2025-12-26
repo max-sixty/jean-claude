@@ -156,15 +156,39 @@ def send(recipient: str, message: str):
         click.echo(json.dumps(result, indent=2))
 
 
+@cli.command("send-file")
+@click.argument("recipient")
+@click.argument("file_path", type=click.Path(exists=True))
+def send_file(recipient: str, file_path: str):
+    """Send a file attachment via WhatsApp.
+
+    RECIPIENT: Phone number with country code (e.g., +12025551234)
+    FILE_PATH: Path to the file to send
+
+    Supports images, videos, audio, and documents.
+
+    Examples:
+        jean-claude whatsapp send-file "+12025551234" ./photo.jpg
+        jean-claude whatsapp send-file "+12025551234" ./document.pdf
+    """
+    result = _run_whatsapp_cli("send-file", recipient, file_path)
+    if result:
+        click.echo(json.dumps(result, indent=2))
+
+
 @cli.command()
 @click.option("-n", "--max-results", default=50, help="Maximum chats to return")
-def chats(max_results: int):
+@click.option("--unread", is_flag=True, help="Show only chats with unread messages")
+def chats(max_results: int, unread: bool):
     """List WhatsApp chats.
 
     Shows recent chats with names (for groups and contacts) and last
-    message timestamps.
+    message timestamps. Use --unread to show only chats with unread messages.
     """
-    result = _run_whatsapp_cli("chats")
+    args = ["chats"]
+    if unread:
+        args.append("--unread")
+    result = _run_whatsapp_cli(*args)
     if result and isinstance(result, list):
         # Apply limit
         chats_list = result[:max_results]
@@ -187,7 +211,7 @@ def messages(chat_jid: str | None, max_results: int, unread: bool):
         jean-claude whatsapp messages --chat "120363277025153496@g.us"
         jean-claude whatsapp messages --unread
     """
-    args = ["messages", f"--limit={max_results}"]
+    args = ["messages", f"--max-results={max_results}"]
     if chat_jid:
         args.append(f"--chat={chat_jid}")
     if unread:
@@ -202,6 +226,38 @@ def messages(chat_jid: str | None, max_results: int, unread: bool):
 def contacts():
     """List WhatsApp contacts from local database."""
     result = _run_whatsapp_cli("contacts")
+    if result:
+        click.echo(json.dumps(result, indent=2))
+
+
+@cli.command()
+@click.argument("query")
+@click.option("-n", "--max-results", default=50, help="Maximum results to return")
+def search(query: str, max_results: int):
+    """Search message history.
+
+    QUERY: Search term (searches message text)
+
+    Examples:
+        jean-claude whatsapp search "dinner plans"
+        jean-claude whatsapp search "meeting" -n 20
+    """
+    result = _run_whatsapp_cli("search", query, f"--max-results={max_results}")
+    if result:
+        click.echo(json.dumps(result, indent=2))
+
+
+@cli.command()
+@click.argument("group_jid")
+def participants(group_jid: str):
+    """List participants of a group chat.
+
+    GROUP_JID: The group JID (e.g., "120363277025153496@g.us")
+
+    Examples:
+        jean-claude whatsapp participants "120363277025153496@g.us"
+    """
+    result = _run_whatsapp_cli("participants", group_jid)
     if result:
         click.echo(json.dumps(result, indent=2))
 
