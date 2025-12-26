@@ -51,13 +51,14 @@ def get_db_connection() -> sqlite3.Connection:
 def build_message_dict(
     date: str,
     sender: str,
-    text: str,
+    text: str | None,
     is_from_me: bool = False,
     contact_name: str | None = None,
     group_name: str | None = None,
+    attachments: list[dict] | None = None,
 ) -> dict:
     """Build a message dictionary for JSON output."""
-    return {
+    result = {
         "date": date,
         "sender": sender,
         "text": text,
@@ -65,6 +66,61 @@ def build_message_dict(
         "contact_name": contact_name,
         "group_name": group_name,
     }
+    if attachments:
+        result["attachments"] = attachments
+    return result
+
+
+# Image MIME types we expose (includes Apple-specific formats for iMessage)
+IMAGE_MIME_TYPES = frozenset(
+    [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/heic",
+        "image/heif",
+        "image/webp",
+        "image/tiff",
+    ]
+)
+
+
+def parse_attachments(attachments_json: str | None) -> list[dict]:
+    """Parse attachment JSON from SQLite query into list of attachment dicts.
+
+    Only returns image attachments with valid, existing file paths.
+    The SQL query defines the JSON structure, so we trust the field names.
+    """
+    if not attachments_json:
+        return []
+
+    attachments_data = json.loads(attachments_json)
+
+    result = []
+    for att in attachments_data:
+        mime_type = att["mime_type"]
+        filename = att["filename"]
+
+        # Only include images
+        if mime_type not in IMAGE_MIME_TYPES:
+            continue
+
+        # Expand ~ to home directory and verify file exists
+        file_path = Path(filename).expanduser()
+        if not file_path.exists():
+            continue
+
+        result.append(
+            {
+                "type": mime_type.split("/")[0],
+                "filename": file_path.name,
+                "mimeType": mime_type,
+                "size": att["size"] or 0,
+                "file": str(file_path),
+            }
+        )
+
+    return result
 
 
 def extract_text_from_attributed_body(data: bytes | None) -> str | None:
@@ -359,7 +415,8 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
         else "COALESCE(h.id, c.chat_identifier, 'unknown')"
     )
 
-    # Use subquery with GROUP_CONCAT to get group participants inline (avoids N+1 queries)
+    # Use subqueries with GROUP_CONCAT/json_group_array for participants and attachments
+    # This avoids N+1 queries
     sql = f"""
         SELECT
             datetime(m.date/1000000000 + {APPLE_EPOCH_OFFSET}, 'unixepoch', 'localtime') as date,
@@ -371,13 +428,24 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
             (SELECT GROUP_CONCAT(h2.id, '|')
              FROM chat_handle_join chj2
              JOIN handle h2 ON chj2.handle_id = h2.ROWID
-             WHERE chj2.chat_id = c.ROWID) as participants
+             WHERE chj2.chat_id = c.ROWID) as participants,
+            (SELECT json_group_array(json_object(
+                'filename', a.filename,
+                'mime_type', a.mime_type,
+                'size', a.total_bytes
+             ))
+             FROM message_attachment_join maj
+             JOIN attachment a ON maj.attachment_id = a.ROWID
+             WHERE maj.message_id = m.ROWID
+               AND a.filename IS NOT NULL
+               AND a.transfer_state IN (0, 5)
+            ) as attachments_json
             {"," + is_from_me_col.rstrip(",") if is_from_me_col else ""}
         FROM message m
         LEFT JOIN handle h ON m.handle_id = h.ROWID
         LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
         LEFT JOIN chat c ON cmj.chat_id = c.ROWID
-        WHERE (m.text IS NOT NULL OR m.attributedBody IS NOT NULL)
+        WHERE (m.text IS NOT NULL OR m.attributedBody IS NOT NULL OR m.cache_has_attachments = 1)
         {("AND " + query.where_clause) if query.where_clause else ""}
         ORDER BY m.date DESC
         LIMIT ?
@@ -402,13 +470,23 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
     # Build message dictionaries
     messages = []
     for row in rows:
-        date, sender, text, attributed_body, display_name, style, participants_str = (
-            row[:7]
-        )
-        is_from_me = row[7] if query.include_is_from_me else False
+        (
+            date,
+            sender,
+            text,
+            attributed_body,
+            display_name,
+            style,
+            participants_str,
+            attachments_json,
+        ) = row[:8]
+        is_from_me = row[8] if query.include_is_from_me else False
 
         msg_text = get_message_text(text, attributed_body)
-        if not msg_text:
+        attachments = parse_attachments(attachments_json)
+
+        # Skip messages with no text and no attachments
+        if not msg_text and not attachments:
             continue
 
         contact_name = phone_to_name.get(sender)
@@ -431,6 +509,7 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
                 is_from_me=is_from_me,
                 contact_name=contact_name,
                 group_name=group_name,
+                attachments=attachments,
             )
         )
 

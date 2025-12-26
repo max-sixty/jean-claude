@@ -335,3 +335,83 @@ def mark_read(chat_jid: str):
     result = _run_whatsapp_cli("mark-read", chat_jid)
     if result:
         click.echo(json.dumps(result, indent=2))
+
+
+@cli.command()
+@click.argument("message_id")
+@click.option(
+    "--output", type=click.Path(), help="Output file path (defaults to XDG data dir)"
+)
+def download(message_id: str, output: str | None):
+    """Download media from a message.
+
+    MESSAGE_ID: The message ID
+
+    Downloads media to ~/.local/share/jean-claude/whatsapp/media/ by default.
+    Uses content hash as filename for deduplication.
+
+    Examples:
+        jean-claude whatsapp download "3EB0ABC123..."
+        jean-claude whatsapp download "3EB0ABC123..." --output ./photo.jpg
+    """
+    args = ["download", message_id]
+    if output:
+        args.append(f"--output={output}")
+
+    result = _run_whatsapp_cli(*args)
+    if result:
+        click.echo(json.dumps(result, indent=2))
+
+
+# Image MIME types for auto-download (excludes Apple-specific formats like HEIC)
+IMAGE_MIME_TYPES = frozenset(
+    [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+    ]
+)
+
+
+@cli.command()
+@click.option("-n", "--max-results", default=50, help="Maximum messages to return")
+def unread(max_results: int):
+    """List unread messages and auto-download images.
+
+    Shows unread messages with sender, timestamp, and text content.
+    Images are automatically downloaded to ~/.local/share/jean-claude/whatsapp/media/
+    and their file paths are included in the output.
+
+    Examples:
+        jean-claude whatsapp unread
+        jean-claude whatsapp unread -n 20
+    """
+    # Get unread messages
+    result = _run_whatsapp_cli("messages", f"--max-results={max_results}", "--unread")
+    if not result or not isinstance(result, list):
+        click.echo(json.dumps([], indent=2))
+        return
+
+    # Auto-download images
+    for msg in result:
+        media_type = msg.get("media_type")
+        mime_type = msg.get("mime_type_full", "")
+        msg_id = msg.get("id")
+
+        # Only auto-download images
+        if media_type == "image" or mime_type in IMAGE_MIME_TYPES:
+            # Check if already has a file path
+            if msg.get("media_file_path"):
+                msg["file"] = msg["media_file_path"]
+                continue
+
+            # Try to download
+            try:
+                download_result = _run_whatsapp_cli("download", msg_id)
+                if download_result and download_result.get("file"):
+                    msg["file"] = download_result["file"]
+            except JeanClaudeError as e:
+                logger.debug("Download failed", message_id=msg_id, error=str(e))
+
+    click.echo(json.dumps(result, indent=2))

@@ -739,6 +739,30 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage history --name "Kevi
 To enable reading: System Preferences > Privacy & Security > Full Disk Access >
 add your terminal app.
 
+### Image Attachments
+
+Messages include an `attachments` field with file paths to images. Use Claude's
+Read tool to view and describe the images.
+
+**Attachment schema:**
+
+```json
+{
+  "attachments": [
+    {
+      "type": "image",
+      "filename": "IMG_1234.heic",
+      "mimeType": "image/heic",
+      "size": 456789,
+      "file": "/Users/you/Library/Messages/Attachments/.../IMG_1234.heic"
+    }
+  ]
+}
+```
+
+Only image attachments are included (HEIC, JPEG, PNG, GIF, WebP). Other media
+types (video, audio, documents) are not exposed.
+
 ## WhatsApp
 
 Send and receive WhatsApp messages. Requires Go binary to be built and QR code
@@ -777,12 +801,35 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp chats -n 10
 ### Read Messages
 
 ```bash
-# Recent messages (from local database)
+# Unread messages (auto-downloads images)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp unread
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp unread -n 20
+
+# All recent messages (from local database, no auto-download)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages -n 20
 
 # Messages from specific chat (use JID from chats command)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --chat "120363277025153496@g.us"
 ```
+
+### Image Downloads
+
+The `unread` command auto-downloads images to
+`~/.local/share/jean-claude/whatsapp/media/`. Images include a `file` field with
+the path—use Claude's Read tool to view and describe them.
+
+For messages from `messages` command, use `download` to fetch media:
+
+```bash
+# Download media from a specific message
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp download MESSAGE_ID
+
+# Download to custom path
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp download MESSAGE_ID --output ./photo.jpg
+```
+
+Files are stored with content-hash filenames for deduplication (same image sent
+twice → downloaded once).
 
 ### Other Commands
 

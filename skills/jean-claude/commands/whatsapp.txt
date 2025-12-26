@@ -12,6 +12,7 @@ Commands:
   auth          Authenticate with WhatsApp by scanning QR code.
   chats         List WhatsApp chats.
   contacts      List WhatsApp contacts from local database.
+  download      Download media from a message.
   logout        Log out and clear WhatsApp credentials.
   mark-read     Mark all messages in a chat as read.
   messages      List messages from local database.
@@ -22,3 +23,4 @@ Commands:
   send-file     Send a file attachment via WhatsApp.
   status        Show WhatsApp connection status.
   sync          Sync messages from WhatsApp to local database.
+  unread        List unread messages and auto-download images.
