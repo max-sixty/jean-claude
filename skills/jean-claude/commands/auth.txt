@@ -1,4 +1,4 @@
-Usage: j-claude auth [OPTIONS]
+Usage: jean-claude auth [OPTIONS]
 
   Authenticate with Google APIs.
 

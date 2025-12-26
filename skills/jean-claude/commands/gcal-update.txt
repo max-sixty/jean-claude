@@ -1,4 +1,4 @@
-Usage: j-claude gcal update [OPTIONS] EVENT_ID
+Usage: jean-claude gcal update [OPTIONS] EVENT_ID
 
   Update/modify an existing calendar event.
 

@@ -1,4 +1,4 @@
-Usage: j-claude gmail get [OPTIONS] MESSAGE_ID
+Usage: jean-claude gmail get [OPTIONS] MESSAGE_ID
 
   Get a single message by ID, written to file.
 

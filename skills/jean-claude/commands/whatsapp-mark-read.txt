@@ -1,4 +1,4 @@
-Usage: j-claude whatsapp mark-read [OPTIONS] CHAT_JID
+Usage: jean-claude whatsapp mark-read [OPTIONS] CHAT_JID
 
   Mark all messages in a chat as read.
 

@@ -1,4 +1,4 @@
-Usage: j-claude gdrive move [OPTIONS] FILE_ID FOLDER_ID
+Usage: jean-claude gdrive move [OPTIONS] FILE_ID FOLDER_ID
 
   Move a file to a different folder.
 

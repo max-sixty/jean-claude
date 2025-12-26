@@ -1,4 +1,4 @@
-Usage: j-claude gdocs info [OPTIONS] DOCUMENT_ID
+Usage: jean-claude gdocs info [OPTIONS] DOCUMENT_ID
 
   Get document metadata. Returns JSON.
 

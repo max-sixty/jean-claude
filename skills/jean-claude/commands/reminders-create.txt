@@ -1,4 +1,4 @@
-Usage: j-claude reminders create [OPTIONS] TITLE
+Usage: jean-claude reminders create [OPTIONS] TITLE
 
   Create a new reminder.
 

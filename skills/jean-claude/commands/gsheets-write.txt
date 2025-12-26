@@ -1,4 +1,4 @@
-Usage: j-claude gsheets write [OPTIONS] SPREADSHEET_ID RANGE_
+Usage: jean-claude gsheets write [OPTIONS] SPREADSHEET_ID RANGE_
 
   Write data to a specific range. Reads JSON array from stdin.
 

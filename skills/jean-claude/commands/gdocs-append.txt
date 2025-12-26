@@ -1,4 +1,4 @@
-Usage: j-claude gdocs append [OPTIONS] DOCUMENT_ID
+Usage: jean-claude gdocs append [OPTIONS] DOCUMENT_ID
 
   Append text to the end of a document.
 

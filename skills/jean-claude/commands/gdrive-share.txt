@@ -1,4 +1,4 @@
-Usage: j-claude gdrive share [OPTIONS] FILE_ID EMAIL
+Usage: jean-claude gdrive share [OPTIONS] FILE_ID EMAIL
 
   Share a file or folder.
 

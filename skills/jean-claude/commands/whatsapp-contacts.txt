@@ -1,4 +1,4 @@
-Usage: j-claude whatsapp contacts [OPTIONS]
+Usage: jean-claude whatsapp contacts [OPTIONS]
 
   List WhatsApp contacts from local database.
 

@@ -1,4 +1,4 @@
-Usage: j-claude gsheets sort [OPTIONS] SPREADSHEET_ID RANGE_
+Usage: jean-claude gsheets sort [OPTIONS] SPREADSHEET_ID RANGE_
 
   Sort data in a range by one or more columns.
 

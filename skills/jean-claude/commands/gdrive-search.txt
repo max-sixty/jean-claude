@@ -1,4 +1,4 @@
-Usage: j-claude gdrive search [OPTIONS] QUERY
+Usage: jean-claude gdrive search [OPTIONS] QUERY
 
   Search for files. Returns JSON with files and optional nextPageToken.
 

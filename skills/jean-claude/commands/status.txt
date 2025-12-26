@@ -1,4 +1,4 @@
-Usage: j-claude status [OPTIONS]
+Usage: jean-claude status [OPTIONS]
 
   Show authentication status and API availability.
 

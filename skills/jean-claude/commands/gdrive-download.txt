@@ -1,4 +1,4 @@
-Usage: j-claude gdrive download [OPTIONS] FILE_ID OUTPUT
+Usage: jean-claude gdrive download [OPTIONS] FILE_ID OUTPUT
 
   Download a file.
 

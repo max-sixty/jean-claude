@@ -1,4 +1,4 @@
-Usage: j-claude gdrive upload [OPTIONS] FILE_PATH
+Usage: jean-claude gdrive upload [OPTIONS] FILE_PATH
 
   Upload a file.
 

@@ -1,4 +1,4 @@
-Usage: j-claude whatsapp search [OPTIONS] QUERY
+Usage: jean-claude whatsapp search [OPTIONS] QUERY
 
   Search message history.
 

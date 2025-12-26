@@ -1,4 +1,4 @@
-Usage: j-claude gsheets clear [OPTIONS] SPREADSHEET_ID RANGE_
+Usage: jean-claude gsheets clear [OPTIONS] SPREADSHEET_ID RANGE_
 
   Clear data from a range (keeps formatting).
 

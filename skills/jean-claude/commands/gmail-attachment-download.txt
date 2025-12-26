@@ -1,5 +1,5 @@
-Usage: j-claude gmail attachment-download [OPTIONS] MESSAGE_ID ATTACHMENT_ID
-                                          OUTPUT
+Usage: jean-claude gmail attachment-download [OPTIONS] MESSAGE_ID
+                                             ATTACHMENT_ID OUTPUT
 
   Download an attachment from a message.
 

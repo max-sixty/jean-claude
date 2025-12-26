@@ -1,4 +1,4 @@
-Usage: j-claude imessage chats [OPTIONS]
+Usage: jean-claude imessage chats [OPTIONS]
 
   List available iMessage chats.
 

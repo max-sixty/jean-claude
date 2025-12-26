@@ -1,4 +1,4 @@
-Usage: j-claude imessage send [OPTIONS] [RECIPIENT] [MESSAGE]
+Usage: jean-claude imessage send [OPTIONS] [RECIPIENT] [MESSAGE]
 
   Send an iMessage to a phone number, chat ID, or contact name.
 

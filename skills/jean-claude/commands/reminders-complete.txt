@@ -1,4 +1,4 @@
-Usage: j-claude reminders complete [OPTIONS] REMINDER_ID
+Usage: jean-claude reminders complete [OPTIONS] REMINDER_ID
 
   Mark a reminder as completed.
 

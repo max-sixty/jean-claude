@@ -1,4 +1,4 @@
-Usage: j-claude gdocs create [OPTIONS] TITLE
+Usage: jean-claude gdocs create [OPTIONS] TITLE
 
   Create a new document.
 

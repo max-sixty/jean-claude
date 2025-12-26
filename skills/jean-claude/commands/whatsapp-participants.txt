@@ -1,4 +1,4 @@
-Usage: j-claude whatsapp participants [OPTIONS] GROUP_JID
+Usage: jean-claude whatsapp participants [OPTIONS] GROUP_JID
 
   List participants of a group chat.
 

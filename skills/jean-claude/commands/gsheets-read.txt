@@ -1,4 +1,4 @@
-Usage: j-claude gsheets read [OPTIONS] SPREADSHEET_ID
+Usage: jean-claude gsheets read [OPTIONS] SPREADSHEET_ID
 
   Read data from a spreadsheet. Returns JSON array of rows.
 

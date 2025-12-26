@@ -1,4 +1,4 @@
-Usage: j-claude gdrive get [OPTIONS] FILE_ID
+Usage: jean-claude gdrive get [OPTIONS] FILE_ID
 
   Get file metadata. Returns JSON.
 

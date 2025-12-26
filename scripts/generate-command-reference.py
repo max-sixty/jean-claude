@@ -11,7 +11,7 @@ from pathlib import Path
 
 def get_help(command_parts: list[str]) -> str:
     """Run command with --help and return output."""
-    cmd = ["uv", "run", "j-claude"] + command_parts + ["--help"]
+    cmd = ["uv", "run", "jean-claude"] + command_parts + ["--help"]
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     return result.stdout
 

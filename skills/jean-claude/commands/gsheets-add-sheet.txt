@@ -1,4 +1,4 @@
-Usage: j-claude gsheets add-sheet [OPTIONS] SPREADSHEET_ID SHEET_NAME
+Usage: jean-claude gsheets add-sheet [OPTIONS] SPREADSHEET_ID SHEET_NAME
 
   Add a new sheet to a spreadsheet.
 

@@ -1,4 +1,4 @@
-Usage: j-claude gcal search [OPTIONS] QUERY
+Usage: jean-claude gcal search [OPTIONS] QUERY
 
   Search calendar events. Returns JSON with events and optional nextPageToken.
 

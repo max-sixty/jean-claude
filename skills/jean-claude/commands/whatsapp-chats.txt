@@ -1,4 +1,4 @@
-Usage: j-claude whatsapp chats [OPTIONS]
+Usage: jean-claude whatsapp chats [OPTIONS]
 
   List WhatsApp chats.
 

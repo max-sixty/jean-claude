@@ -1,4 +1,4 @@
-Usage: j-claude whatsapp auth [OPTIONS]
+Usage: jean-claude whatsapp auth [OPTIONS]
 
   Authenticate with WhatsApp by scanning QR code.
 

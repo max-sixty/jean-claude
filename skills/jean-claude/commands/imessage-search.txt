@@ -1,4 +1,4 @@
-Usage: j-claude imessage search [OPTIONS] [QUERY]
+Usage: jean-claude imessage search [OPTIONS] [QUERY]
 
   Search message history (requires Full Disk Access).
 

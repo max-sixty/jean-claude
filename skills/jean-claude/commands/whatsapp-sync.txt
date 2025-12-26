@@ -1,4 +1,4 @@
-Usage: j-claude whatsapp sync [OPTIONS]
+Usage: jean-claude whatsapp sync [OPTIONS]
 
   Sync messages from WhatsApp to local database.
 

@@ -1,4 +1,4 @@
-Usage: j-claude gcal create [OPTIONS] SUMMARY
+Usage: jean-claude gcal create [OPTIONS] SUMMARY
 
   Create a calendar event.
 

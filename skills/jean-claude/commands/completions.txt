@@ -1,4 +1,4 @@
-Usage: j-claude completions [OPTIONS] {bash|zsh|fish}
+Usage: jean-claude completions [OPTIONS] {bash|zsh|fish}
 
   Generate shell completion script.
 

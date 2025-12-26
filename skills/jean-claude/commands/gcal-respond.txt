@@ -1,4 +1,4 @@
-Usage: j-claude gcal respond [OPTIONS] EVENT_ID
+Usage: jean-claude gcal respond [OPTIONS] EVENT_ID
 
   Respond to a calendar invitation.
 

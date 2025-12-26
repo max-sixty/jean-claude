@@ -1,4 +1,4 @@
-Usage: j-claude gdrive mkdir [OPTIONS] NAME
+Usage: jean-claude gdrive mkdir [OPTIONS] NAME
 
   Create a folder.
 

@@ -1,4 +1,4 @@
-Usage: j-claude reminders delete [OPTIONS] REMINDER_ID
+Usage: jean-claude reminders delete [OPTIONS] REMINDER_ID
 
   Delete a reminder.
 

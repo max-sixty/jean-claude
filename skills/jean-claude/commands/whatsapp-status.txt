@@ -1,4 +1,4 @@
-Usage: j-claude whatsapp status [OPTIONS]
+Usage: jean-claude whatsapp status [OPTIONS]
 
   Show WhatsApp connection status.
 

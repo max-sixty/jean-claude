@@ -1,4 +1,4 @@
-Usage: j-claude whatsapp send [OPTIONS] [RECIPIENT] [MESSAGE]
+Usage: jean-claude whatsapp send [OPTIONS] [RECIPIENT] [MESSAGE]
 
   Send a WhatsApp message.
 

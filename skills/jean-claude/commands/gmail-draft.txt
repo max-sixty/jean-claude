@@ -1,6 +1,6 @@
 # gmail draft
 
-Usage: j-claude gmail draft [OPTIONS] COMMAND [ARGS]...
+Usage: jean-claude gmail draft [OPTIONS] COMMAND [ARGS]...
 
   Manage email drafts.
 
@@ -21,7 +21,7 @@ Commands:
 
 ## gmail draft create
 
-Usage: j-claude gmail draft create [OPTIONS]
+Usage: jean-claude gmail draft create [OPTIONS]
 
   Create a new email draft from JSON stdin.
 
@@ -36,7 +36,7 @@ Options:
 
 ## gmail draft delete
 
-Usage: j-claude gmail draft delete [OPTIONS] DRAFT_ID
+Usage: jean-claude gmail draft delete [OPTIONS] DRAFT_ID
 
   Permanently delete a draft.
 
@@ -48,7 +48,7 @@ Options:
 
 ## gmail draft forward
 
-Usage: j-claude gmail draft forward [OPTIONS] MESSAGE_ID
+Usage: jean-claude gmail draft forward [OPTIONS] MESSAGE_ID
 
   Create a forward draft from JSON stdin.
 
@@ -63,7 +63,7 @@ Options:
 
 ## gmail draft get
 
-Usage: j-claude gmail draft get [OPTIONS] DRAFT_ID
+Usage: jean-claude gmail draft get [OPTIONS] DRAFT_ID
 
   Get a draft with full body, written to file.
 
@@ -75,7 +75,7 @@ Options:
 
 ## gmail draft list
 
-Usage: j-claude gmail draft list [OPTIONS]
+Usage: jean-claude gmail draft list [OPTIONS]
 
   List drafts.
 
@@ -88,7 +88,7 @@ Options:
 
 ## gmail draft reply
 
-Usage: j-claude gmail draft reply [OPTIONS] MESSAGE_ID
+Usage: jean-claude gmail draft reply [OPTIONS] MESSAGE_ID
 
   Create a reply draft from JSON stdin.
 
@@ -107,7 +107,7 @@ Options:
 
 ## gmail draft reply-all
 
-Usage: j-claude gmail draft reply-all [OPTIONS] MESSAGE_ID
+Usage: jean-claude gmail draft reply-all [OPTIONS] MESSAGE_ID
 
   Create a reply-all draft from JSON stdin.
 
@@ -125,7 +125,7 @@ Options:
 
 ## gmail draft send
 
-Usage: j-claude gmail draft send [OPTIONS] DRAFT_ID
+Usage: jean-claude gmail draft send [OPTIONS] DRAFT_ID
 
   Send an existing draft.
 
@@ -137,7 +137,7 @@ Options:
 
 ## gmail draft update
 
-Usage: j-claude gmail draft update [OPTIONS] DRAFT_ID
+Usage: jean-claude gmail draft update [OPTIONS] DRAFT_ID
 
   Update an existing draft from JSON stdin.
 

@@ -1,4 +1,4 @@
-Usage: j-claude whatsapp send-file [OPTIONS] [RECIPIENT] [FILE_PATH]
+Usage: jean-claude whatsapp send-file [OPTIONS] [RECIPIENT] [FILE_PATH]
 
   Send a file attachment via WhatsApp.
 

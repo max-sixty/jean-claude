@@ -1,4 +1,4 @@
-Usage: j-claude whatsapp logout [OPTIONS]
+Usage: jean-claude whatsapp logout [OPTIONS]
 
   Log out and clear WhatsApp credentials.
 
