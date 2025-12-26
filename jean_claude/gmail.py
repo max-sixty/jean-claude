@@ -1169,7 +1169,14 @@ def draft_list(max_results: int, page_token: str | None):
 @draft.command("get")
 @click.argument("draft_id")
 def draft_get(draft_id: str):
-    """Get a draft with full body, written to file.
+    """Get a draft as JSON, written to file.
+
+    Writes JSON that can be edited and piped directly to 'draft update'.
+
+    Workflow:
+        jean-claude gmail draft get DRAFT_ID      # writes .tmp/draft-DRAFT_ID.json
+        # Edit the body field with Edit tool
+        cat .tmp/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
 
     Example:
         jean-claude gmail draft get r-123456789
@@ -1184,16 +1191,26 @@ def draft_get(draft_id: str):
     }
     body = decode_body(msg.get("payload", {}))
 
+    # Build JSON with editable fields (matches draft update input)
+    draft_data = {
+        "id": draft_id,
+        "from": headers.get("from", ""),
+        "to": headers.get("to", ""),
+        "subject": headers.get("subject", ""),
+        "body": body,
+    }
+    # Only include optional fields if present
+    if cc := headers.get("cc"):
+        draft_data["cc"] = cc
+    if bcc := headers.get("bcc"):
+        draft_data["bcc"] = bcc
+
     tmp_dir = Path(".tmp")
     tmp_dir.mkdir(exist_ok=True)
-    file_path = tmp_dir / f"draft-{draft_id}.txt"
+    file_path = tmp_dir / f"draft-{draft_id}.json"
+    file_path.write_text(json.dumps(draft_data, indent=2))
 
-    with open(file_path, "w") as f:
-        for field in ["from", "to", "cc", "bcc", "subject", "date"]:
-            f.write(f"{field.title()}: {headers.get(field, '')}\n")
-        f.write(f"\n{body}")
-
-    click.echo(str(file_path))
+    click.echo(json.dumps({"id": draft_id, "file": str(file_path)}, indent=2))
 
 
 @draft.command("update")
@@ -1207,9 +1224,9 @@ def draft_update(draft_id: str):
     JSON fields (all optional): to, cc, bcc, subject, body
 
     Workflow for iterating on long emails:
-        1. jean-claude gmail draft get DRAFT_ID  # writes to .tmp/draft-ID.txt
-        2. Edit the file with your changes
-        3. cat .tmp/draft-ID.txt | jean-claude gmail draft update DRAFT_ID
+        jean-claude gmail draft get DRAFT_ID      # writes .tmp/draft-DRAFT_ID.json
+        # Edit the body field with Edit tool
+        cat .tmp/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
 
     Example:
         echo '{"cc": "new@example.com"}' | jean-claude gmail draft update DRAFT_ID

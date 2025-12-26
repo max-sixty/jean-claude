@@ -11,7 +11,7 @@ Commands:
   create     Create a new email draft from JSON stdin.
   delete     Permanently delete a draft.
   forward    Create a forward draft from JSON stdin.
-  get        Get a draft with full body, written to file.
+  get        Get a draft as JSON, written to file.
   list       List drafts.
   reply      Create a reply draft from JSON stdin.
   reply-all  Create a reply-all draft from JSON stdin.
@@ -65,7 +65,13 @@ Options:
 
 Usage: jean-claude gmail draft get [OPTIONS] DRAFT_ID
 
-  Get a draft with full body, written to file.
+  Get a draft as JSON, written to file.
+
+  Writes JSON that can be edited and piped directly to 'draft update'.
+
+  Workflow:     jean-claude gmail draft get DRAFT_ID      # writes .tmp/draft-
+  DRAFT_ID.json     # Edit the body field with Edit tool     cat .tmp/draft-
+  DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
 
   Example:     jean-claude gmail draft get r-123456789
 
@@ -148,10 +154,10 @@ Usage: jean-claude gmail draft update [OPTIONS] DRAFT_ID
 
   JSON fields (all optional): to, cc, bcc, subject, body
 
-  Workflow for iterating on long emails:     1. jean-claude gmail draft get
-  DRAFT_ID  # writes to .tmp/draft-ID.txt     2. Edit the file with your
-  changes     3. cat .tmp/draft-ID.txt | jean-claude gmail draft update
-  DRAFT_ID
+  Workflow for iterating on long emails:     jean-claude gmail draft get
+  DRAFT_ID      # writes .tmp/draft-DRAFT_ID.json     # Edit the body field
+  with Edit tool     cat .tmp/draft-DRAFT_ID.json | jean-claude gmail draft
+  update DRAFT_ID
 
   Example:     echo '{"cc": "new@example.com"}' | jean-claude gmail draft
   update DRAFT_ID     echo '{"subject": "New subject", "body": "New body"}' |

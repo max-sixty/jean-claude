@@ -66,6 +66,30 @@ Consistent flags across all commands:
 - **`-n` / `--max-results`** - Limit number of results (never `--limit`)
 - **`--page-token`** - Pagination token for large result sets
 
+### Input Conventions
+
+- **Stdin (JSON only)** — Structured content (email bodies, spreadsheet rows,
+  message text). Always JSON, never plain text. Avoids shell escaping issues.
+- **Positional args** — IDs, file paths, short values that don't need escaping.
+- **Flags** — Options and modifiers (`-n`, `--unread`, `--json`).
+
+One canonical input method per command. No auto-detection between formats.
+
+### Output: File Indirection for Full Content
+
+Commands return compact JSON to stdout. Full content (email bodies, draft text)
+is written to `.tmp/` files with the path included in the JSON response.
+
+```json
+{"id": "abc123", "snippet": "First 200 chars...", "file": ".tmp/email-abc123.json"}
+```
+
+**Why files instead of inline content?**
+
+- **Composability** — Agents can use `cat`, `grep`, `jq` on the files
+- **Context efficiency** — Summaries fit in output; full bodies read on demand
+- **Iteration** — Edit files with standard tools, pipe back to update commands
+
 ## Output Policy
 
 **All data is JSON.** No `--json` flags, no formatted display modes.

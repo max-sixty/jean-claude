@@ -338,7 +338,7 @@ EOF
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list -n 5
 
-# Get full draft body (writes to .tmp/draft-ID.txt)
+# Get draft as JSON (writes to .tmp/draft-DRAFT_ID.json)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft get DRAFT_ID
 
 # Update a draft (preserves threading, only updates fields provided)
@@ -357,11 +357,10 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft delete DRAFT_ID
 with the user without rewriting the full email each time:
 
 1. Create initial draft: `jean-claude gmail draft create`
-2. Get draft to file: `jean-claude gmail draft get DRAFT_ID` (writes to
-   `.tmp/draft-ID.txt`)
-3. Use file editing tools (Edit/Write) to modify `.tmp/draft-ID.txt`
-4. Update draft from file: `cat .tmp/draft-ID.txt | jq -Rs '{body: .}' |
-   jean-claude gmail draft update DRAFT_ID`
+2. Get draft as JSON: `jean-claude gmail draft get DRAFT_ID` (writes to
+   `.tmp/draft-DRAFT_ID.json`)
+3. Use Edit tool to modify the `body` field in `.tmp/draft-DRAFT_ID.json`
+4. Update draft: `cat .tmp/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID`
 5. Show user, get feedback, repeat steps 3-4 until approved
 
 ### Manage Threads and Messages
@@ -589,9 +588,8 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs read DOCUMENT_ID --json
 ### Write Content
 
 ```bash
-# Append text to end of document
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs append DOCUMENT_ID --text "New paragraph to add"
-echo "Content from stdin" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs append DOCUMENT_ID
+# Append text to end of document (JSON stdin)
+echo '{"text": "New paragraph to add"}' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs append DOCUMENT_ID
 
 # Find and replace text
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs replace DOCUMENT_ID --find "old text" --replace-with "new text"

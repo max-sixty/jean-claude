@@ -183,28 +183,29 @@ class TestGmailDraftOperations:
         # Get full draft content to verify original message is included
         result = runner.invoke(cli, ["gmail", "draft", "get", draft_id])
         assert result.exit_code == 0
-        draft_file = result.stdout.strip()
+        get_result = json.loads(result.stdout)
+        draft_file = get_result["file"]
 
         with open(draft_file) as f:
-            draft_content = f.read()
+            draft_data = json.load(f)
+
+        body = draft_data["body"]
 
         # Verify the forwarded message separator is present
-        assert "---------- Forwarded message ----------" in draft_content, (
+        assert "---------- Forwarded message ----------" in body, (
             "Forward draft missing forwarded message separator"
         )
 
         # Verify original message body is included (from test fixture)
-        assert "automated integration test message" in draft_content, (
+        assert "automated integration test message" in body, (
             "Forward draft missing original message body"
         )
 
         # Verify From header has display name (not just email)
-        # Format should be "From: Name <email>" or similar with a name
-        from_line = next(
-            line for line in draft_content.split("\n") if line.startswith("From:")
-        )
-        assert "<" in from_line and ">" in from_line, (
-            f"From header missing display name format: {from_line}"
+        # Format should be "Name <email>" or similar with a name
+        from_addr = draft_data["from"]
+        assert "<" in from_addr and ">" in from_addr, (
+            f"From header missing display name format: {from_addr}"
         )
 
     def test_draft_create_has_from_header(self, runner, my_email, draft_cleanup):
@@ -237,17 +238,16 @@ class TestGmailDraftOperations:
         # Get full draft content
         result = runner.invoke(cli, ["gmail", "draft", "get", draft_id])
         assert result.exit_code == 0
-        draft_file = result.stdout.strip()
+        get_result = json.loads(result.stdout)
+        draft_file = get_result["file"]
 
         with open(draft_file) as f:
-            draft_content = f.read()
+            draft_data = json.load(f)
 
         # Verify From header has display name format
-        from_line = next(
-            line for line in draft_content.split("\n") if line.startswith("From:")
-        )
-        assert "<" in from_line and ">" in from_line, (
-            f"From header missing display name format: {from_line}"
+        from_addr = draft_data["from"]
+        assert "<" in from_addr and ">" in from_addr, (
+            f"From header missing display name format: {from_addr}"
         )
 
     def test_draft_update_preserves_from_header(self, runner, my_email, draft_cleanup):
@@ -281,14 +281,13 @@ class TestGmailDraftOperations:
         # Get original From header
         result = runner.invoke(cli, ["gmail", "draft", "get", draft_id])
         assert result.exit_code == 0
-        draft_file = result.stdout.strip()
+        get_result = json.loads(result.stdout)
+        draft_file = get_result["file"]
 
         with open(draft_file) as f:
-            original_content = f.read()
+            original_data = json.load(f)
 
-        original_from = next(
-            line for line in original_content.split("\n") if line.startswith("From:")
-        )
+        original_from = original_data["from"]
 
         # Update the draft body only (not From)
         update_data = json.dumps({"body": "Updated body content."})
@@ -300,21 +299,20 @@ class TestGmailDraftOperations:
         # Get updated draft and verify From is preserved
         result = runner.invoke(cli, ["gmail", "draft", "get", draft_id])
         assert result.exit_code == 0
-        draft_file = result.stdout.strip()
+        get_result = json.loads(result.stdout)
+        draft_file = get_result["file"]
 
         with open(draft_file) as f:
-            updated_content = f.read()
+            updated_data = json.load(f)
 
-        updated_from = next(
-            line for line in updated_content.split("\n") if line.startswith("From:")
-        )
+        updated_from = updated_data["from"]
 
         assert original_from == updated_from, (
             f"From header changed during update: '{original_from}' -> '{updated_from}'"
         )
 
         # Verify body was updated
-        assert "Updated body content" in updated_content
+        assert "Updated body content" in updated_data["body"]
 
 
 class TestGmailSearch:

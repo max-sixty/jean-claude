@@ -73,23 +73,23 @@ def create(title: str):
 
 @cli.command()
 @click.argument("document_id")
-@click.option("--text", help="Text to append (otherwise reads from stdin)")
-def append(document_id: str, text: str | None):
-    """Append text to the end of a document.
+def append(document_id: str):
+    """Append text to the end of a document from JSON stdin.
 
     DOCUMENT_ID: The document ID (from the URL)
 
-    Examples:
-        jean-claude gdocs append 1abc...xyz --text "New paragraph"
-        echo "Content from stdin" | jean-claude gdocs append 1abc...xyz
+    JSON fields: text (required)
+
+    Example:
+        echo '{"text": "New paragraph"}' | jean-claude gdocs append 1abc...xyz
     """
-    if text is None:
-        if sys.stdin.isatty():
-            raise JeanClaudeError("No text provided (use --text or pipe input)")
-        text = sys.stdin.read()
+    data = json.load(sys.stdin)
+    if "text" not in data:
+        raise JeanClaudeError("Missing required field: text")
+    text = data["text"]
 
     if not text:
-        raise JeanClaudeError("No text provided (use --text or stdin)")
+        raise JeanClaudeError("text field cannot be empty")
 
     service = get_docs()
 
