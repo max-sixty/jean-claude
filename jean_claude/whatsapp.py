@@ -230,3 +230,18 @@ def refresh():
     automatically during sync, but can be run manually if needed.
     """
     _run_whatsapp_cli("refresh", capture=False)
+
+
+@cli.command("mark-read")
+@click.argument("chat_jid")
+def mark_read(chat_jid: str):
+    """Mark all messages in a chat as read.
+
+    CHAT_JID: The chat JID (e.g., "120363277025153496@g.us")
+
+    Examples:
+        jean-claude whatsapp mark-read "120363277025153496@g.us"
+    """
+    result = _run_whatsapp_cli("mark-read", chat_jid)
+    if result:
+        click.echo(json.dumps(result, indent=2))
