@@ -17,6 +17,10 @@ understand OAuth flows, API pagination, or AppleScript internals.
 The CLI is the abstraction layer. SKILL.md documents what the CLI does.
 CLAUDE.md documents how it works.
 
+**No backward compatibility concerns.** The only API is the skill — agents read
+SKILL.md, not the CLI directly. When CLI output formats change, update SKILL.md
+to match. Breaking changes are fine; just keep the skill in sync.
+
 ## Updating the Skill
 
 When modifying CLI commands or adding features:

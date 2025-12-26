@@ -98,20 +98,9 @@ def sent_message(runner, my_email, test_subject):
     result = runner.invoke(cli, ["gmail", "draft", "create"], input=draft_data)
     assert result.exit_code == 0, f"Failed to create draft: {result.output}"
 
-    # Get draft ID from the list (draft create only logs, doesn't output JSON)
-    result = runner.invoke(cli, ["gmail", "draft", "list", "-n", "5"])
-    assert result.exit_code == 0, f"Failed to list drafts: {result.stderr}"
-    drafts = json.loads(result.stdout)
-
-    # Find our draft by snippet (subject may be empty due to Gmail API header casing bug)
-    # Our test body starts with "This is an automated integration test"
-    draft_id = None
-    for draft in drafts:
-        if "automated integration test" in draft["snippet"]:
-            draft_id = draft["id"]
-            break
-
-    assert draft_id is not None, "Could not find test draft by snippet"
+    # draft create now returns JSON with the draft ID
+    draft_response = json.loads(result.stdout)
+    draft_id = draft_response["id"]
 
     # Send the draft
     result = runner.invoke(cli, ["gmail", "draft", "send", draft_id])

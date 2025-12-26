@@ -704,7 +704,9 @@ def draft_create():
         .create(userId="me", body={"message": {"raw": raw}})
         .execute()
     )
-    logger.info(f"Draft created: {result['id']}", url=draft_url(result))
+    url = draft_url(result)
+    logger.info(f"Draft created: {result['id']}", url=url)
+    click.echo(json.dumps({"id": result["id"], "url": url}, indent=2))
 
 
 @draft.command("send")
@@ -719,6 +721,9 @@ def draft_send(draft_id: str):
         get_gmail().users().drafts().send(userId="me", body={"id": draft_id}).execute()
     )
     logger.info(f"Sent: {result['id']}")
+    click.echo(
+        json.dumps({"id": result["id"], "threadId": result["threadId"]}, indent=2)
+    )
 
 
 def _format_gmail_date(date_str: str) -> str:
@@ -1017,6 +1022,7 @@ def draft_reply(message_id: str):
         message_id, data["body"], include_cc=False, custom_cc=data.get("cc")
     )
     logger.info(f"Reply draft created: {draft_id}", url=url)
+    click.echo(json.dumps({"id": draft_id, "url": url}, indent=2))
 
 
 @draft.command("reply-all")
@@ -1040,6 +1046,7 @@ def draft_reply_all(message_id: str):
         message_id, data["body"], include_cc=True, custom_cc=data.get("cc")
     )
     logger.info(f"Reply-all draft created: {draft_id}", url=url)
+    click.echo(json.dumps({"id": draft_id, "url": url}, indent=2))
 
 
 @draft.command("forward")
@@ -1109,25 +1116,33 @@ def draft_forward(message_id: str):
         .create(userId="me", body={"message": {"raw": raw}})
         .execute()
     )
-    logger.info(f"Forward draft created: {result['id']}", url=draft_url(result))
+    url = draft_url(result)
+    logger.info(f"Forward draft created: {result['id']}", url=url)
+    click.echo(json.dumps({"id": result["id"], "url": url}, indent=2))
 
 
 @draft.command("list")
 @click.option("-n", "--max-results", default=20, help="Maximum results")
-def draft_list(max_results: int):
+@click.option("--page-token", help="Token for next page of results")
+def draft_list(max_results: int, page_token: str | None):
     """List drafts.
 
     Example:
         jean-claude gmail draft list
     """
     service = get_gmail()
-    results = (
-        service.users().drafts().list(userId="me", maxResults=max_results).execute()
-    )
+    list_kwargs: dict = {"userId": "me", "maxResults": max_results}
+    if page_token:
+        list_kwargs["pageToken"] = page_token
+
+    results = service.users().drafts().list(**list_kwargs).execute()
     drafts = results.get("drafts", [])
 
     if not drafts:
-        click.echo(json.dumps([]))
+        output: dict = {"drafts": []}
+        if next_token := results.get("nextPageToken"):
+            output["nextPageToken"] = next_token
+        click.echo(json.dumps(output, indent=2))
         return
 
     # Batch fetch draft details
@@ -1145,7 +1160,10 @@ def draft_list(max_results: int):
         for d in drafts
         if d["id"] in responses
     ]
-    click.echo(json.dumps(detailed, indent=2))
+    output = {"drafts": detailed}
+    if next_token := results.get("nextPageToken"):
+        output["nextPageToken"] = next_token
+    click.echo(json.dumps(output, indent=2))
 
 
 @draft.command("get")
@@ -1236,7 +1254,9 @@ def draft_update(draft_id: str):
     result = (
         service.users().drafts().update(userId="me", id=draft_id, body=body).execute()
     )
-    logger.info(f"Updated draft: {result['id']}", url=draft_url(result))
+    url = draft_url(result)
+    logger.info(f"Updated draft: {result['id']}", url=url)
+    click.echo(json.dumps({"id": result["id"], "url": url}, indent=2))
 
 
 @draft.command("delete")
@@ -1418,10 +1438,6 @@ def attachments(message_id: str):
     payload = msg.get("payload", {})
     if "parts" in payload:
         _extract_attachments(payload["parts"], attachment_list)
-
-    if not attachment_list:
-        logger.info("No attachments found")
-        return
 
     click.echo(json.dumps(attachment_list, indent=2))
 

@@ -137,7 +137,7 @@ class TestGmailDraftOperations:
         # List drafts and find our reply
         result = runner.invoke(cli, ["gmail", "draft", "list", "-n", "10"])
         assert result.exit_code == 0
-        drafts = json.loads(result.stdout)
+        drafts = json.loads(result.stdout)["drafts"]
 
         # Find the reply draft by snippet (contains our reply text)
         reply_draft = None
@@ -167,7 +167,7 @@ class TestGmailDraftOperations:
         # List drafts and find our forward
         result = runner.invoke(cli, ["gmail", "draft", "list", "-n", "10"])
         assert result.exit_code == 0
-        drafts = json.loads(result.stdout)
+        drafts = json.loads(result.stdout)["drafts"]
 
         # Find the forward draft by snippet (contains our forward text)
         forward_draft = None
@@ -222,7 +222,7 @@ class TestGmailDraftOperations:
         # List drafts and find ours
         result = runner.invoke(cli, ["gmail", "draft", "list", "-n", "10"])
         assert result.exit_code == 0
-        drafts = json.loads(result.stdout)
+        drafts = json.loads(result.stdout)["drafts"]
 
         test_draft = None
         for draft in drafts:
@@ -266,7 +266,7 @@ class TestGmailDraftOperations:
         # Find the draft
         result = runner.invoke(cli, ["gmail", "draft", "list", "-n", "10"])
         assert result.exit_code == 0
-        drafts = json.loads(result.stdout)
+        drafts = json.loads(result.stdout)["drafts"]
 
         test_draft = None
         for draft in drafts:

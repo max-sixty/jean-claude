@@ -83,6 +83,7 @@ Usage: jean-claude gmail draft list [OPTIONS]
 
 Options:
   -n, --max-results INTEGER  Maximum results
+  --page-token TEXT          Token for next page of results
   --help                     Show this message and exit.
 
 
