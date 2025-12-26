@@ -15,15 +15,19 @@ jobs:
           - os: macos-latest
             goos: darwin
             goarch: arm64
-          - os: macos-13
+            wheel_tag: macosx_11_0_arm64
+          - os: macos-latest
             goos: darwin
             goarch: amd64
+            wheel_tag: macosx_10_9_x86_64
           - os: ubuntu-latest
             goos: linux
             goarch: amd64
+            wheel_tag: manylinux2014_x86_64
           - os: ubuntu-latest
             goos: linux
             goarch: arm64
+            wheel_tag: manylinux2014_aarch64
 
     runs-on: ${{ matrix.os }}
 
@@ -53,6 +57,8 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Build wheel
+        env:
+          JEAN_CLAUDE_WHEEL_TAG: ${{ matrix.wheel_tag }}
         run: uv build --wheel
 
       - name: Show wheel info

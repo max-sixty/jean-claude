@@ -2,8 +2,12 @@
 
 This hook ensures wheels are tagged for the platform they're built on,
 since they contain platform-specific Go binaries.
+
+Set JEAN_CLAUDE_WHEEL_TAG environment variable to override auto-detection
+(used for cross-compilation in CI).
 """
 
+import os
 import platform
 import sys
 
@@ -11,7 +15,15 @@ from hatchling.builders.hooks.plugin.interface import BuildHookInterface  # type
 
 
 def get_platform_tag() -> str:
-    """Get the wheel platform tag for the current platform."""
+    """Get the wheel platform tag for the current platform.
+
+    If JEAN_CLAUDE_WHEEL_TAG is set, use that (for cross-compilation).
+    Otherwise, auto-detect based on the current platform.
+    """
+    # Allow override for cross-compilation
+    if tag := os.environ.get("JEAN_CLAUDE_WHEEL_TAG"):
+        return tag
+
     # Map Python platform info to wheel tag conventions
     os_name = sys.platform
     machine = platform.machine().lower()
