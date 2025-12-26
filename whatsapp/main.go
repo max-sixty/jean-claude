@@ -757,9 +757,22 @@ func cmdSync() error {
 		return fmt.Errorf("not authenticated. Run 'auth' first")
 	}
 
-	// Set up event handler for messages (atomic counter for thread safety)
+	// Idle detection for sync completion.
+	//
+	// WhatsApp's protocol is push-based: we can't request "messages since X".
+	// On connect, WhatsApp pushes events (messages, receipts, history) and we
+	// save whatever arrives. The challenge is knowing when sync is "done".
+	//
+	// We use idle detection: track when events last arrived, exit after silence.
+	// Events arrive in bursts (typically <100ms gaps), so 500ms of silence
+	// reliably indicates completion. This gives ~1-2s total sync time vs 30s
+	// with a fixed timeout.
 	var messageCount atomic.Int64
+	var lastActivity atomic.Int64
+	lastActivity.Store(time.Now().UnixNano())
+
 	client.AddEventHandler(func(evt interface{}) {
+		lastActivity.Store(time.Now().UnixNano()) // Update on ANY event for idle detection
 		switch v := evt.(type) {
 		case *events.Message:
 			if err := saveMessage(v); err != nil {
@@ -863,16 +876,45 @@ func cmdSync() error {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 
-	// Wait for history sync
-	fmt.Fprintln(os.Stderr, "Syncing messages... (press Ctrl+C to stop)")
+	// Idle-based sync completion.
+	//
+	// Timing rationale:
+	// - 500ms idle timeout: Events arrive in tight bursts. 500ms of silence means
+	//   WhatsApp is done sending. Tested values: 100ms works but aggressive,
+	//   500ms is safe with margin for network jitter.
+	// - 100ms poll interval: Frequent enough to exit promptly after idle threshold.
+	// - 60s max wait: Safety cap for first sync after pairing (can have large
+	//   history). Normal syncs complete in 1-2s via idle detection.
+	//
+	// Why not request-based sync? WhatsApp multidevice protocol doesn't support
+	// "fetch messages since timestamp X". We must connect, receive whatever
+	// WhatsApp pushes, and infer completion from silence.
+	fmt.Fprintln(os.Stderr, "Syncing messages...")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Wait for initial sync or interrupt
-	select {
-	case <-sigChan:
-	case <-time.After(30 * time.Second):
+	const (
+		idleTimeout  = 500 * time.Millisecond // Exit after this much silence
+		pollInterval = 100 * time.Millisecond // How often to check for idle
+		maxSyncTime  = 60 * time.Second       // Safety cap (first sync can be slow)
+	)
+	maxWait := time.After(maxSyncTime)
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+SyncLoop:
+	for {
+		select {
+		case <-sigChan:
+			break SyncLoop
+		case <-maxWait:
+			break SyncLoop
+		case <-ticker.C:
+			if time.Since(time.Unix(0, lastActivity.Load())) > idleTimeout {
+				break SyncLoop
+			}
+		}
 	}
 
 	// Fetch names for chats that don't have them
