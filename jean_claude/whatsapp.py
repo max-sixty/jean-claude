@@ -198,22 +198,6 @@ def messages(chat_jid: str | None, max_results: int, unread: bool):
         click.echo(json.dumps(result, indent=2))
 
 
-@cli.command("mark-read")
-@click.argument("chat_jid")
-def mark_read(chat_jid: str):
-    """Mark all messages in a chat as read.
-
-    CHAT_JID: The chat identifier (e.g., "12025551234@s.whatsapp.net")
-
-    \b
-    Examples:
-        jean-claude whatsapp mark-read "12025551234@s.whatsapp.net"
-    """
-    result = _run_whatsapp_cli("mark-read", chat_jid)
-    if result:
-        click.echo(json.dumps(result, indent=2))
-
-
 @cli.command()
 def contacts():
     """List WhatsApp contacts from local database."""
