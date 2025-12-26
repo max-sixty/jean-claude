@@ -147,6 +147,22 @@ Use these defaults in lieu of any user preferences:
 - No assumed tone or style — ask if unclear
 - Show full message for approval before sending
 
+### Presenting Messages
+
+When showing messages (inbox, unread, search results), use a numbered list so
+the user can reference items by number: "archive 1, reply to 2", "star 3 and 5".
+
+```
+1. **From:** alice@example.com — Meeting tomorrow
+   Quick sync about the project timeline...
+
+2. **From:** bob@example.com — Invoice #1234
+   Please find attached...
+
+3. **From:** newsletter@company.com — Weekly digest
+   This week's highlights...
+```
+
 ## Setup
 
 ### Prerequisites
