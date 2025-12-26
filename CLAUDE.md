@@ -2,24 +2,32 @@
 
 A Claude Code plugin for Gmail, Google Calendar, Google Drive, and iMessage.
 
-## Architecture
+Two parts: a **skill** that agents read, and a **library** that implements it.
+The skill (`skills/jean-claude/SKILL.md`) documents commands and outputs. The
+library (`jean_claude/`) handles the complexity — OAuth, APIs, AppleScript.
 
-This repo serves two audiences with a clear boundary between them:
+## Design Philosophy
 
-**Agents** read `skills/jean-claude/SKILL.md`, call CLI commands, never touch
-Python code. SKILL.md is the complete interface — if a feature isn't documented
-there, it doesn't exist for agents.
+The library exists to make the skill simple. Every design decision follows from
+this: complexity belongs in the Python code, not in agent workflows.
 
-**Developers** read this file, work on the CLI code in `jean_claude/`. The CLI
-encapsulates all Google API and iMessage complexity. Agents should never need to
-understand OAuth flows, API pagination, or AppleScript internals.
+When an agent reads email, it runs `jean-claude gmail list` and gets JSON. The
+agent doesn't know about OAuth tokens, API pagination, rate limits, or retry
+logic. The library handles all of that.
 
-The CLI is the abstraction layer. SKILL.md documents what the CLI does.
-CLAUDE.md documents how it works.
+**When adding features, ask:** "Can the agent's job be simpler?" Push complexity
+into the library. Handle edge cases in Python. Parse and validate in code.
 
-**No backward compatibility concerns.** The only API is the skill — agents read
-SKILL.md, not the CLI directly. When CLI output formats change, update SKILL.md
-to match. Breaking changes are fine; just keep the skill in sync.
+## Two Audiences
+
+- **Agents** read SKILL.md, call CLI commands, never touch Python code. If a
+  feature isn't documented there, it doesn't exist for agents.
+- **Developers** read this file, work on code in `jean_claude/`.
+
+SKILL.md documents what the CLI does. CLAUDE.md documents how it works.
+
+The skill is the only API. Breaking changes to the library are fine — just keep
+the skill in sync.
 
 ## Updating the Skill
 
