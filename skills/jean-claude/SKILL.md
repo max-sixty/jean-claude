@@ -720,20 +720,21 @@ Other: `imessage open CHAT_ID` opens a chat in Messages.app (brings app to focus
 ### Read Messages (Requires Full Disk Access)
 
 ```bash
-# Unread messages (excludes spam-filtered messages by default)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage unread
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage unread -n 50
+# Recent messages
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages -n 20
 
-# Include spam-filtered messages (for cleanup/review)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage unread --include-spam
+# Unread messages only (excludes spam-filtered by default)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --unread
 
-# Search messages (-n limits results)
+# Include spam-filtered messages
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --unread --include-spam
+
+# Messages from specific chat
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --chat "any;-;+12025551234"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --name "Kevin Seals"
+
+# Search messages
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage search "dinner plans"
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage search "dinner plans" -n 20
-
-# Chat history (-n limits messages)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage history "any;-;+12025551234" -n 20
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage history --name "Kevin Seals" -n 20
 ```
 
 To enable reading: System Preferences > Privacy & Security > Full Disk Access >
@@ -801,24 +802,19 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp chats -n 10
 ### Read Messages
 
 ```bash
-# Unread messages (auto-downloads images)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp unread
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp unread -n 20
-
-# All recent messages (from local database, no auto-download)
+# Recent messages (from local database)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages -n 20
+
+# Unread messages only
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --unread
 
 # Messages from specific chat (use JID from chats command)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --chat "120363277025153496@g.us"
 ```
 
-### Image Downloads
+### Media Downloads
 
-The `unread` command auto-downloads images to
-`~/.local/share/jean-claude/whatsapp/media/`. Images include a `file` field with
-the path—use Claude's Read tool to view and describe them.
-
-For messages from `messages` command, use `download` to fetch media:
+Use `download` to fetch media from messages:
 
 ```bash
 # Download media from a specific message
@@ -836,9 +832,6 @@ twice → downloaded once).
 ```bash
 # List contacts
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp contacts
-
-# Manually refresh chat names (usually not needed, sync does this)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp refresh
 
 # Check status
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp status

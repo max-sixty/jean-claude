@@ -1,0 +1,20 @@
+Usage: jean-claude imessage messages [OPTIONS]
+
+  List messages from local database (requires Full Disk Access).
+
+  Shows messages with sender, timestamp, and text content. Use --chat or
+  --name to filter to a specific conversation. Use --unread to show only
+  unread messages.
+
+  Examples:     jean-claude imessage messages -n 20     jean-claude imessage
+  messages --chat "any;-;+12025551234"     jean-claude imessage messages
+  --name "Kevin Seals"     jean-claude imessage messages --unread     jean-
+  claude imessage messages --unread --include-spam
+
+Options:
+  --chat TEXT                Filter to specific chat ID or phone number
+  --name TEXT                Filter to specific contact by name
+  -n, --max-results INTEGER  Maximum messages to return
+  --unread                   Show only unread messages
+  --include-spam             Include spam-filtered messages
+  --help                     Show this message and exit.

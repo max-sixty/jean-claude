@@ -767,42 +767,83 @@ end run"""
 
 
 @cli.command()
-@click.option("-n", "--max-results", default=20, help="Maximum messages to return")
-@click.option("--include-spam", is_flag=True, help="Include messages filtered as spam")
-def unread(max_results: int, include_spam: bool):
-    """List unread messages (requires Full Disk Access).
+@click.option("--chat", "chat_id", help="Filter to specific chat ID or phone number")
+@click.option("--name", help="Filter to specific contact by name")
+@click.option("-n", "--max-results", default=50, help="Maximum messages to return")
+@click.option("--unread", is_flag=True, help="Show only unread messages")
+@click.option("--include-spam", is_flag=True, help="Include spam-filtered messages")
+def messages(
+    chat_id: str | None,
+    name: str | None,
+    max_results: int,
+    unread: bool,
+    include_spam: bool,
+):
+    """List messages from local database (requires Full Disk Access).
 
-    Shows messages that haven't been read yet, excluding messages you sent.
-    By default excludes spam-filtered messages (is_filtered=2); use --include-spam
-    to include them.
+    Shows messages with sender, timestamp, and text content.
+    Use --chat or --name to filter to a specific conversation.
+    Use --unread to show only unread messages.
 
-    Example:
-        jean-claude imessage unread
-        jean-claude imessage unread -n 50
-        jean-claude imessage unread --include-spam
+    Examples:
+        jean-claude imessage messages -n 20
+        jean-claude imessage messages --chat "any;-;+12025551234"
+        jean-claude imessage messages --name "Kevin Seals"
+        jean-claude imessage messages --unread
+        jean-claude imessage messages --unread --include-spam
     """
-    # is_filtered: 0 = contacts, 1 = unknown senders, 2 = spam
-    spam_filter = (
-        "" if include_spam else "(c.is_filtered IS NULL OR c.is_filtered < 2) AND"
-    )
-    where_clause = f"{spam_filter} m.is_read = 0 AND m.is_from_me = 0"
+    where_clauses = []
+    params: tuple = ()
+
+    # Exclude spam by default (is_filtered: 0=contacts, 1=unknown, 2=spam)
+    if not include_spam:
+        where_clauses.append("(c.is_filtered IS NULL OR c.is_filtered < 2)")
+
+    # Filter by chat
+    if name:
+        raw_phone = resolve_contact_to_phone(name)
+        messages_chat_id = get_chat_id_for_phone(raw_phone)
+        if not messages_chat_id:
+            raise JeanClaudeError(
+                f"No message history found for '{name}' ({raw_phone})"
+            )
+        chat_identifier = messages_chat_id.split(";")[-1]
+        where_clauses.append("(c.chat_identifier = ? OR h.id = ?)")
+        params = (chat_identifier, chat_identifier)
+    elif chat_id:
+        chat_identifier = chat_id.split(";")[-1] if ";" in chat_id else chat_id
+        where_clauses.append("(c.chat_identifier = ? OR h.id = ?)")
+        params = (chat_identifier, chat_identifier)
+
+    # Filter by unread
+    if unread:
+        where_clauses.append("m.is_read = 0 AND m.is_from_me = 0")
+
+    where_clause = " AND ".join(where_clauses) if where_clauses else ""
+    include_is_from_me = bool(chat_id or name)  # Show both sides for chat history
 
     conn = get_db_connection()
-    messages = fetch_messages(
+    result = fetch_messages(
         conn,
-        MessageQuery(where_clause=where_clause, max_results=max_results),
+        MessageQuery(
+            where_clause=where_clause,
+            params=params,
+            include_is_from_me=include_is_from_me,
+            reverse_order=include_is_from_me,  # Chronological for chat history
+            max_results=max_results,
+        ),
     )
     conn.close()
 
-    if not messages:
-        logger.info("No unread messages")
+    if not result:
+        logger.info("No messages found")
 
-    click.echo(json.dumps({"messages": messages}, indent=2))
+    click.echo(json.dumps(result, indent=2))
 
 
 @cli.command()
 @click.argument("query", required=False)
-@click.option("-n", "--max-results", default=20, help="Maximum messages to return")
+@click.option("-n", "--max-results", default=50, help="Maximum messages to return")
 def search(query: str | None, max_results: int):
     """Search message history (requires Full Disk Access).
 
@@ -829,53 +870,4 @@ def search(query: str | None, max_results: int):
     if not messages:
         logger.info("No messages found")
 
-    click.echo(json.dumps({"messages": messages}, indent=2))
-
-
-@cli.command()
-@click.argument("chat_id", required=False)
-@click.option("-n", "--max-results", default=20, help="Maximum messages to return")
-@click.option("--name", help="Contact name to search for (instead of chat ID)")
-def history(chat_id: str | None, max_results: int, name: str | None):
-    """Get message history for a specific chat (requires Full Disk Access).
-
-    CHAT_ID: The chat ID or phone number (e.g., any;-;+12025551234 or +12025551234)
-
-    Examples:
-        jean-claude imessage history "any;-;+12025551234" -n 10
-        jean-claude imessage history --name "Kevin Seals"
-        jean-claude imessage history "+12025551234"
-    """
-    if name:
-        # Get raw phone from Contacts, then use Messages.app to get normalized chat ID
-        raw_phone = resolve_contact_to_phone(name)
-        messages_chat_id = get_chat_id_for_phone(raw_phone)
-        if not messages_chat_id:
-            raise JeanClaudeError(
-                f"No message history found for '{name}' ({raw_phone})"
-            )
-        # Extract identifier from chat ID (e.g., "any;-;+16467194457" -> "+16467194457")
-        chat_identifier = messages_chat_id.split(";")[-1]
-    elif chat_id:
-        # Use provided chat ID directly
-        chat_identifier = chat_id.split(";")[-1] if ";" in chat_id else chat_id
-    else:
-        raise click.UsageError("Provide either CHAT_ID or --name")
-
-    conn = get_db_connection()
-    messages = fetch_messages(
-        conn,
-        MessageQuery(
-            where_clause="(c.chat_identifier = ? OR h.id = ?)",
-            params=(chat_identifier, chat_identifier),
-            include_is_from_me=True,
-            reverse_order=True,
-            max_results=max_results,
-        ),
-    )
-    conn.close()
-
-    if not messages:
-        logger.info("No messages found for this chat")
-
-    click.echo(json.dumps({"messages": messages}, indent=2))
+    click.echo(json.dumps(messages, indent=2))
