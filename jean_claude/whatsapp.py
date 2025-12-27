@@ -235,7 +235,7 @@ def _run_whatsapp_cli(*args: str, capture: bool = True) -> dict | list | None:
         raise JeanClaudeError(
             "WhatsApp is disabled. Enable via:\n"
             "  - Environment: JEAN_CLAUDE_ENABLE_WHATSAPP=1\n"
-            "  - Config: {\"enable_whatsapp\": true} in ~/.config/jean-claude/config.json"
+            '  - Config: {"enable_whatsapp": true} in ~/.config/jean-claude/config.json'
         )
     cli_path = _get_whatsapp_cli_path()
     cmd = [str(cli_path), *args]
