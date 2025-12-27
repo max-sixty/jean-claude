@@ -32,7 +32,12 @@ def _get_whatsapp_cli_binary() -> Path | None:
     bin_dir = Path(__file__).parent.parent / "jean_claude" / "bin"
     os_name = {"darwin": "darwin", "linux": "linux"}.get(sys.platform)
     machine = platform.machine().lower()
-    arch = {"x86_64": "amd64", "amd64": "amd64", "arm64": "arm64", "aarch64": "arm64"}.get(machine)
+    arch = {
+        "x86_64": "amd64",
+        "amd64": "amd64",
+        "arm64": "arm64",
+        "aarch64": "arm64",
+    }.get(machine)
 
     if os_name and arch:
         binary = bin_dir / f"whatsapp-cli-{os_name}-{arch}"
@@ -296,12 +301,6 @@ class TestWhatsAppCLIChats:
         # Sample data has chats with unread messages and one marked_as_unread
         assert len(chats) > 0, "Should have at least one unread chat"
 
-        # All returned chats should have unread_count > 0 or be marked_as_unread
-        for chat in chats:
-            has_unread = chat.get("unread_count", 0) > 0
-            # Note: We can't easily check marked_as_unread from output, but we verify
-            # that the filter returns a subset (not all chats)
-
         # Verify it's filtering - get all chats and compare
         all_result = whatsapp_cli("chats", data_dir=whatsapp_data_dir)
         all_chats = json.loads(all_result.stdout)
@@ -349,7 +348,9 @@ class TestWhatsAppCLIMessages:
         chat_jid = chats[0]["jid"]
 
         # Filter messages to that chat
-        result = whatsapp_cli("messages", f"--chat={chat_jid}", data_dir=whatsapp_data_dir)
+        result = whatsapp_cli(
+            "messages", f"--chat={chat_jid}", data_dir=whatsapp_data_dir
+        )
         assert result.returncode == 0
 
         messages = json.loads(result.stdout)

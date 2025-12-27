@@ -45,4 +45,3 @@ SAMPLE_CHATS = [
         "unread_count": 0,
     },
 ]
-

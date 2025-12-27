@@ -46,14 +46,16 @@ class DatabaseBuilder:
         Returns:
             The JID for use in other methods.
         """
-        self._chats.append({
-            "jid": jid,
-            "name": name,
-            "is_group": is_group,
-            "last_message_time": last_message_time,
-            "marked_as_unread": marked_as_unread,
-            "updated_at": int(datetime.now().timestamp()),
-        })
+        self._chats.append(
+            {
+                "jid": jid,
+                "name": name,
+                "is_group": is_group,
+                "last_message_time": last_message_time,
+                "marked_as_unread": marked_as_unread,
+                "updated_at": int(datetime.now().timestamp()),
+            }
+        )
         return jid
 
     def add_contact(
@@ -72,12 +74,14 @@ class DatabaseBuilder:
         Returns:
             The JID for use in other methods.
         """
-        self._contacts.append({
-            "jid": jid,
-            "name": name,
-            "push_name": push_name,
-            "updated_at": int(datetime.now().timestamp()),
-        })
+        self._contacts.append(
+            {
+                "jid": jid,
+                "name": name,
+                "push_name": push_name,
+                "updated_at": int(datetime.now().timestamp()),
+            }
+        )
         return jid
 
     def add_message(
@@ -119,21 +123,23 @@ class DatabaseBuilder:
         elif isinstance(timestamp, datetime):
             timestamp = int(timestamp.timestamp())
 
-        self._messages.append({
-            "id": message_id,
-            "chat_jid": chat_jid,
-            "sender_jid": sender_jid,
-            "sender_name": sender_name,
-            "timestamp": timestamp,
-            "text": text,
-            "media_type": media_type,
-            "is_from_me": is_from_me,
-            "is_read": is_read,
-            "created_at": int(datetime.now().timestamp()),
-            "reply_to_id": reply_to_id,
-            "reply_to_sender": reply_to_sender,
-            "reply_to_text": reply_to_text,
-        })
+        self._messages.append(
+            {
+                "id": message_id,
+                "chat_jid": chat_jid,
+                "sender_jid": sender_jid,
+                "sender_name": sender_name,
+                "timestamp": timestamp,
+                "text": text,
+                "media_type": media_type,
+                "is_from_me": is_from_me,
+                "is_read": is_read,
+                "created_at": int(datetime.now().timestamp()),
+                "reply_to_id": reply_to_id,
+                "reply_to_sender": reply_to_sender,
+                "reply_to_text": reply_to_text,
+            }
+        )
         return message_id
 
     def add_reaction(
@@ -160,14 +166,16 @@ class DatabaseBuilder:
         elif isinstance(timestamp, datetime):
             timestamp = int(timestamp.timestamp())
 
-        self._reactions.append({
-            "message_id": message_id,
-            "chat_jid": chat_jid,
-            "sender_jid": sender_jid,
-            "sender_name": sender_name,
-            "emoji": emoji,
-            "timestamp": timestamp,
-        })
+        self._reactions.append(
+            {
+                "message_id": message_id,
+                "chat_jid": chat_jid,
+                "sender_jid": sender_jid,
+                "sender_name": sender_name,
+                "emoji": emoji,
+                "timestamp": timestamp,
+            }
+        )
 
     def build(self, db_path: Path | str) -> sqlite3.Connection:
         """Build the database and write to the specified path.
@@ -358,7 +366,7 @@ def create_sample_database() -> DatabaseBuilder:
         last_message_time=int((base_time + timedelta(hours=3)).timestamp()),
     )
 
-    family_jid = builder.add_chat(
+    builder.add_chat(
         "120363299999999999@g.us",
         "Family Group",
         is_group=True,
@@ -391,7 +399,7 @@ def create_sample_database() -> DatabaseBuilder:
         is_read=True,
     )
 
-    msg3 = builder.add_message(
+    builder.add_message(
         "3EB0ABC003",
         alice_jid,
         alice_jid,
@@ -402,7 +410,9 @@ def create_sample_database() -> DatabaseBuilder:
     )
 
     # Add reaction to first message
-    builder.add_reaction(msg1, alice_jid, "me", "👍", timestamp=base_time + timedelta(minutes=1))
+    builder.add_reaction(
+        msg1, alice_jid, "me", "👍", timestamp=base_time + timedelta(minutes=1)
+    )
 
     # Add messages in team chat
     team_msg1 = builder.add_message(
@@ -429,7 +439,9 @@ def create_sample_database() -> DatabaseBuilder:
     )
 
     # Add reactions to team message
-    builder.add_reaction(team_msg1, team_jid, alice_jid, "👍", sender_name="Alice Smith")
+    builder.add_reaction(
+        team_msg1, team_jid, alice_jid, "👍", sender_name="Alice Smith"
+    )
     builder.add_reaction(team_msg1, team_jid, "me", "✅")
 
     # Add message with media
