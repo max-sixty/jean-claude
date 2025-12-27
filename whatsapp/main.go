@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/protobuf/reflect/protoreflect"
 	_ "modernc.org/sqlite"
 	"github.com/mdp/qrterminal/v3"
 	"github.com/skip2/go-qrcode"
@@ -1226,9 +1227,12 @@ func getReactionsForMessages(messageIDs []string) map[string][]map[string]any {
 	return result
 }
 
-// isDownloadableMedia returns true if the media type can be auto-downloaded
+// isDownloadableMedia returns true if the media type can be auto-downloaded.
+// Handles both regular types (image, video) and viewonce variants (viewonce_image).
 func isDownloadableMedia(mediaType string) bool {
-	switch mediaType {
+	// Strip viewonce_ prefix if present
+	mt := strings.TrimPrefix(mediaType, "viewonce_")
+	switch mt {
 	case "image", "video", "audio", "sticker", "document":
 		return true
 	default:
@@ -2515,6 +2519,90 @@ func extractMessageContentFull(m *waE2E.Message) MessageContent {
 		// Text is the emoji, key contains the target message
 		content.MediaType = "reaction"
 		content.Text = m.GetReactionMessage().GetText()
+
+	// ViewOnce messages wrap the actual content in FutureProofMessage
+	case m.GetViewOnceMessage() != nil:
+		content = extractViewOnceContent(m.GetViewOnceMessage().GetMessage())
+	case m.GetViewOnceMessageV2() != nil:
+		content = extractViewOnceContent(m.GetViewOnceMessageV2().GetMessage())
+	case m.GetViewOnceMessageV2Extension() != nil:
+		content = extractViewOnceContent(m.GetViewOnceMessageV2Extension().GetMessage())
+
+	// Live location shares
+	case m.GetLiveLocationMessage() != nil:
+		content.MediaType = "live_location"
+		loc := m.GetLiveLocationMessage()
+		if loc.GetCaption() != "" {
+			content.Text = loc.GetCaption()
+		}
+
+	// Group invites
+	case m.GetGroupInviteMessage() != nil:
+		content.MediaType = "group_invite"
+		inv := m.GetGroupInviteMessage()
+		content.Text = inv.GetGroupName()
+
+	// Polls
+	case m.GetPollCreationMessage() != nil:
+		content.MediaType = "poll"
+		poll := m.GetPollCreationMessage()
+		content.Text = poll.GetName()
+	case m.GetPollCreationMessageV2() != nil:
+		content.MediaType = "poll"
+		poll := m.GetPollCreationMessageV2()
+		content.Text = poll.GetName()
+	case m.GetPollCreationMessageV3() != nil:
+		content.MediaType = "poll"
+		poll := m.GetPollCreationMessageV3()
+		content.Text = poll.GetName()
+	case m.GetPollUpdateMessage() != nil:
+		content.MediaType = "poll_update"
+
+	// Protocol messages (edits, deletes, etc.)
+	case m.GetProtocolMessage() != nil:
+		proto := m.GetProtocolMessage()
+		switch proto.GetType() {
+		case waE2E.ProtocolMessage_REVOKE:
+			content.MediaType = "deleted"
+			content.Text = "[Message deleted]"
+		case waE2E.ProtocolMessage_MESSAGE_EDIT:
+			// Edited message - extract the new content
+			if edited := proto.GetEditedMessage(); edited != nil {
+				content = extractMessageContentFull(edited)
+			}
+		default:
+			// Other protocol messages (key distribution, ephemeral settings, etc.)
+			content.MediaType = "protocol"
+		}
+
+	default:
+		// Log unrecognized message types for debugging
+		// Use proto reflection to identify the message type
+		if m.ProtoReflect().IsValid() {
+			fields := m.ProtoReflect()
+			fields.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+				if v.IsValid() && fd.Kind() == protoreflect.MessageKind {
+					fmt.Fprintf(os.Stderr, "Warning: unhandled message type: %s\n", fd.Name())
+					return false // stop after first non-nil field
+				}
+				return true
+			})
+		}
+	}
+	return content
+}
+
+// extractViewOnceContent extracts content from a ViewOnce message wrapper.
+// Prefixes the media type with "viewonce_" to indicate ephemeral content.
+func extractViewOnceContent(inner *waE2E.Message) MessageContent {
+	if inner == nil {
+		return MessageContent{}
+	}
+	content := extractMessageContentFull(inner)
+	if content.MediaType != "" {
+		content.MediaType = "viewonce_" + content.MediaType
+	} else {
+		content.MediaType = "viewonce"
 	}
 	return content
 }
