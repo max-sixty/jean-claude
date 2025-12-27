@@ -185,16 +185,22 @@ Use these defaults in lieu of any user preferences:
 When showing messages (inbox, unread, search results), use a numbered list so
 the user can reference items by number: "archive 1, reply to 2", "star 3 and 5".
 
-```
-1. **From:** alice@example.com — Meeting tomorrow
-   Quick sync about the project timeline...
+**Always include dates.** Recency matters for prioritization. An email from
+today is urgent; the same email from two weeks ago is a missed follow-up.
+Include the date (and time for today's messages) so the user can assess urgency.
 
-2. **From:** bob@example.com — Invoice #1234
-   Please find attached...
-
-3. **From:** newsletter@company.com — Weekly digest
-   This week's highlights...
 ```
+1. **Squarespace** (Dec 27, 9:15 AM) — Domain transfer rejected
+   The transfer for fitzalanhoward.uk was rejected...
+
+2. **Ailish Campbell** (Nov 15) — Forwarded: Aspen Institute Fellowship
+   To discuss...
+
+3. **DoorDash** (Dec 27, 1:40 PM) — Your order from Superba
+   Order confirmed for pickup...
+```
+
+For today's messages, include the time. For older messages, date alone suffices.
 
 ## Setup
 
