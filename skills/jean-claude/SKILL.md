@@ -305,7 +305,7 @@ Credentials are stored in `~/.local/share/jean-claude/signal/`.
 See "Personalization" section for default behaviors and user skill overrides.
 
 1. **List/search** returns compact JSON with summaries and file paths
-2. **Read the file** if you need the full body
+2. **Read the body file** directly with `cat` if you need the full body
 
 **Search/Inbox response schema:**
 
@@ -329,9 +329,12 @@ See "Personalization" section for default behaviors and user skill overrides.
 }
 ```
 
-The `file` field points to a self-contained JSON file with the full body. Use
-`jq .body` to extract just the body, or `jq .html_body` for HTML content (when
-present). HTML content contains links like unsubscribe URLs.
+**Split file format:** Each email creates three files in `~/.cache/jean-claude/emails/`:
+- `email-{id}.json` — Metadata (queryable with `jq`)
+- `email-{id}.txt` — Plain text body (readable with `cat`/`less`)
+- `email-{id}.html` — HTML body when present (viewable in browser)
+
+The JSON includes `body_file` and `html_file` paths. HTML contains unsubscribe links.
 
 The `nextPageToken` field is only present when more results are available. Use
 `--page-token` to fetch the next page:
@@ -380,7 +383,7 @@ Use this when you have a specific message ID and want to read its full content.
 
 ### Drafts
 
-All compose commands read JSON from stdin (avoids shell escaping issues).
+Create drafts read JSON from stdin. Reply/forward read body from stdin.
 
 ```bash
 # Create a new draft
@@ -409,13 +412,17 @@ echo "Thanks everyone!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gma
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list -n 5
 
-# Get draft as JSON (writes to ~/.cache/jean-claude/drafts/)
+# Get draft (writes metadata to .json and body to .txt)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft get DRAFT_ID
 
-# Update a draft (preserves threading, only updates fields provided)
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft update DRAFT_ID
-{"cc": "added@example.com", "subject": "Updated subject"}
-EOF
+# Update draft body (from stdin)
+cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft update DRAFT_ID
+
+# Update metadata only
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft update DRAFT_ID --subject "New subject" --cc "added@example.com"
+
+# Update both body and metadata
+cat body.txt | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft update DRAFT_ID --subject "Updated"
 
 # Send a draft (after approval)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft send DRAFT_ID
@@ -428,9 +435,9 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft delete DRAFT_ID
 with the user without rewriting the full email each time:
 
 1. Create initial draft: `jean-claude gmail draft create`
-2. Get draft as JSON: `jean-claude gmail draft get DRAFT_ID` (writes to cache)
-3. Use Edit tool to modify the `body` field in `~/.cache/jean-claude/drafts/draft-DRAFT_ID.json`
-4. Update draft: `cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID`
+2. Get draft files: `jean-claude gmail draft get DRAFT_ID` (writes `.json` and `.txt`)
+3. Use Edit tool to modify `~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt`
+4. Update draft: `cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt | jean-claude gmail draft update DRAFT_ID`
 5. Show user, get feedback, repeat steps 3-4 until approved
 
 ### Manage Threads and Messages
@@ -476,12 +483,12 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail attachment-download MES
 
 ### Unsubscribing from Newsletters
 
-Extract the `html_body` from the JSON file to find unsubscribe links — they're
-in the HTML, not the plain text.
+Unsubscribe links are in the HTML file, not the plain text. Note: HTML files are
+only created when the email has HTML content (most newsletters do).
 
 ```bash
-# Search HTML body for unsubscribe links
-jq -r '.html_body' ~/.cache/jean-claude/emails/email-MESSAGE_ID.json | grep -oE 'https?://[^"<>]+unsubscribe[^"<>]*'
+# Search HTML body for unsubscribe links (if HTML file exists)
+grep -oE 'https?://[^"<>]+unsubscribe[^"<>]*' ~/.cache/jean-claude/emails/email-MESSAGE_ID.html
 ```
 
 **Decoding tracking URLs:** Newsletters often wrap links in tracking redirects.

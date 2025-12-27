@@ -19,3 +19,14 @@ def read_body_stdin(*, allow_empty: bool = False) -> str:
         raise click.UsageError("Body cannot be empty")
 
     return body
+
+
+def read_stdin_optional() -> str | None:
+    """Read from stdin if provided, return None if interactive.
+
+    Use when stdin is optional (e.g., updating metadata without body).
+    """
+    if sys.stdin.isatty():
+        return None
+
+    return sys.stdin.read() or None

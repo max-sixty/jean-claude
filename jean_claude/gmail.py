@@ -68,7 +68,7 @@ import click
 from googleapiclient.errors import HttpError
 
 from .auth import build_service
-from .input import read_body_stdin
+from .input import read_body_stdin, read_stdin_optional
 from .logging import JeanClaudeError, get_logger
 from .pagination import paginated_output
 from .paths import ATTACHMENT_CACHE_DIR, DRAFT_CACHE_DIR, EMAIL_CACHE_DIR
@@ -432,30 +432,50 @@ def extract_body(payload: dict) -> tuple[str, str | None]:
     return display_text, html
 
 
-def _write_email_json(
+def _sanitize_id(id_: str) -> str:
+    """Sanitize ID for use in filenames, preventing path traversal."""
+    return id_.replace("/", "_").replace("..", "__")
+
+
+def _write_email_cache(
     prefix: str, id_: str, summary: dict, body: str, html_body: str | None
 ) -> str:
-    """Write email data to cache as JSON, return file path.
+    """Write email data to cache as separate files, return JSON file path.
 
-    Creates a self-contained JSON file with the full body instead of snippet.
-    Files are written to ~/.cache/jean-claude/emails/ (XDG cache).
+    Creates three files in ~/.cache/jean-claude/emails/ (XDG cache):
+    - {prefix}-{id}.json: Metadata (queryable with jq)
+    - {prefix}-{id}.txt: Plain text body (readable with cat/less)
+    - {prefix}-{id}.html: HTML body if present (viewable in browser)
+
+    The JSON includes body_file and html_file paths for reference.
     """
     EMAIL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    file_data = {k: v for k, v in summary.items() if k != "snippet"}
-    file_data["body"] = body
-    if html_body:
-        file_data["html_body"] = html_body
+    base_name = f"{prefix}-{_sanitize_id(id_)}"
+    json_path = EMAIL_CACHE_DIR / f"{base_name}.json"
+    txt_path = EMAIL_CACHE_DIR / f"{base_name}.txt"
 
-    file_path = EMAIL_CACHE_DIR / f"{prefix}-{id_}.json"
-    file_path.write_text(json.dumps(file_data, indent=2))
-    return str(file_path)
+    # Write plain text body
+    txt_path.write_text(body, encoding="utf-8")
+
+    # Build metadata (without snippet, without inline body)
+    file_data = {k: v for k, v in summary.items() if k != "snippet"}
+    file_data["body_file"] = str(txt_path)
+
+    # Write HTML body if present
+    if html_body:
+        html_path = EMAIL_CACHE_DIR / f"{base_name}.html"
+        html_path.write_text(html_body, encoding="utf-8")
+        file_data["html_file"] = str(html_path)
+
+    json_path.write_text(json.dumps(file_data, indent=2), encoding="utf-8")
+    return str(json_path)
 
 
 def extract_message_summary(msg: dict) -> dict:
     """Extract essential fields from a message for compact output.
 
-    Writes self-contained JSON to cache with full body (and html_body when present).
+    Writes cache files: JSON metadata, .txt body, and .html body when present.
     """
     headers = _get_headers(msg)
     result = {
@@ -472,7 +492,7 @@ def extract_message_summary(msg: dict) -> dict:
         result["cc"] = cc
 
     body, html_body = extract_body(msg["payload"])
-    result["file"] = _write_email_json("email", msg["id"], result, body, html_body)
+    result["file"] = _write_email_cache("email", msg["id"], result, body, html_body)
     return result
 
 
@@ -515,7 +535,7 @@ def extract_thread_summary(thread: dict) -> dict:
         result["cc"] = cc
 
     body, html_body = extract_body(latest_msg["payload"])
-    result["file"] = _write_email_json("thread", thread["id"], result, body, html_body)
+    result["file"] = _write_email_cache("thread", thread["id"], result, body, html_body)
 
     return result
 
@@ -1180,16 +1200,19 @@ def draft_list(max_results: int, page_token: str | None):
 @draft.command("get")
 @click.argument("draft_id")
 def draft_get(draft_id: str):
-    """Get a draft as JSON, written to file.
+    """Get a draft, written to separate metadata and body files.
 
-    Writes JSON that can be edited and piped directly to 'draft update'.
-    File is written to ~/.cache/jean-claude/drafts/.
+    Creates two files in ~/.cache/jean-claude/drafts/:
+    - draft-{id}.json: Metadata (to, cc, subject, etc.)
+    - draft-{id}.txt: Body text (editable with any text editor)
 
     \b
     Workflow:
         jean-claude gmail draft get DRAFT_ID
-        # Edit the body field with Edit tool
-        cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
+        # Edit the body file
+        vim ~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt
+        # Update from edited body
+        cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt | jean-claude gmail draft update DRAFT_ID
 
     \b
     Example:
@@ -1203,13 +1226,20 @@ def draft_get(draft_id: str):
     headers = _get_headers_lower(msg)
     body = decode_body(msg["payload"])
 
-    # Build JSON with editable fields (matches draft update input)
+    DRAFT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Write body to plain text file (sanitize ID for safe filenames)
+    safe_id = _sanitize_id(draft_id)
+    body_path = DRAFT_CACHE_DIR / f"draft-{safe_id}.txt"
+    body_path.write_text(body, encoding="utf-8")
+
+    # Build metadata JSON (without inline body)
     draft_data = {
         "id": draft_id,
         "from": headers.get("from", ""),
         "to": headers.get("to", ""),
         "subject": headers.get("subject", ""),
-        "body": body,
+        "body_file": str(body_path),
     }
     # Only include optional fields if present
     if cc := headers.get("cc"):
@@ -1217,55 +1247,89 @@ def draft_get(draft_id: str):
     if bcc := headers.get("bcc"):
         draft_data["bcc"] = bcc
 
-    DRAFT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    file_path = DRAFT_CACHE_DIR / f"draft-{draft_id}.json"
-    file_path.write_text(json.dumps(draft_data, indent=2))
+    json_path = DRAFT_CACHE_DIR / f"draft-{safe_id}.json"
+    json_path.write_text(json.dumps(draft_data, indent=2), encoding="utf-8")
 
-    click.echo(json.dumps({"id": draft_id, "file": str(file_path)}, indent=2))
+    click.echo(json.dumps({"id": draft_id, "file": str(json_path)}, indent=2))
 
 
 @draft.command("update")
 @click.argument("draft_id")
-def draft_update(draft_id: str):
-    """Update an existing draft from JSON stdin.
+@click.option("--to", "to_addr", help="Update To recipients")
+@click.option("--cc", help="Update CC recipients")
+@click.option("--bcc", help="Update BCC recipients")
+@click.option("--subject", help="Update subject line")
+def draft_update(
+    draft_id: str,
+    to_addr: str | None,
+    cc: str | None,
+    bcc: str | None,
+    subject: str | None,
+):
+    """Update an existing draft.
+
+    Body is read from stdin (plain text). Metadata is updated via flags.
+    Only provided fields are updated; others remain unchanged.
 
     Preserves threading headers (In-Reply-To, References) from the original draft.
-    Only fields provided in the JSON are updated; others remain unchanged.
-
-    JSON fields (all optional): to, cc, bcc, subject, body
 
     \b
-    Workflow for iterating on long emails:
+    Workflow for editing drafts:
         jean-claude gmail draft get DRAFT_ID
-        # Edit the body field with Edit tool
-        cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.json | jean-claude gmail draft update DRAFT_ID
+        # Edit the body file
+        vim ~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt
+        # Update from edited body
+        cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt | jean-claude gmail draft update DRAFT_ID
 
     \b
-    Example:
-        echo '{"cc": "new@example.com"}' | jean-claude gmail draft update DRAFT_ID
-        echo '{"subject": "New subject", "body": "New body"}' | jean-claude gmail draft update DRAFT_ID
+    Examples:
+        # Update body only
+        cat body.txt | jean-claude gmail draft update DRAFT_ID
+
+        # Update metadata only (no stdin)
+        jean-claude gmail draft update DRAFT_ID --subject "New subject"
+
+        # Update both
+        cat body.txt | jean-claude gmail draft update DRAFT_ID --cc "new@example.com"
     """
-    data = json.load(sys.stdin)
-    if not data:
-        raise click.UsageError("No fields provided to update")
+    # Read body from stdin if provided
+    new_body = read_stdin_optional()
+
+    # Check that at least one update is provided
+    if new_body is None and not any((to_addr, cc, bcc, subject)):
+        raise click.UsageError(
+            "Nothing to update. Provide body on stdin or use --to/--cc/--bcc/--subject"
+        )
 
     service = get_gmail()
 
-    # Fetch existing draft to preserve threading headers
+    # Fetch existing draft to preserve threading headers and unchanged fields
     existing = (
         service.users().drafts().get(userId="me", id=draft_id, format="full").execute()
     )
     existing_msg = existing["message"]
     thread_id = existing_msg.get("threadId")
 
-    # Copy all headers from original, then apply updates
+    # Start with existing headers
     headers = _get_headers_lower(existing_msg)
-    headers["body"] = decode_body(existing_msg["payload"])
-    headers |= {k.lower(): v for k, v in data.items()}
+    existing_body = decode_body(existing_msg["payload"])
+
+    # Apply updates (only for provided values)
+    if to_addr is not None:
+        headers["to"] = to_addr
+    if cc is not None:
+        headers["cc"] = cc
+    if bcc is not None:
+        headers["bcc"] = bcc
+    if subject is not None:
+        headers["subject"] = subject
+
+    # Use new body if provided, otherwise keep existing
+    final_body = new_body if new_body is not None else existing_body
 
     # Build new message
-    msg = MIMEText(headers.get("body", ""))
-    # Preserve original From header unless explicitly updated
+    msg = MIMEText(final_body)
+    # Preserve original From header
     msg["from"] = headers.get("from") or get_my_from_address(service)
     for field in ["to", "cc", "bcc", "subject"]:
         if value := headers.get(field):
@@ -1276,12 +1340,15 @@ def draft_update(draft_id: str):
         msg["References"] = references
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    body = {"message": {"raw": raw}}
+    api_body = {"message": {"raw": raw}}
     if thread_id:
-        body["message"]["threadId"] = thread_id
+        api_body["message"]["threadId"] = thread_id
 
     result = (
-        service.users().drafts().update(userId="me", id=draft_id, body=body).execute()
+        service.users()
+        .drafts()
+        .update(userId="me", id=draft_id, body=api_body)
+        .execute()
     )
     url = draft_url(result)
     logger.info(f"Updated draft: {result['id']}", url=url)
