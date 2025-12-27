@@ -144,7 +144,7 @@ class TestFetchMessages:
 
     def test_includes_sender_for_received_messages(self, imessage_sample_db):
         """Test that received messages have sender populated."""
-        query = MessageQuery(max_results=20, include_is_from_me=True)
+        query = MessageQuery(max_results=20, show_both_directions=True)
         messages = fetch_messages(imessage_sample_db, query)
 
         received = [m for m in messages if not m.get("is_from_me", False)]
@@ -155,7 +155,7 @@ class TestFetchMessages:
 
     def test_marks_self_messages_correctly(self, imessage_sample_db):
         """Test that messages from self have is_from_me=True when requested."""
-        query = MessageQuery(max_results=20, include_is_from_me=True)
+        query = MessageQuery(max_results=20, show_both_directions=True)
         messages = fetch_messages(imessage_sample_db, query)
 
         from_me = [m for m in messages if m.get("is_from_me")]
@@ -239,8 +239,7 @@ class TestFetchMessagesWithFilters:
 
         # Filter by Alice's chat identifier
         query = MessageQuery(
-            where_clause="c.chat_identifier = ?",
-            params=("+15551111111",),
+            chat_identifier="+15551111111",
             max_results=10,
         )
         messages = fetch_messages(conn, query)

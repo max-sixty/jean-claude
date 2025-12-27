@@ -11,6 +11,7 @@ import click
 
 from .auth import build_service
 from .logging import JeanClaudeError, get_logger
+from .pagination import paginated_output
 
 logger = get_logger(__name__)
 
@@ -40,14 +41,6 @@ LOCAL_TZ = ZoneInfo(TIMEZONE)
 
 def get_calendar():
     return build_service("calendar", "v3")
-
-
-def _paginated_output(key: str, result: dict) -> dict:
-    """Build paginated output dict from API result."""
-    output: dict = {key: result.get("items", [])}
-    if next_token := result.get("nextPageToken"):
-        output["nextPageToken"] = next_token
-    return output
 
 
 def parse_datetime(s: str) -> datetime:
@@ -104,7 +97,10 @@ def list_events(
         list_kwargs["pageToken"] = page_token
 
     result = service.events().list(**list_kwargs).execute()
-    click.echo(json.dumps(_paginated_output("events", result), indent=2))
+    output = paginated_output(
+        "events", result.get("items", []), result.get("nextPageToken")
+    )
+    click.echo(json.dumps(output, indent=2))
 
 
 @cli.command()
@@ -215,7 +211,10 @@ def search(query: str, days: int, max_results: int, page_token: str):
         list_kwargs["pageToken"] = page_token
 
     result = service.events().list(**list_kwargs).execute()
-    click.echo(json.dumps(_paginated_output("events", result), indent=2))
+    output = paginated_output(
+        "events", result.get("items", []), result.get("nextPageToken")
+    )
+    click.echo(json.dumps(output, indent=2))
 
 
 @cli.command()

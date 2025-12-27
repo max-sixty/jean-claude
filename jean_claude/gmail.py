@@ -70,6 +70,7 @@ from googleapiclient.errors import HttpError
 from .auth import build_service
 from .input import read_body_stdin
 from .logging import JeanClaudeError, get_logger
+from .pagination import paginated_output
 from .paths import ATTACHMENT_CACHE_DIR, DRAFT_CACHE_DIR, EMAIL_CACHE_DIR
 
 logger = get_logger(__name__)
@@ -324,14 +325,6 @@ def _get_headers(msg: dict) -> dict[str, str]:
 def _get_headers_lower(msg: dict) -> dict[str, str]:
     """Extract headers from a message payload as a lowercase name->value dict."""
     return {h["name"].lower(): h["value"] for h in msg["payload"]["headers"]}
-
-
-def _paginated_output(key: str, items: list, next_page_token: str | None) -> dict:
-    """Build paginated output dict with optional nextPageToken."""
-    output: dict = {key: items}
-    if next_page_token:
-        output["nextPageToken"] = next_page_token
-    return output
 
 
 def _strip_html(html: str) -> str:
@@ -618,7 +611,7 @@ def _search_messages(query: str, max_results: int, page_token: str | None = None
 
     if not messages:
         click.echo(
-            json.dumps(_paginated_output("messages", [], next_page_token), indent=2)
+            json.dumps(paginated_output("messages", [], next_page_token), indent=2)
         )
         return
 
@@ -635,7 +628,7 @@ def _search_messages(query: str, max_results: int, page_token: str | None = None
         if m["id"] in responses
     ]
     click.echo(
-        json.dumps(_paginated_output("messages", detailed, next_page_token), indent=2)
+        json.dumps(paginated_output("messages", detailed, next_page_token), indent=2)
     )
 
 
@@ -658,7 +651,7 @@ def _search_threads(query: str, max_results: int, page_token: str | None = None)
 
     if not threads:
         click.echo(
-            json.dumps(_paginated_output("threads", [], next_page_token), indent=2)
+            json.dumps(paginated_output("threads", [], next_page_token), indent=2)
         )
         return
 
@@ -675,7 +668,7 @@ def _search_threads(query: str, max_results: int, page_token: str | None = None)
         if t["id"] in responses
     ]
     click.echo(
-        json.dumps(_paginated_output("threads", detailed, next_page_token), indent=2)
+        json.dumps(paginated_output("threads", detailed, next_page_token), indent=2)
     )
 
 
@@ -1160,7 +1153,7 @@ def draft_list(max_results: int, page_token: str | None):
 
     if not drafts:
         click.echo(
-            json.dumps(_paginated_output("drafts", [], next_page_token), indent=2)
+            json.dumps(paginated_output("drafts", [], next_page_token), indent=2)
         )
         return
 
@@ -1180,7 +1173,7 @@ def draft_list(max_results: int, page_token: str | None):
         if d["id"] in responses
     ]
     click.echo(
-        json.dumps(_paginated_output("drafts", detailed, next_page_token), indent=2)
+        json.dumps(paginated_output("drafts", detailed, next_page_token), indent=2)
     )
 
 

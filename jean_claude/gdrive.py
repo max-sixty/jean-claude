@@ -11,6 +11,7 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
 from .auth import build_service
 from .logging import get_logger
+from .pagination import paginated_output
 from .paths import DRIVE_CACHE_DIR
 
 logger = get_logger(__name__)
@@ -18,14 +19,6 @@ logger = get_logger(__name__)
 
 def get_drive():
     return build_service("drive", "v3")
-
-
-def _paginated_output(result: dict) -> dict:
-    """Build paginated output dict from API result."""
-    output: dict = {"files": result.get("files", [])}
-    if next_token := result.get("nextPageToken"):
-        output["nextPageToken"] = next_token
-    return output
 
 
 @click.group()
@@ -53,7 +46,10 @@ def list_files(folder: str | None, max_results: int, page_token: str):
         list_kwargs["pageToken"] = page_token
 
     result = get_drive().files().list(**list_kwargs).execute()
-    click.echo(json.dumps(_paginated_output(result), indent=2))
+    output = paginated_output(
+        "files", result.get("files", []), result.get("nextPageToken")
+    )
+    click.echo(json.dumps(output, indent=2))
 
 
 @cli.command()
@@ -80,7 +76,10 @@ def search(query: str, max_results: int, page_token: str):
         list_kwargs["pageToken"] = page_token
 
     result = get_drive().files().list(**list_kwargs).execute()
-    click.echo(json.dumps(_paginated_output(result), indent=2))
+    output = paginated_output(
+        "files", result.get("files", []), result.get("nextPageToken")
+    )
+    click.echo(json.dumps(output, indent=2))
 
 
 @cli.command()

@@ -4,33 +4,25 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import click
 
+from .applescript import run_applescript
 from .input import read_body_stdin
 from .logging import JeanClaudeError, get_logger
-from .phone import looks_like_phone, normalize_phone
+from .messaging import (
+    disambiguate_chat_matches,
+    resolve_recipient as _resolve_recipient,
+)
+from .phone import normalize_phone
 
 logger = get_logger(__name__)
 
 DB_PATH = Path.home() / "Library" / "Messages" / "chat.db"
 # Apple's Cocoa epoch (2001-01-01) offset from Unix epoch (1970-01-01)
 APPLE_EPOCH_OFFSET = 978307200
-
-
-def run_applescript(script: str, *args: str) -> str:
-    """Run AppleScript with optional arguments passed via 'on run argv'."""
-    result = subprocess.run(
-        ["osascript", "-e", script, *args],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise JeanClaudeError(f"AppleScript error: {result.stderr.strip()}")
-    return result.stdout.strip()
 
 
 def get_db_connection() -> sqlite3.Connection:
@@ -405,18 +397,12 @@ def find_chat_by_name(name: str) -> str | None:
     Raises JeanClaudeError if multiple chats have the same name.
     """
     matches = find_chats_by_name(name)
+    return disambiguate_chat_matches(matches, name, id_type="chat ID")
 
-    if not matches:
-        return None
 
-    if len(matches) > 1:
-        matches_str = "\n".join(f"  - {m[1]} ({m[0]})" for m in matches)
-        raise JeanClaudeError(
-            f"Multiple chats match '{name}':\n{matches_str}\n"
-            "Use the chat ID to send to a specific chat."
-        )
-
-    return matches[0][0]
+def _is_imessage_native_id(value: str) -> bool:
+    """Check if value is a native iMessage ID (chat ID or email/Apple ID)."""
+    return value.startswith(("any;", "iMessage;")) or "@" in value
 
 
 def resolve_recipient_from_string(value: str) -> str:
@@ -429,25 +415,13 @@ def resolve_recipient_from_string(value: str) -> str:
     - A chat name (looked up in Messages.app)
     - A contact name (looked up in Contacts.app)
     """
-    # Chat IDs pass through directly
-    if value.startswith("any;") or value.startswith("iMessage;"):
-        return value
-
-    # Email addresses / Apple IDs pass through directly (iMessage handles)
-    if "@" in value:
-        return value
-
-    # Phone numbers pass through directly (preserving user formatting)
-    if looks_like_phone(value):
-        return value
-
-    # Try chat name first (groups and named individual chats)
-    chat_id = find_chat_by_name(value)
-    if chat_id:
-        return chat_id
-
-    # Fall back to contact name lookup
-    return resolve_contact_to_phone(value)
+    return _resolve_recipient(
+        value,
+        is_native_id=_is_imessage_native_id,
+        find_chat_by_name=find_chat_by_name,
+        resolve_contact=resolve_contact_to_phone,
+        service_name="iMessage",
+    )
 
 
 def resolve_contact_to_phone(name: str) -> str:
@@ -501,12 +475,29 @@ IMESSAGE_GROUP_CHAT_STYLE = 43
 
 @dataclass
 class MessageQuery:
-    """Parameters for querying messages from the database."""
+    """Query parameters for fetching messages from the database.
 
-    where_clause: str = ""
-    params: tuple = field(default_factory=tuple)
-    include_is_from_me: bool = False
-    reverse_order: bool = False
+    Filtering:
+        chat_identifier: Filter to a specific chat (phone/email/chat ID)
+        search_text: Search in message text (LIKE match)
+        unread_only: Only fetch unread messages from others
+        include_spam: Include filtered/spam messages (excluded by default)
+
+    Output:
+        show_both_directions: Include is_from_me field in output (for chat history)
+        chronological: Return oldest-first instead of newest-first
+        max_results: Maximum messages to return
+    """
+
+    # Filtering
+    chat_identifier: str | None = None
+    search_text: str | None = None
+    unread_only: bool = False
+    include_spam: bool = False
+
+    # Output
+    show_both_directions: bool = False
+    chronological: bool = False
     max_results: int = 20
 
 
@@ -514,6 +505,7 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
     """Fetch messages with full enrichment (names, group participants).
 
     This is the central function for querying messages. It handles:
+    - Building WHERE clause from query filters
     - Executing the query with common SELECT columns
     - Identifying unnamed group chats and fetching their participants
     - Resolving phone numbers to contact names
@@ -525,12 +517,26 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
 
     Returns:
         List of message dictionaries ready for JSON output.
-
-    Security Note:
-        The `where_clause` is interpolated directly into SQL. Only use hardcoded
-        SQL fragments with parameterized placeholders (?). User input must ONLY
-        go in `params`, never in `where_clause`. Current callers are safe.
     """
+    # Build WHERE clause from query filters
+    where_clauses: list[str] = []
+    params: list[str] = []
+
+    if not query.include_spam:
+        where_clauses.append("(c.is_filtered IS NULL OR c.is_filtered < 2)")
+
+    if query.chat_identifier:
+        where_clauses.append("(c.chat_identifier = ? OR h.id = ?)")
+        params.extend([query.chat_identifier, query.chat_identifier])
+
+    if query.unread_only:
+        where_clauses.append("m.is_read = 0 AND m.is_from_me = 0")
+
+    if query.search_text:
+        where_clauses.append("m.text LIKE ?")
+        params.append(f"%{query.search_text}%")
+
+    where_clause = " AND ".join(where_clauses) if where_clauses else ""
     cursor = conn.cursor()
 
     # Always fetch is_from_me - simpler than conditional column building
@@ -565,12 +571,12 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
         LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
         LEFT JOIN chat c ON cmj.chat_id = c.ROWID
         WHERE (m.text IS NOT NULL OR m.attributedBody IS NOT NULL OR m.cache_has_attachments = 1)
-        {("AND " + query.where_clause) if query.where_clause else ""}
+        {("AND " + where_clause) if where_clause else ""}
         ORDER BY m.date DESC
         LIMIT ?
     """
 
-    cursor.execute(sql, (*query.params, query.max_results))
+    cursor.execute(sql, (*params, query.max_results))
     rows = cursor.fetchall()
 
     if not rows:
@@ -621,7 +627,7 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
             group_name = None
 
         # Only include is_from_me when requested (e.g., for chat history views)
-        is_from_me = bool(is_from_me_int) if query.include_is_from_me else False
+        is_from_me = bool(is_from_me_int) if query.show_both_directions else False
 
         messages.append(
             build_message_dict(
@@ -635,7 +641,7 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
             )
         )
 
-    if query.reverse_order:
+    if query.chronological:
         messages.reverse()
 
     return messages
@@ -1012,14 +1018,8 @@ def messages(
         jean-claude imessage messages --unread
         jean-claude imessage messages --unread --include-spam
     """
-    where_clauses = []
-    params: tuple = ()
-
-    # Exclude spam by default (is_filtered: 0=contacts, 1=unknown, 2=spam)
-    if not include_spam:
-        where_clauses.append("(c.is_filtered IS NULL OR c.is_filtered < 2)")
-
-    # Filter by chat
+    # Resolve chat identifier from name or chat_id
+    chat_identifier: str | None = None
     if name:
         raw_phone = resolve_contact_to_phone(name)
         messages_chat_id = get_chat_id_for_phone(raw_phone)
@@ -1028,28 +1028,21 @@ def messages(
                 f"No message history found for '{name}' ({raw_phone})"
             )
         chat_identifier = messages_chat_id.split(";")[-1]
-        where_clauses.append("(c.chat_identifier = ? OR h.id = ?)")
-        params = (chat_identifier, chat_identifier)
     elif chat_id:
         chat_identifier = chat_id.split(";")[-1] if ";" in chat_id else chat_id
-        where_clauses.append("(c.chat_identifier = ? OR h.id = ?)")
-        params = (chat_identifier, chat_identifier)
 
-    # Filter by unread
-    if unread:
-        where_clauses.append("m.is_read = 0 AND m.is_from_me = 0")
-
-    where_clause = " AND ".join(where_clauses) if where_clauses else ""
-    include_is_from_me = bool(chat_id or name)  # Show both sides for chat history
+    # When viewing a specific chat, show both directions in chronological order
+    viewing_chat = chat_identifier is not None
 
     conn = get_db_connection()
     result = fetch_messages(
         conn,
         MessageQuery(
-            where_clause=where_clause,
-            params=params,
-            include_is_from_me=include_is_from_me,
-            reverse_order=include_is_from_me,  # Chronological for chat history
+            chat_identifier=chat_identifier,
+            unread_only=unread,
+            include_spam=include_spam,
+            show_both_directions=viewing_chat,
+            chronological=viewing_chat,
             max_results=max_results,
         ),
     )
@@ -1077,14 +1070,10 @@ def search(query: str | None, max_results: int):
         jean-claude imessage search "dinner plans"
         jean-claude imessage search -n 50
     """
-    # Search in text column - attributedBody search would require extraction
-    where_clause = "m.text LIKE ?" if query else ""
-    params = (f"%{query}%",) if query else ()
-
     conn = get_db_connection()
     messages = fetch_messages(
         conn,
-        MessageQuery(where_clause=where_clause, params=params, max_results=max_results),
+        MessageQuery(search_text=query, max_results=max_results),
     )
     conn.close()
 

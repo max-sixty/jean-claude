@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from datetime import datetime
 
 import click
 
+from .applescript import run_applescript
 from .logging import JeanClaudeError, get_logger
 
 logger = get_logger(__name__)
@@ -15,18 +15,6 @@ logger = get_logger(__name__)
 # AppleScript priority: 0 = none, 1 = high, 5 = medium, 9 = low
 PRIORITY_TO_APPLESCRIPT = {"high": 1, "medium": 5, "low": 9}
 APPLESCRIPT_TO_PRIORITY = {1: "high", 5: "medium", 9: "low"}
-
-
-def run_applescript(script: str, *args: str) -> str:
-    """Run AppleScript with optional arguments passed via 'on run argv'."""
-    result = subprocess.run(
-        ["osascript", "-e", script, *args],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise JeanClaudeError(f"AppleScript error: {result.stderr.strip()}")
-    return result.stdout.strip()
 
 
 def parse_datetime(dt_str: str) -> datetime:

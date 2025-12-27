@@ -19,7 +19,10 @@ import click
 
 from .input import read_body_stdin
 from .logging import JeanClaudeError, get_logger
-from .phone import looks_like_phone
+from .messaging import (
+    disambiguate_chat_matches,
+    resolve_recipient as _resolve_recipient,
+)
 
 logger = get_logger(__name__)
 
@@ -281,18 +284,12 @@ def find_chat_by_name(name: str) -> str | None:
     """
     chats = _get_all_chats()
     matches = [(c["jid"], c["name"]) for c in chats if c.get("name") == name]
+    return disambiguate_chat_matches(matches, name)
 
-    if not matches:
-        return None
 
-    if len(matches) > 1:
-        matches_str = "\n".join(f"  - {m[1]} ({m[0]})" for m in matches)
-        raise JeanClaudeError(
-            f"Multiple chats match '{name}':\n{matches_str}\n"
-            "Use the ID to send to a specific chat."
-        )
-
-    return matches[0][0]
+def _is_whatsapp_jid(value: str) -> bool:
+    """Check if value is a WhatsApp JID (contains @)."""
+    return "@" in value
 
 
 def resolve_recipient(value: str) -> str:
@@ -305,25 +302,11 @@ def resolve_recipient(value: str) -> str:
 
     Returns the JID or phone number to use for sending.
     """
-    # JIDs pass through directly (individual @s.whatsapp.net or group @g.us)
-    if "@" in value:
-        return value
-
-    # Phone numbers pass through directly
-    if looks_like_phone(value):
-        return value
-
-    # Try chat name lookup
-    jid = find_chat_by_name(value)
-    if jid:
-        logger.info(f"Found chat: {value} ({jid})")
-        return jid
-
-    raise JeanClaudeError(
-        f"Could not resolve '{value}' to a WhatsApp recipient.\n"
-        "Use a phone number (+12025551234), "
-        "an ID from 'whatsapp chats' (e.g., 123@g.us), "
-        "or a chat name."
+    return _resolve_recipient(
+        value,
+        is_native_id=_is_whatsapp_jid,
+        find_chat_by_name=find_chat_by_name,
+        service_name="WhatsApp",
     )
 
 
