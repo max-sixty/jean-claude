@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime"
 	"os"
@@ -18,18 +19,17 @@ import (
 	"syscall"
 	"time"
 
-	"google.golang.org/protobuf/reflect/protoreflect"
-	_ "modernc.org/sqlite"
 	"github.com/mdp/qrterminal/v3"
 	"github.com/skip2/go-qrcode"
 	"go.mau.fi/whatsmeow"
-	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/proto/waWeb"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	_ "modernc.org/sqlite"
 )
 
 var (
@@ -91,7 +91,7 @@ func main() {
 	// Ensure database is closed on exit
 	defer func() {
 		if messageDB != nil {
-			messageDB.Close()
+			_ = messageDB.Close()
 		}
 	}()
 
@@ -128,14 +128,13 @@ func main() {
 	case "help", "-h", "--help":
 		printUsage()
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", cmd)
 		printUsage()
-		os.Exit(1)
+		err = fmt.Errorf("unknown command: %s", cmd)
 	}
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		os.Exit(1) //nolint:gocritic // intentional exit after error
 	}
 }
 
@@ -193,7 +192,7 @@ func initClient(ctx context.Context) error {
 
 	device, err := container.GetFirstDevice(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			device = container.NewDevice()
 		} else {
 			return fmt.Errorf("failed to get device: %w", err)
@@ -327,14 +326,14 @@ func initMessageDB() error {
 
 	// Migration: add media metadata columns to messages if they don't exist
 	mediaColumns := []string{
-		"mime_type_full TEXT",       // Full MIME type (e.g., image/jpeg)
-		"media_key BLOB",            // Decryption key
-		"file_sha256 BLOB",          // SHA256 hash of decrypted file
-		"file_enc_sha256 BLOB",      // SHA256 hash of encrypted file
-		"file_length INTEGER",       // File size in bytes
-		"direct_path TEXT",          // WhatsApp CDN path
-		"media_url TEXT",            // Full download URL
-		"media_file_path TEXT",      // Local file path after download
+		"mime_type_full TEXT",  // Full MIME type (e.g., image/jpeg)
+		"media_key BLOB",       // Decryption key
+		"file_sha256 BLOB",     // SHA256 hash of decrypted file
+		"file_enc_sha256 BLOB", // SHA256 hash of encrypted file
+		"file_length INTEGER",  // File size in bytes
+		"direct_path TEXT",     // WhatsApp CDN path
+		"media_url TEXT",       // Full download URL
+		"media_file_path TEXT", // Local file path after download
 	}
 	for _, colDef := range mediaColumns {
 		colName := strings.Split(colDef, " ")[0]
@@ -347,9 +346,9 @@ func initMessageDB() error {
 
 	// Migration: add reply context columns to messages if they don't exist
 	replyColumns := []string{
-		"reply_to_id TEXT",          // ID of message being replied to
-		"reply_to_sender TEXT",      // Sender of the quoted message
-		"reply_to_text TEXT",        // Preview of quoted message text
+		"reply_to_id TEXT",     // ID of message being replied to
+		"reply_to_sender TEXT", // Sender of the quoted message
+		"reply_to_text TEXT",   // Preview of quoted message text
 	}
 	for _, colDef := range replyColumns {
 		colName := strings.Split(colDef, " ")[0]
@@ -389,7 +388,7 @@ func hasColumn(db *sql.DB, table, column string) bool {
 	if err != nil {
 		return false
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var cid int
 		var name, ctype string
@@ -451,12 +450,12 @@ func cmdAuth() error {
 			}
 			// Also print to terminal as fallback
 			fmt.Fprintln(os.Stderr, "\nScan this QR code with WhatsApp:")
-			fmt.Fprintln(os.Stderr, "(WhatsApp > Settings > Linked Devices > Link a Device)\n")
+			fmt.Fprintln(os.Stderr, "(WhatsApp > Settings > Linked Devices > Link a Device)")
 			qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stderr)
 		case "success":
 			fmt.Fprintln(os.Stderr, "\nQR code scanned! Completing device registration...")
 			// Clean up QR file
-			os.Remove(qrFile)
+			_ = os.Remove(qrFile)
 			// Wait for the Connected event or timeout
 			fmt.Fprintln(os.Stderr, "Waiting for device sync to complete...")
 			select {
@@ -574,7 +573,7 @@ func cmdSend(args []string) error {
 	}
 
 	// Build message
-	msg := &waProto.Message{
+	msg := &waE2E.Message{
 		Conversation: &message,
 	}
 
@@ -585,8 +584,8 @@ func cmdSend(args []string) error {
 			return fmt.Errorf("failed to get quoted message: %w", err)
 		}
 		// Use ExtendedTextMessage for replies (Conversation doesn't support ContextInfo)
-		msg = &waProto.Message{
-			ExtendedTextMessage: &waProto.ExtendedTextMessage{
+		msg = &waE2E.Message{
+			ExtendedTextMessage: &waE2E.ExtendedTextMessage{
 				Text:        &message,
 				ContextInfo: contextInfo,
 			},
@@ -674,13 +673,14 @@ func cmdSendFile(args []string) error {
 
 	// Determine media type for upload
 	var mediaType whatsmeow.MediaType
-	if strings.HasPrefix(mimeType, "image/") {
+	switch {
+	case strings.HasPrefix(mimeType, "image/"):
 		mediaType = whatsmeow.MediaImage
-	} else if strings.HasPrefix(mimeType, "video/") {
+	case strings.HasPrefix(mimeType, "video/"):
 		mediaType = whatsmeow.MediaVideo
-	} else if strings.HasPrefix(mimeType, "audio/") {
+	case strings.HasPrefix(mimeType, "audio/"):
 		mediaType = whatsmeow.MediaAudio
-	} else {
+	default:
 		mediaType = whatsmeow.MediaDocument
 	}
 
@@ -716,12 +716,12 @@ func cmdSendFile(args []string) error {
 	// Build message based on media type
 	fileName := filepath.Base(filePath)
 	fileLen := uint64(len(data))
-	var msg *waProto.Message
+	var msg *waE2E.Message
 
 	switch mediaType {
 	case whatsmeow.MediaImage:
-		msg = &waProto.Message{
-			ImageMessage: &waProto.ImageMessage{
+		msg = &waE2E.Message{
+			ImageMessage: &waE2E.ImageMessage{
 				URL:           &uploadResp.URL,
 				DirectPath:    &uploadResp.DirectPath,
 				MediaKey:      uploadResp.MediaKey,
@@ -732,8 +732,8 @@ func cmdSendFile(args []string) error {
 			},
 		}
 	case whatsmeow.MediaVideo:
-		msg = &waProto.Message{
-			VideoMessage: &waProto.VideoMessage{
+		msg = &waE2E.Message{
+			VideoMessage: &waE2E.VideoMessage{
 				URL:           &uploadResp.URL,
 				DirectPath:    &uploadResp.DirectPath,
 				MediaKey:      uploadResp.MediaKey,
@@ -744,8 +744,8 @@ func cmdSendFile(args []string) error {
 			},
 		}
 	case whatsmeow.MediaAudio:
-		msg = &waProto.Message{
-			AudioMessage: &waProto.AudioMessage{
+		msg = &waE2E.Message{
+			AudioMessage: &waE2E.AudioMessage{
 				URL:           &uploadResp.URL,
 				DirectPath:    &uploadResp.DirectPath,
 				MediaKey:      uploadResp.MediaKey,
@@ -756,8 +756,8 @@ func cmdSendFile(args []string) error {
 			},
 		}
 	default:
-		msg = &waProto.Message{
-			DocumentMessage: &waProto.DocumentMessage{
+		msg = &waE2E.Message{
+			DocumentMessage: &waE2E.DocumentMessage{
 				URL:           &uploadResp.URL,
 				DirectPath:    &uploadResp.DirectPath,
 				MediaKey:      uploadResp.MediaKey,
@@ -1014,7 +1014,7 @@ func cmdMessages(args []string) error {
 		case strings.HasPrefix(args[i], "--chat="):
 			chatJID = strings.TrimPrefix(args[i], "--chat=")
 		case strings.HasPrefix(args[i], "--max-results="):
-			fmt.Sscanf(strings.TrimPrefix(args[i], "--max-results="), "%d", &limit)
+			_, _ = fmt.Sscanf(strings.TrimPrefix(args[i], "--max-results="), "%d", &limit)
 		case args[i] == "--unread":
 			unreadOnly = true
 		case args[i] == "--with-media":
@@ -1075,7 +1075,7 @@ func cmdMessages(args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to query messages: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Collect message IDs to query reactions
 	var messageIDs []string
@@ -1195,7 +1195,7 @@ func getReactionsForMessages(messageIDs []string) map[string][]map[string]any {
 		fmt.Fprintf(os.Stderr, "Warning: failed to query reactions: %v\n", err)
 		return nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	result := make(map[string][]map[string]any)
 	for rows.Next() {
@@ -1308,7 +1308,7 @@ func cmdContacts() error {
 	if err != nil {
 		return fmt.Errorf("failed to query contacts: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var contacts []map[string]any
 	for rows.Next() {
@@ -1389,7 +1389,7 @@ func cmdChats(args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to query chats: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var chats []map[string]any
 	for rows.Next() {
@@ -1438,7 +1438,7 @@ func cmdSearch(args []string) error {
 	for i := 0; i < len(args); i++ {
 		switch {
 		case strings.HasPrefix(args[i], "--max-results="):
-			fmt.Sscanf(strings.TrimPrefix(args[i], "--max-results="), "%d", &limit)
+			_, _ = fmt.Sscanf(strings.TrimPrefix(args[i], "--max-results="), "%d", &limit)
 		case !strings.HasPrefix(args[i], "--"):
 			if query == "" {
 				query = args[i]
@@ -1467,7 +1467,7 @@ func cmdSearch(args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to search messages: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var messages []map[string]any
 	for rows.Next() {
@@ -1680,7 +1680,7 @@ func cmdMarkRead(args []string) error {
 	for rows.Next() {
 		var id, sender string
 		if err := rows.Scan(&id, &sender); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return fmt.Errorf("failed to scan row: %w", err)
 		}
 		messageIDs = append(messageIDs, id)
@@ -1688,7 +1688,7 @@ func cmdMarkRead(args []string) error {
 			senderJID = sender
 		}
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	// Send read receipts to WhatsApp if there are unread messages
 	receiptsSent := 0
@@ -1716,9 +1716,7 @@ func cmdMarkRead(args []string) error {
 
 					// Convert string IDs to MessageID type
 					msgIDs := make([]types.MessageID, len(messageIDs))
-					for i, id := range messageIDs {
-						msgIDs[i] = types.MessageID(id)
-					}
+					copy(msgIDs, messageIDs)
 
 					// Send read receipt
 					if err := client.MarkRead(ctx, msgIDs, time.Now(), jid, sender); err != nil {
@@ -1782,7 +1780,7 @@ func cmdDownload(args []string) error {
 		SELECT media_type, mime_type_full, media_key, file_sha256, file_enc_sha256, file_length, direct_path, media_file_path
 		FROM messages WHERE id = ?
 	`, messageID).Scan(&mediaType, &mimeType, &mediaKey, &fileSHA256, &fileEncSHA256, &fileLength, &directPath, &existingPath)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("message not found: %s", messageID)
 	}
 	if err != nil {
@@ -2002,7 +2000,7 @@ func getChatsNeedingNames(limit int) ([]chatForNameUpdate, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var chats []chatForNameUpdate
 	for rows.Next() {
@@ -2089,7 +2087,7 @@ func lookupContactByName(name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to search contacts: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	type match struct {
 		jid  string
@@ -2131,14 +2129,14 @@ func lookupContactByName(name string) (string, error) {
 }
 
 // getQuotedContext retrieves context info for replying to a specific message
-func getQuotedContext(messageID, chatJID string) (*waProto.ContextInfo, error) {
+func getQuotedContext(messageID, chatJID string) (*waE2E.ContextInfo, error) {
 	// Look up the message in the database
 	var senderJID, text string
 	err := messageDB.QueryRow(`
 		SELECT sender_jid, text FROM messages
 		WHERE id = ? AND chat_jid = ?
 	`, messageID, chatJID).Scan(&senderJID, &text)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("message not found: %s", messageID)
 	}
 	if err != nil {
@@ -2152,10 +2150,10 @@ func getQuotedContext(messageID, chatJID string) (*waProto.ContextInfo, error) {
 	}
 	participantStr := participant.String()
 
-	return &waProto.ContextInfo{
+	return &waE2E.ContextInfo{
 		StanzaID:      &messageID,
 		Participant:   &participantStr,
-		QuotedMessage: &waProto.Message{Conversation: &text},
+		QuotedMessage: &waE2E.Message{Conversation: &text},
 	}, nil
 }
 
@@ -2424,14 +2422,14 @@ func saveReaction(msg *NormalizedMessage, rm *waE2E.ReactionMessage) error {
 // MediaMetadata holds media information extracted from a WhatsApp message.
 // Used for storing download info and later retrieval.
 type MediaMetadata struct {
-	MediaType    string // image, video, audio, document, sticker, contact, location
-	MimeType     string // Full MIME type (e.g., image/jpeg)
-	MediaKey     []byte // Decryption key
-	FileSHA256   []byte // SHA256 hash of decrypted file
+	MediaType     string // image, video, audio, document, sticker, contact, location
+	MimeType      string // Full MIME type (e.g., image/jpeg)
+	MediaKey      []byte // Decryption key
+	FileSHA256    []byte // SHA256 hash of decrypted file
 	FileEncSHA256 []byte // SHA256 hash of encrypted file
-	FileLength   int64  // File size in bytes
-	DirectPath   string // WhatsApp CDN path
-	URL          string // Full download URL
+	FileLength    int64  // File size in bytes
+	DirectPath    string // WhatsApp CDN path
+	URL           string // Full download URL
 }
 
 // extractMessageContent extracts text and media type from a WhatsApp message.

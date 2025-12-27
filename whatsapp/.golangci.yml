@@ -1,0 +1,21 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - gocritic      # opinionated checks for bugs, performance, style
+    - errorlint     # error wrapping checks
+    - bodyclose     # HTTP response body close checks
+    - unconvert     # unnecessary type conversions
+    - unparam       # unused function parameters
+    - nolintlint    # ill-formed //nolint directives
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  # Don't limit issues per linter
+  max-issues-per-linter: 0
+  max-same-issues: 0
