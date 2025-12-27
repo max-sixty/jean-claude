@@ -10,6 +10,7 @@ import click
 from googleapiclient.errors import HttpError
 
 from .auth import SCOPES_FULL, SCOPES_READONLY, TOKEN_FILE, run_auth
+from .config import is_signal_enabled, is_whatsapp_enabled
 from .gcal import cli as gcal_cli
 from .gdocs import cli as gdocs_cli
 from .gdrive import cli as gdrive_cli
@@ -341,6 +342,12 @@ def _check_whatsapp_status() -> None:
 
     click.echo("WhatsApp:")
 
+    # Check if feature is enabled
+    if not is_whatsapp_enabled():
+        click.echo("  " + click.style("Disabled", fg="yellow"))
+        click.echo("    Enable: JEAN_CLAUDE_ENABLE_WHATSAPP=1")
+        return
+
     # Check if CLI binary exists
     try:
         _get_whatsapp_cli_path()
@@ -374,6 +381,12 @@ def _check_signal_status() -> None:
     from .signal import _get_signal_cli_path, _run_signal_cli
 
     click.echo("Signal:")
+
+    # Check if feature is enabled
+    if not is_signal_enabled():
+        click.echo("  " + click.style("Disabled", fg="yellow"))
+        click.echo("    Enable: JEAN_CLAUDE_ENABLE_SIGNAL=1")
+        return
 
     # Check if CLI binary exists
     try:
