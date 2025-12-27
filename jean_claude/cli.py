@@ -477,9 +477,8 @@ def _show_calendar_counts(cal) -> None:
 
 def _show_reminders_counts() -> None:
     """Show incomplete reminders count."""
-    import subprocess
+    from .applescript import run_applescript
 
-    # Count incomplete reminders across all lists
     script = """tell application "Reminders"
     set totalCount to 0
     repeat with lst in lists
@@ -487,15 +486,9 @@ def _show_reminders_counts() -> None:
     end repeat
     return totalCount
 end tell"""
-    result = subprocess.run(
-        ["osascript", "-e", script],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0:
-        count = int(result.stdout.strip())
-        if count > 0:
-            click.echo(f"    {count} incomplete")
+    count = int(run_applescript(script))
+    if count > 0:
+        click.echo(f"    {count} incomplete")
 
 
 @cli.command()
