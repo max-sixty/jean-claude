@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 
-def paginated_output(
-    key: str, items: list, next_page_token: str | None = None
-) -> dict:
+def paginated_output(key: str, items: list, next_page_token: str | None = None) -> dict:
     """Build paginated output dict with optional nextPageToken.
 
     Args:

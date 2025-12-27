@@ -2201,14 +2201,15 @@ func normalizeFromHistory(chatJID string, msg *waWeb.WebMessageInfo) *Normalized
 	// - DMs from others: use remoteJID (the other person)
 	// - DMs from self: use our own JID
 	var sender string
-	if isGroup {
+	switch {
+	case isGroup:
 		sender = msg.GetParticipant()
-	} else if isFromMe {
+	case isFromMe:
 		// DM from self - sender is our own JID
 		if client.Store.ID != nil {
 			sender = client.Store.ID.String()
 		}
-	} else {
+	default:
 		// DM from other person
 		sender = key.GetRemoteJID()
 	}
