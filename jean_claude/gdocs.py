@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-import sys
 
 import click
 
 from .auth import build_service
-from .logging import JeanClaudeError, get_logger
+from .input import read_body_stdin
+from .logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -76,23 +76,16 @@ def create(title: str):
 @cli.command()
 @click.argument("document_id")
 def append(document_id: str):
-    """Append text to the end of a document from JSON stdin.
+    """Append text to the end of a document. Text is read from stdin.
 
     DOCUMENT_ID: The document ID (from the URL)
 
-    JSON fields: text (required)
-
     \b
-    Example:
-        echo '{"text": "New paragraph"}' | jean-claude gdocs append 1abc...xyz
+    Examples:
+        echo "New paragraph" | jean-claude gdocs append 1abc...xyz
+        cat content.txt | jean-claude gdocs append 1abc...xyz
     """
-    data = json.load(sys.stdin)
-    if "text" not in data:
-        raise JeanClaudeError("Missing required field: text")
-    text = data["text"]
-
-    if not text:
-        raise JeanClaudeError("text field cannot be empty")
+    text = read_body_stdin()
 
     service = get_docs()
 

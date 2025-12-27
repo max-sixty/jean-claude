@@ -88,14 +88,12 @@ def sent_message(runner, my_email, test_subject):
     (like test_message) fail to find the message ID.
     """
     # Create draft
-    draft_data = json.dumps(
-        {
-            "to": my_email,
-            "subject": test_subject,
-            "body": "This is an automated integration test message.\n\nIt will be trashed after the test completes.",
-        }
+    body = "This is an automated integration test message.\n\nIt will be trashed after the test completes."
+    result = runner.invoke(
+        cli,
+        ["gmail", "draft", "create", "--to", my_email, "--subject", test_subject],
+        input=body,
     )
-    result = runner.invoke(cli, ["gmail", "draft", "create"], input=draft_data)
     assert result.exit_code == 0, f"Failed to create draft: {result.output}"
 
     # draft create now returns JSON with the draft ID

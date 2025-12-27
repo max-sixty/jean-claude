@@ -6,7 +6,7 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  append   Append text to the end of a document from JSON stdin.
+  append   Append text to the end of a document.
   create   Create a new document.
   info     Get document metadata.
   read     Read document structure.

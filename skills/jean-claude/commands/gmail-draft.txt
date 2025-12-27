@@ -8,7 +8,7 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  create     Create a new email draft from JSON stdin.
+  create     Create a new email draft with body from stdin.
   delete     Permanently delete a draft.
   forward    Create a forward draft with body from stdin.
   get        Get a draft, written to separate metadata and body files.
@@ -23,15 +23,18 @@ Commands:
 
 Usage: jean-claude gmail draft create [OPTIONS]
 
-  Create a new email draft from JSON stdin.
+  Create a new email draft with body from stdin.
 
-  JSON fields: to (required), subject (required), body (required), cc, bcc
-
-  Example:
-      echo '{"to": "x@y.com", "subject": "Hi!", "body": "Hello!"}' | jean-claude gmail draft create
+  Examples:
+      echo "Hello!" | jean-claude gmail draft create --to "x@y.com" --subject "Hi!"
+      echo "Hi team" | jean-claude gmail draft create --to "a@x.com, b@y.com" --subject "Update"
 
 Options:
-  --help  Show this message and exit.
+  --to TEXT       Recipient(s) (comma-separated)  [required]
+  --subject TEXT  Email subject line  [required]
+  --cc TEXT       CC recipients (comma-separated)
+  --bcc TEXT      BCC recipients (comma-separated)
+  --help          Show this message and exit.
 
 
 ## gmail draft delete

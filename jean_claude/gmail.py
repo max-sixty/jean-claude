@@ -56,7 +56,6 @@ from __future__ import annotations
 import base64
 import html
 import json
-import sys
 import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -700,29 +699,29 @@ def draft():
 
 
 @draft.command("create")
-def draft_create():
-    """Create a new email draft from JSON stdin.
-
-    JSON fields: to (required), subject (required), body (required), cc, bcc
+@click.option("--to", "to_addr", required=True, help="Recipient(s) (comma-separated)")
+@click.option("--subject", required=True, help="Email subject line")
+@click.option("--cc", help="CC recipients (comma-separated)")
+@click.option("--bcc", help="BCC recipients (comma-separated)")
+def draft_create(to_addr: str, subject: str, cc: str | None, bcc: str | None):
+    """Create a new email draft with body from stdin.
 
     \b
-    Example:
-        echo '{"to": "x@y.com", "subject": "Hi!", "body": "Hello!"}' | jean-claude gmail draft create
+    Examples:
+        echo "Hello!" | jean-claude gmail draft create --to "x@y.com" --subject "Hi!"
+        echo "Hi team" | jean-claude gmail draft create --to "a@x.com, b@y.com" --subject "Update"
     """
-    data = json.load(sys.stdin)
-    for field in ("to", "subject", "body"):
-        if field not in data:
-            raise click.UsageError(f"Missing required field: {field}")
+    body = read_body_stdin()
 
     service = get_gmail()
-    msg = MIMEText(data["body"])
+    msg = MIMEText(body)
     msg["from"] = get_my_from_address(service)
-    msg["to"] = data["to"]
-    msg["subject"] = data["subject"]
-    if data.get("cc"):
-        msg["cc"] = data["cc"]
-    if data.get("bcc"):
-        msg["bcc"] = data["bcc"]
+    msg["to"] = to_addr
+    msg["subject"] = subject
+    if cc:
+        msg["cc"] = cc
+    if bcc:
+        msg["bcc"] = bcc
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     result = (

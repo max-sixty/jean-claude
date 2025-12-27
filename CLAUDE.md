@@ -159,10 +159,10 @@ Consistent flags across all commands:
 ### Input Conventions
 
 - **Stdin** — Content that needs to avoid shell escaping
-  - **JSON** for structured data with multiple fields (e.g., `gmail draft create`)
-  - **Plain text** for message bodies (e.g., `imessage send`, `gmail draft reply`)
+  - **JSON** for structured data (e.g., `gsheets write`, `gsheets append`)
+  - **Plain text** for message bodies (e.g., `imessage send`, `gmail draft create`)
 - **Positional args** — IDs, recipients, file paths
-- **Flags** — Options and modifiers (`-n`, `--unread`, `--cc`)
+- **Flags** — Options and modifiers (`-n`, `--unread`, `--cc`, `--to`, `--subject`)
 
 One canonical input method per command. No auto-detection between formats.
 

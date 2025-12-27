@@ -186,7 +186,9 @@ class TestGmailDraftOperations:
         with open(draft_file) as f:
             draft_data = json.load(f)
 
-        body = draft_data["body"]
+        # Body is in a separate .txt file
+        with open(draft_data["body_file"]) as f:
+            body = f.read()
 
         # Verify the forwarded message separator is present
         assert "---------- Forwarded message ----------" in body, (
@@ -207,14 +209,20 @@ class TestGmailDraftOperations:
 
     def test_draft_create_has_from_header(self, runner, my_email, draft_cleanup):
         """Test that draft create sets proper From header with display name."""
-        draft_data = json.dumps(
-            {
-                "to": my_email,
-                "subject": "Test From Header",
-                "body": "Testing From header format.",
-            }
+        body = "Testing From header format."
+        result = runner.invoke(
+            cli,
+            [
+                "gmail",
+                "draft",
+                "create",
+                "--to",
+                my_email,
+                "--subject",
+                "Test From Header",
+            ],
+            input=body,
         )
-        result = runner.invoke(cli, ["gmail", "draft", "create"], input=draft_data)
         assert result.exit_code == 0
 
         # List drafts and find ours
@@ -250,14 +258,20 @@ class TestGmailDraftOperations:
     def test_draft_update_preserves_from_header(self, runner, my_email, draft_cleanup):
         """Test that draft update preserves From header when not explicitly changed."""
         # Create initial draft
-        draft_data = json.dumps(
-            {
-                "to": my_email,
-                "subject": "Test Update Preserves From",
-                "body": "Initial body.",
-            }
+        body = "Initial body."
+        result = runner.invoke(
+            cli,
+            [
+                "gmail",
+                "draft",
+                "create",
+                "--to",
+                my_email,
+                "--subject",
+                "Test Update Preserves From",
+            ],
+            input=body,
         )
-        result = runner.invoke(cli, ["gmail", "draft", "create"], input=draft_data)
         assert result.exit_code == 0
 
         # Find the draft
@@ -287,9 +301,9 @@ class TestGmailDraftOperations:
         original_from = original_data["from"]
 
         # Update the draft body only (not From)
-        update_data = json.dumps({"body": "Updated body content."})
+        update_body = "Updated body content."
         result = runner.invoke(
-            cli, ["gmail", "draft", "update", draft_id], input=update_data
+            cli, ["gmail", "draft", "update", draft_id], input=update_body
         )
         assert result.exit_code == 0
 
@@ -308,8 +322,10 @@ class TestGmailDraftOperations:
             f"From header changed during update: '{original_from}' -> '{updated_from}'"
         )
 
-        # Verify body was updated
-        assert "Updated body content" in updated_data["body"]
+        # Verify body was updated (body is in separate .txt file)
+        with open(updated_data["body_file"]) as f:
+            updated_body = f.read()
+        assert "Updated body content" in updated_body
 
 
 class TestGmailSearch:

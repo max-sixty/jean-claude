@@ -1,13 +1,12 @@
 Usage: jean-claude gdocs append [OPTIONS] DOCUMENT_ID
 
-  Append text to the end of a document from JSON stdin.
+  Append text to the end of a document. Text is read from stdin.
 
   DOCUMENT_ID: The document ID (from the URL)
 
-  JSON fields: text (required)
-
-  Example:
-      echo '{"text": "New paragraph"}' | jean-claude gdocs append 1abc...xyz
+  Examples:
+      echo "New paragraph" | jean-claude gdocs append 1abc...xyz
+      cat content.txt | jean-claude gdocs append 1abc...xyz
 
 Options:
   --help  Show this message and exit.

@@ -389,12 +389,15 @@ Use this when you have a specific message ID and want to read its full content.
 
 ### Drafts
 
-Create drafts read JSON from stdin. Reply/forward read body from stdin.
+All draft commands read body from stdin. Create uses flags for metadata.
 
 ```bash
 # Create a new draft
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft create
-{"to": "recipient@example.com", "subject": "Subject", "body": "Message body"}
+echo "Message body" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft create --to "recipient@example.com" --subject "Subject"
+
+# Create with CC/BCC
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft create --to "recipient@example.com" --subject "Subject" --cc "cc@example.com"
+Multi-line message body here.
 EOF
 
 # Reply to a message (body from stdin, preserves threading, includes quoted original)
@@ -440,7 +443,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft delete DRAFT_ID
 **Iterating on long emails:** For complex emails, use file editing to iterate
 with the user without rewriting the full email each time:
 
-1. Create initial draft: `jean-claude gmail draft create`
+1. Create initial draft: `echo "Initial body" | jean-claude gmail draft create --to "..." --subject "..."`
 2. Get draft files: `jean-claude gmail draft get DRAFT_ID` (writes `.json` and `.txt`)
 3. Use Edit tool to modify `~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt`
 4. Update draft: `cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt | jean-claude gmail draft update DRAFT_ID`
@@ -715,8 +718,8 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs read DOCUMENT_ID --json
 ### Write Content
 
 ```bash
-# Append text to end of document (JSON stdin)
-echo '{"text": "New paragraph to add"}' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs append DOCUMENT_ID
+# Append text to end of document (plain text stdin)
+echo "New paragraph to add" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs append DOCUMENT_ID
 
 # Find and replace text
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs replace DOCUMENT_ID --find "old text" --replace-with "new text"
