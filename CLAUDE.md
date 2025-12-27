@@ -29,6 +29,49 @@ SKILL.md documents what the CLI does. CLAUDE.md documents how it works.
 The skill is the only API. Breaking changes to the library are fine — just keep
 the skill in sync.
 
+## Writing Skill Content
+
+**Skill files are instructions for agents, not documentation for humans.**
+
+When writing or editing files in `skills/jean-claude/`, remember:
+
+- The **agent** reads the skill and runs commands
+- The **user** sees natural conversation, not command output
+- Commands in skill files are what the agent runs, not what users type
+
+**Wrong framing:**
+```markdown
+After setup, run these commands to check your inbox:
+- `jean-claude gmail inbox -n 10` - Recent emails
+- `jean-claude gmail search "is:unread"` - Unread emails
+```
+
+This reads like user documentation. Users don't run commands.
+
+**Correct framing:**
+```markdown
+After setup, offer to help with common tasks. Run the appropriate command
+based on what the user wants:
+
+- Check inbox: `jean-claude gmail inbox -n 10`
+- Find unread: `jean-claude gmail search "is:unread"`
+
+Present results conversationally, not as command output.
+```
+
+This tells the agent what to do and how to communicate with the user.
+
+**Key principles:**
+
+1. **Agent runs commands** — Never tell the user to run a command. The agent
+   runs it and explains the result.
+2. **User does manual steps** — Some things require user action (granting macOS
+   permissions, scanning QR codes). Guide them through these conversationally.
+3. **Present results, not output** — Don't show raw JSON. Summarize: "You have
+   12 unread emails, 3 from today."
+4. **Conversational tone** — The skill describes how the agent should talk to
+   the user, not command syntax.
+
 ## Testing Is Real
 
 **Every command you run sends real messages to real people.**
