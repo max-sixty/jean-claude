@@ -11,6 +11,7 @@ from pathlib import Path
 
 import click
 
+from .config import is_signal_enabled
 from .input import read_body_stdin
 from .logging import JeanClaudeError, get_logger
 
@@ -189,6 +190,16 @@ def _run_signal_cli_with_stdin(*args: str, stdin_data: str) -> dict | list | Non
         return None
 
 
+def _require_signal_enabled() -> None:
+    """Check if Signal is enabled, raise error if not."""
+    if not is_signal_enabled():
+        raise JeanClaudeError(
+            "Signal is disabled. Enable via:\n"
+            "  - Environment: JEAN_CLAUDE_ENABLE_SIGNAL=1\n"
+            "  - Config: {\"enable_signal\": true} in ~/.config/jean-claude/config.json"
+        )
+
+
 @click.group()
 def cli():
     """Signal CLI - send messages and list chats.
@@ -208,12 +219,14 @@ def link(device_name: str):
     Opens a QR code in the terminal. Scan with Signal on your phone:
     Settings > Linked Devices > Link New Device.
     """
+    _require_signal_enabled()
     _run_signal_cli("link", "--device-name", device_name, capture=False)
 
 
 @cli.command()
 def status():
     """Show Signal connection status."""
+    _require_signal_enabled()
     result = _run_signal_cli("status")
     if result:
         click.echo(json.dumps(result, indent=2))
@@ -222,6 +235,7 @@ def status():
 @cli.command()
 def whoami():
     """Show account information."""
+    _require_signal_enabled()
     result = _run_signal_cli("whoami")
     if result:
         click.echo(json.dumps(result, indent=2))
@@ -234,6 +248,7 @@ def chats(max_results: int):
 
     Shows contacts and groups with names and IDs.
     """
+    _require_signal_enabled()
     result = _run_signal_cli("chats", "--max-results", str(max_results))
     if result and isinstance(result, list):
         click.echo(json.dumps(result, indent=2))
@@ -252,6 +267,7 @@ def send(recipient: str):
     Examples:
         echo "Hello!" | jean-claude signal send "abc123-uuid"
     """
+    _require_signal_enabled()
     body = read_body_stdin()
     result = _run_signal_cli_with_stdin("send", recipient, stdin_data=body)
     if result:
@@ -264,6 +280,7 @@ def receive():
 
     Downloads and displays any pending messages from Signal.
     """
+    _require_signal_enabled()
     result = _run_signal_cli("receive")
     if result:
         click.echo(json.dumps(result, indent=2))
@@ -284,6 +301,7 @@ def messages(chat_id: str, max_results: int):
         jean-claude signal messages "abc123-def456-..."
         jean-claude signal messages "abc123-def456-..." -n 20
     """
+    _require_signal_enabled()
     result = _run_signal_cli("messages", chat_id, "-n", str(max_results))
     if result:
         click.echo(json.dumps(result, indent=2))

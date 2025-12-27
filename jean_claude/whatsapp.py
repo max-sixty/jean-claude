@@ -17,6 +17,7 @@ from pathlib import Path
 
 import click
 
+from .config import is_whatsapp_enabled
 from .input import read_body_stdin
 from .logging import JeanClaudeError, get_logger
 from .messaging import (
@@ -310,6 +311,16 @@ def resolve_recipient(value: str) -> str:
     )
 
 
+def _require_whatsapp_enabled() -> None:
+    """Check if WhatsApp is enabled, raise error if not."""
+    if not is_whatsapp_enabled():
+        raise JeanClaudeError(
+            "WhatsApp is disabled. Enable via:\n"
+            "  - Environment: JEAN_CLAUDE_ENABLE_WHATSAPP=1\n"
+            "  - Config: {\"enable_whatsapp\": true} in ~/.config/jean-claude/config.json"
+        )
+
+
 @click.group()
 def cli():
     """WhatsApp CLI - send messages and list chats.
@@ -326,18 +337,21 @@ def auth():
     Opens a QR code image and displays it in the terminal. Scan with
     WhatsApp on your phone: Settings > Linked Devices > Link a Device.
     """
+    _require_whatsapp_enabled()
     _run_whatsapp_cli("auth", capture=False)
 
 
 @cli.command()
 def logout():
     """Log out and clear WhatsApp credentials."""
+    _require_whatsapp_enabled()
     _run_whatsapp_cli("logout", capture=False)
 
 
 @cli.command()
 def status():
     """Show WhatsApp connection status."""
+    _require_whatsapp_enabled()
     result = _run_whatsapp_cli("status")
     if result:
         click.echo(json.dumps(result, indent=2))
@@ -350,6 +364,7 @@ def sync():
     Downloads new messages and updates chat names. Run periodically to
     keep the local database current.
     """
+    _require_whatsapp_enabled()
     _run_whatsapp_cli("sync", capture=False)
 
 
@@ -373,6 +388,7 @@ def send(recipient: str, reply_to: str | None):
         It's great to hear from you!
         EOF
     """
+    _require_whatsapp_enabled()
     body = read_body_stdin()
     resolved = resolve_recipient(recipient)
 
@@ -401,6 +417,7 @@ def send_file(recipient: str, file_path: str):
         jean-claude whatsapp send-file "+12025551234" ./photo.jpg
         jean-claude whatsapp send-file "Dialog Brain Trust" ./document.pdf
     """
+    _require_whatsapp_enabled()
     resolved = resolve_recipient(recipient)
     result = _run_whatsapp_cli("send-file", resolved, file_path)
     if result:
@@ -416,6 +433,7 @@ def chats(max_results: int, unread: bool):
     Shows recent chats with names (for groups and contacts) and last
     message timestamps. Use --unread to show only chats with unread messages.
     """
+    _require_whatsapp_enabled()
     args = ["chats"]
     if unread:
         args.append("--unread")
@@ -460,6 +478,7 @@ def messages(chat_id: str | None, max_results: int, unread: bool, with_media: bo
         jean-claude whatsapp messages --unread
         jean-claude whatsapp messages --chat "..." --with-media
     """
+    _require_whatsapp_enabled()
     args = ["messages", f"--max-results={max_results}"]
     if chat_id:
         args.append(f"--chat={chat_id}")
@@ -476,6 +495,7 @@ def messages(chat_id: str | None, max_results: int, unread: bool, with_media: bo
 @cli.command()
 def contacts():
     """List WhatsApp contacts from local database."""
+    _require_whatsapp_enabled()
     result = _run_whatsapp_cli("contacts")
     if result:
         click.echo(json.dumps(result, indent=2))
@@ -494,6 +514,7 @@ def search(query: str, max_results: int):
         jean-claude whatsapp search "dinner plans"
         jean-claude whatsapp search "meeting" -n 20
     """
+    _require_whatsapp_enabled()
     result = _run_whatsapp_cli("search", query, f"--max-results={max_results}")
     if result:
         click.echo(json.dumps(result, indent=2))
@@ -510,6 +531,7 @@ def participants(chat_id: str):
     Examples:
         jean-claude whatsapp participants "120363277025153496@g.us"
     """
+    _require_whatsapp_enabled()
     result = _run_whatsapp_cli("participants", chat_id)
     if result:
         click.echo(json.dumps(result, indent=2))
@@ -526,6 +548,7 @@ def mark_read(chat_id: str):
     Examples:
         jean-claude whatsapp mark-read "120363277025153496@g.us"
     """
+    _require_whatsapp_enabled()
     result = _run_whatsapp_cli("mark-read", chat_id)
     if result:
         click.echo(json.dumps(result, indent=2))
@@ -549,6 +572,7 @@ def download(message_id: str, output: str | None):
         jean-claude whatsapp download "3EB0ABC123..."
         jean-claude whatsapp download "3EB0ABC123..." --output ./photo.jpg
     """
+    _require_whatsapp_enabled()
     args = ["download", message_id]
     if output:
         args.append(f"--output={output}")
