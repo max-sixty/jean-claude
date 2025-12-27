@@ -1449,6 +1449,25 @@ def _extract_attachments(parts: list, attachments: list) -> None:
             _extract_attachments(part["parts"], attachments)
 
 
+def extract_attachments_from_payload(payload: dict) -> list[dict]:
+    """Extract all attachments from a message payload.
+
+    Handles two cases:
+    1. Multipart messages with attachments in nested parts
+    2. Single-part messages where the payload itself is an attachment
+       (e.g., DMARC reports sent as a raw zip file)
+    """
+    attachments: list[dict] = []
+
+    if "parts" in payload:
+        _extract_attachments(payload["parts"], attachments)
+    else:
+        # Check if payload itself is an attachment (single-part message)
+        _extract_attachments([payload], attachments)
+
+    return attachments
+
+
 @cli.command()
 @click.argument("message_id")
 def attachments(message_id: str):
@@ -1466,11 +1485,8 @@ def attachments(message_id: str):
         .execute()
     )
 
-    attachment_list: list[dict] = []
     payload = msg.get("payload", {})
-    if "parts" in payload:
-        _extract_attachments(payload["parts"], attachment_list)
-
+    attachment_list = extract_attachments_from_payload(payload)
     click.echo(json.dumps(attachment_list, indent=2))
 
 

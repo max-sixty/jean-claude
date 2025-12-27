@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jean_claude.gmail import _extract_attachments, _strip_html, decode_body
+from jean_claude.gmail import (
+    _extract_attachments,
+    _strip_html,
+    decode_body,
+    extract_attachments_from_payload,
+)
 
 
 class TestStripHtml:
@@ -177,4 +182,73 @@ class TestExtractAttachments:
         ]
         attachments: list = []
         _extract_attachments(parts, attachments)
+        assert attachments == []
+
+    def test_payload_is_attachment(self):
+        """Test extracting attachment when payload itself is the attachment.
+
+        This happens with emails like DMARC reports where the entire payload
+        is a single attachment (e.g., a zip file) without nested parts.
+        """
+        # Payload structure when email body IS the attachment
+        payload = {
+            "partId": "",
+            "mimeType": "application/zip",
+            "filename": "dmarc-report.zip",
+            "headers": [{"name": "Content-Type", "value": "application/zip"}],
+            "body": {"attachmentId": "ANGjdJ9PBPzOfITU", "size": 726},
+        }
+        attachments: list = []
+        _extract_attachments([payload], attachments)
+        assert len(attachments) == 1
+        assert attachments[0]["filename"] == "dmarc-report.zip"
+        assert attachments[0]["mimeType"] == "application/zip"
+        assert attachments[0]["attachmentId"] == "ANGjdJ9PBPzOfITU"
+
+
+class TestExtractAttachmentsFromPayload:
+    """Tests for extract_attachments_from_payload function."""
+
+    def test_payload_without_parts_is_attachment(self):
+        """Test that payload-level attachments are found (no parts field).
+
+        When an email's payload IS the attachment (like DMARC reports),
+        there are no nested parts - the payload itself has the attachment info.
+        """
+        # Payload structure when email body IS the attachment (no parts)
+        payload = {
+            "partId": "",
+            "mimeType": "application/zip",
+            "filename": "dmarc-report.zip",
+            "headers": [{"name": "Content-Type", "value": "application/zip"}],
+            "body": {"attachmentId": "ANGjdJ9PBPzOfITU", "size": 726},
+        }
+        attachments = extract_attachments_from_payload(payload)
+        assert len(attachments) == 1
+        assert attachments[0]["filename"] == "dmarc-report.zip"
+
+    def test_payload_with_parts(self):
+        """Test normal multipart message with attachments in parts."""
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {"mimeType": "text/plain", "body": {"data": "SGVsbG8="}},
+                {
+                    "filename": "report.pdf",
+                    "mimeType": "application/pdf",
+                    "body": {"attachmentId": "abc123", "size": 1234},
+                },
+            ],
+        }
+        attachments = extract_attachments_from_payload(payload)
+        assert len(attachments) == 1
+        assert attachments[0]["filename"] == "report.pdf"
+
+    def test_empty_payload(self):
+        """Test payload with no attachments."""
+        payload = {
+            "mimeType": "text/plain",
+            "body": {"data": "SGVsbG8="},
+        }
+        attachments = extract_attachments_from_payload(payload)
         assert attachments == []
