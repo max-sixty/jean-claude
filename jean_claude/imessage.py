@@ -424,24 +424,26 @@ def resolve_recipient(value: str) -> str:
     )
 
 
+def find_contacts_by_name(name: str) -> list[tuple[str, list[str]]]:
+    """Find all contacts matching a name with their phone numbers.
+
+    Returns list of (contact_name, [phone_numbers]) tuples.
+    Only returns contacts with at least one valid phone number.
+    """
+    return [
+        (contact_name, valid_phones)
+        for contact_name, phones in search_contacts_by_name(name)
+        if (valid_phones := [p for p in phones if any(c.isdigit() for c in p)])
+    ]
+
+
 def resolve_contact_to_phone(name: str) -> str:
     """Resolve a contact name to a phone number (raw format from Contacts.app).
 
-    Raises ClickException if no match found or ambiguous.
+    Raises JeanClaudeError if no match found or ambiguous.
+    Use find_contacts_by_name() for read operations where multiple matches are OK.
     """
-    contacts = search_contacts_by_name(name)
-
-    if not contacts:
-        raise JeanClaudeError(f"No contact found matching '{name}' with a phone number")
-
-    # Build list of contacts with their valid phones
-    # [(contact_name, [raw_phone, ...]), ...]
-    contacts_with_phones: list[tuple[str, list[str]]] = []
-    for contact_name, phones in contacts:
-        # Filter to phones that have at least one digit
-        valid_phones = [p for p in phones if any(c.isdigit() for c in p)]
-        if valid_phones:
-            contacts_with_phones.append((contact_name, valid_phones))
+    contacts_with_phones = find_contacts_by_name(name)
 
     if not contacts_with_phones:
         raise JeanClaudeError(f"No contact found matching '{name}' with a phone number")
@@ -478,7 +480,7 @@ class MessageQuery:
     """Query parameters for fetching messages from the database.
 
     Filtering:
-        chat_identifier: Filter to a specific chat (phone/email/chat ID)
+        chat_identifiers: Filter to specific chats (phones/emails/chat IDs)
         search_text: Search in message text (LIKE match)
         unread_only: Only fetch unread messages from others
         include_spam: Include filtered/spam messages (excluded by default)
@@ -490,7 +492,7 @@ class MessageQuery:
     """
 
     # Filtering
-    chat_identifier: str | None = None
+    chat_identifiers: list[str] | None = None
     search_text: str | None = None
     unread_only: bool = False
     include_spam: bool = False
@@ -525,9 +527,14 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
     if not query.include_spam:
         where_clauses.append("(c.is_filtered IS NULL OR c.is_filtered < 2)")
 
-    if query.chat_identifier:
-        where_clauses.append("(c.chat_identifier = ? OR h.id = ?)")
-        params.extend([query.chat_identifier, query.chat_identifier])
+    if query.chat_identifiers:
+        # Build OR clause for multiple identifiers
+        id_conditions = " OR ".join(
+            "(c.chat_identifier = ? OR h.id = ?)" for _ in query.chat_identifiers
+        )
+        where_clauses.append(f"({id_conditions})")
+        for identifier in query.chat_identifiers:
+            params.extend([identifier, identifier])
 
     if query.unread_only:
         where_clauses.append("m.is_read = 0 AND m.is_from_me = 0")
@@ -1018,27 +1025,44 @@ def messages(
         jean-claude imessage messages --unread
         jean-claude imessage messages --unread --include-spam
     """
-    # Resolve chat identifier from name or chat_id
-    chat_identifier: str | None = None
+    # Resolve chat identifiers from name or chat_id
+    chat_identifiers: list[str] | None = None
     if name:
-        raw_phone = resolve_contact_to_phone(name)
-        messages_chat_id = get_chat_id_for_phone(raw_phone)
-        if not messages_chat_id:
+        contacts = find_contacts_by_name(name)
+        if not contacts:
             raise JeanClaudeError(
-                f"No message history found for '{name}' ({raw_phone})"
+                f"No contact found matching '{name}' with a phone number"
             )
-        chat_identifier = messages_chat_id.split(";")[-1]
+        # Collect all phone numbers from all matching contacts
+        all_phones = [phone for _, phones in contacts for phone in phones]
+        # Find chat IDs for these phones
+        chat_identifiers = []
+        for phone in all_phones:
+            chat_id_for_phone = get_chat_id_for_phone(phone)
+            if chat_id_for_phone:
+                chat_identifiers.append(chat_id_for_phone.split(";")[-1])
+        if not chat_identifiers:
+            contact_names = [c[0] for c in contacts]
+            raise JeanClaudeError(
+                f"No message history found for contacts matching '{name}' ({', '.join(contact_names)})"
+            )
+        # Log which contacts we're showing messages from
+        if len(contacts) > 1:
+            contact_names = [c[0] for c in contacts]
+            logger.info(
+                "Showing messages from multiple contacts", contacts=contact_names
+            )
     elif chat_id:
-        chat_identifier = chat_id.split(";")[-1] if ";" in chat_id else chat_id
+        chat_identifiers = [chat_id.split(";")[-1] if ";" in chat_id else chat_id]
 
-    # When viewing a specific chat, show both directions in chronological order
-    viewing_chat = chat_identifier is not None
+    # When viewing specific chat(s), show both directions in chronological order
+    viewing_chat = chat_identifiers is not None
 
     conn = get_db_connection()
     result = fetch_messages(
         conn,
         MessageQuery(
-            chat_identifier=chat_identifier,
+            chat_identifiers=chat_identifiers,
             unread_only=unread,
             include_spam=include_spam,
             show_both_directions=viewing_chat,

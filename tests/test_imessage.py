@@ -239,7 +239,7 @@ class TestFetchMessagesWithFilters:
 
         # Filter by Alice's chat identifier
         query = MessageQuery(
-            chat_identifier="+15551111111",
+            chat_identifiers=["+15551111111"],
             max_results=10,
         )
         messages = fetch_messages(conn, query)

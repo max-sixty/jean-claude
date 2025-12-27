@@ -273,8 +273,8 @@ def read(spreadsheet_id: str):
 
 When adding or modifying messaging features (iMessage, WhatsApp, Gmail):
 
-**Never send to ambiguous recipients.** Any code that resolves names to IDs
-must fail if there's ambiguity:
+**Never send to ambiguous recipients.** Any code that sends messages and
+resolves names to IDs must fail if there's ambiguity:
 
 - Multiple chats match a name → fail, list all matches with IDs
 - Multiple contacts match a name → fail, list all matches
@@ -283,6 +283,11 @@ must fail if there's ambiguity:
 
 Sending a message to the wrong person is worse than not sending. Fail loudly
 and show options rather than silently picking one.
+
+**Read operations are different.** When listing or searching messages by name,
+showing results from multiple matching contacts is helpful — the user can
+review and refine. Read commands should log which contacts matched so the
+user knows what they're seeing.
 
 ## Integration Tests
 

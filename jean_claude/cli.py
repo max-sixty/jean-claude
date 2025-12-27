@@ -38,7 +38,6 @@ class ErrorHandlingGroup(click.Group):
     def _handle_error(self, message: str) -> None:
         """Log error and exit cleanly."""
         logger.error(message)
-        click.echo(f"Error: {message}", err=True)
         sys.exit(1)
 
     def _http_error_message(self, e: HttpError) -> str:
