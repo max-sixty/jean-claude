@@ -822,7 +822,7 @@ func doSync(ctx context.Context) (messagesSaved int64, namesUpdated int, err err
 		case *events.HistorySync:
 			for _, conv := range v.Data.Conversations {
 				chatJID := conv.GetID()
-				isGroup := strings.Contains(chatJID, "@g.us")
+				isGroup := strings.HasSuffix(chatJID, "@g.us")
 
 				// Get unread count from WhatsApp - this is the authoritative source
 				unreadCount := int(conv.GetUnreadCount())
@@ -857,20 +857,23 @@ func doSync(ctx context.Context) (messagesSaved int64, namesUpdated int, err err
 				// Mark the N most recent incoming messages as unread based on WhatsApp's unreadCount.
 				// Messages from self are always read. For incoming messages, we count through
 				// the sorted list: the first unreadCount incoming messages are unread.
+				// Only count messages that are actually saved (not reactions or protocol messages).
 				incomingCount := 0
 				for _, m := range messages {
 					// Determine read status:
 					// - Messages from self are always read
 					// - For incoming messages: unread if within unreadCount, else read
 					isRead := m.isFromMe || incomingCount >= unreadCount
-					if !m.isFromMe {
-						incomingCount++
-					}
 
-					if err := saveHistoryMessageWithReadStatus(chatJID, m.msg, isRead); err != nil {
+					saved, err := saveHistoryMessageWithReadStatus(chatJID, m.msg, isRead)
+					if err != nil {
 						fmt.Fprintf(os.Stderr, "Failed to save history message: %v\n", err)
-					} else {
+					} else if saved {
 						messageCount.Add(1)
+						// Only count saved incoming messages toward unread budget
+						if !m.isFromMe {
+							incomingCount++
+						}
 					}
 				}
 
@@ -1534,7 +1537,7 @@ func cmdParticipants(args []string) error {
 		return fmt.Errorf("invalid group JID: %w", err)
 	}
 
-	if !strings.Contains(groupJID, "@g.us") {
+	if !strings.HasSuffix(groupJID, "@g.us") {
 		return fmt.Errorf("not a group JID (must end with @g.us)")
 	}
 
@@ -1705,7 +1708,7 @@ func cmdMarkRead(args []string) error {
 				if err == nil {
 					// For groups, we need the sender JID; for DMs, sender is the chat JID
 					var sender types.JID
-					if strings.Contains(chatJID, "@g.us") && senderJID != "" {
+					if strings.HasSuffix(chatJID, "@g.us") && senderJID != "" {
 						sender, _ = types.ParseJID(senderJID)
 					} else {
 						sender = jid
@@ -2099,7 +2102,7 @@ func lookupContactByName(name string) (string, error) {
 			return "", fmt.Errorf("failed to scan contact: %w", err)
 		}
 		// Only include individual contacts (not groups)
-		if !strings.Contains(m.jid, "@g.us") {
+		if !strings.HasSuffix(m.jid, "@g.us") {
 			matches = append(matches, m)
 		}
 	}
@@ -2156,102 +2159,60 @@ func getQuotedContext(messageID, chatJID string) (*waProto.ContextInfo, error) {
 	}, nil
 }
 
-func saveMessage(evt *events.Message) error {
-	info := evt.Info
-
-	// Handle reaction messages separately - they go to reactions table, not messages
-	if rm := evt.Message.GetReactionMessage(); rm != nil {
-		return saveReactionFromMessage(info, rm)
-	}
-
-	content := extractMessageContentFull(evt.Message)
-
-	// Skip system/protocol messages that have no user-visible content
-	switch content.MediaType {
-	case "key_distribution", "context_info", "protocol":
-		return nil
-	}
-
-	// New messages from others are unread; messages from self are read
-	// UPSERT: insert new messages, preserve read status if already marked read (MAX prevents read→unread)
-	isRead := boolToInt(info.IsFromMe)
-
-	// Prepare media metadata for storage
-	var mimeType, directPath, mediaURL sql.NullString
-	var mediaKey, fileSHA256, fileEncSHA256 []byte
-	var fileLength sql.NullInt64
-
-	if content.Media != nil {
-		mimeType = sql.NullString{String: content.Media.MimeType, Valid: content.Media.MimeType != ""}
-		directPath = sql.NullString{String: content.Media.DirectPath, Valid: content.Media.DirectPath != ""}
-		mediaURL = sql.NullString{String: content.Media.URL, Valid: content.Media.URL != ""}
-		mediaKey = content.Media.MediaKey
-		fileSHA256 = content.Media.FileSHA256
-		fileEncSHA256 = content.Media.FileEncSHA256
-		if content.Media.FileLength > 0 {
-			fileLength = sql.NullInt64{Int64: content.Media.FileLength, Valid: true}
-		}
-	}
-
-	// Prepare reply context for storage
-	var replyToID, replyToSender, replyToText sql.NullString
-	if content.Reply != nil {
-		replyToID = sql.NullString{String: content.Reply.ID, Valid: content.Reply.ID != ""}
-		replyToSender = sql.NullString{String: content.Reply.Sender, Valid: content.Reply.Sender != ""}
-		replyToText = sql.NullString{String: content.Reply.Text, Valid: content.Reply.Text != ""}
-	}
-
-	_, err := messageDB.Exec(`
-		INSERT INTO messages (id, chat_jid, sender_jid, sender_name, timestamp, text, media_type, is_from_me, is_read, created_at,
-			mime_type_full, media_key, file_sha256, file_enc_sha256, file_length, direct_path, media_url,
-			reply_to_id, reply_to_sender, reply_to_text)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET
-			text = excluded.text,
-			media_type = excluded.media_type,
-			is_read = MAX(messages.is_read, excluded.is_read),
-			mime_type_full = COALESCE(excluded.mime_type_full, messages.mime_type_full),
-			media_key = COALESCE(excluded.media_key, messages.media_key),
-			file_sha256 = COALESCE(excluded.file_sha256, messages.file_sha256),
-			file_enc_sha256 = COALESCE(excluded.file_enc_sha256, messages.file_enc_sha256),
-			file_length = COALESCE(excluded.file_length, messages.file_length),
-			direct_path = COALESCE(excluded.direct_path, messages.direct_path),
-			media_url = COALESCE(excluded.media_url, messages.media_url),
-			reply_to_id = COALESCE(excluded.reply_to_id, messages.reply_to_id),
-			reply_to_sender = COALESCE(excluded.reply_to_sender, messages.reply_to_sender),
-			reply_to_text = COALESCE(excluded.reply_to_text, messages.reply_to_text)
-	`, info.ID, info.Chat.String(), info.Sender.String(), info.PushName, info.Timestamp.Unix(),
-		content.Text, content.MediaType, boolToInt(info.IsFromMe), isRead, time.Now().Unix(),
-		mimeType, mediaKey, fileSHA256, fileEncSHA256, fileLength, directPath, mediaURL,
-		replyToID, replyToSender, replyToText)
-
-	if err == nil {
-		// Update chat timestamp (best-effort, don't fail message save)
-		_ = saveChat(info.Chat.String(), "", info.Chat.Server == types.GroupServer, info.Timestamp.Unix(), false)
-	}
-
-	return err
+// NormalizedMessage contains the common fields extracted from both live events and history sync.
+type NormalizedMessage struct {
+	ID        string
+	ChatJID   string
+	SenderJID string
+	PushName  string
+	Timestamp int64
+	IsFromMe  bool
+	IsGroup   bool
+	Message   *waE2E.Message
 }
 
-// saveHistoryMessageWithReadStatus saves a message from history sync with the specified read status.
-// Uses UPSERT with MAX(is_read) to only move messages from unread→read, never backwards.
-// This prevents history sync from marking already-read messages as unread.
-func saveHistoryMessageWithReadStatus(chatJID string, msg *waWeb.WebMessageInfo, isRead bool) error {
+// normalizeFromEvent converts a live message event to NormalizedMessage.
+func normalizeFromEvent(evt *events.Message) NormalizedMessage {
+	return NormalizedMessage{
+		ID:        evt.Info.ID,
+		ChatJID:   evt.Info.Chat.String(),
+		SenderJID: evt.Info.Sender.String(),
+		PushName:  evt.Info.PushName,
+		Timestamp: evt.Info.Timestamp.Unix(),
+		IsFromMe:  evt.Info.IsFromMe,
+		IsGroup:   evt.Info.Chat.Server == types.GroupServer,
+		Message:   evt.Message,
+	}
+}
+
+// normalizeFromHistory converts a history sync message to NormalizedMessage.
+func normalizeFromHistory(chatJID string, msg *waWeb.WebMessageInfo) *NormalizedMessage {
 	if msg == nil {
 		return nil
 	}
-
 	key := msg.GetKey()
 	if key == nil {
 		return nil
 	}
 
-	content := extractMessageContentFull(msg.GetMessage())
+	isFromMe := key.GetFromMe()
+	isGroup := strings.HasSuffix(chatJID, "@g.us")
 
-	// Skip system/protocol messages that have no user-visible content
-	switch content.MediaType {
-	case "key_distribution", "context_info", "protocol":
-		return nil
+	// Determine sender:
+	// - Groups: use participant field
+	// - DMs from others: use remoteJID (the other person)
+	// - DMs from self: use our own JID
+	var sender string
+	if isGroup {
+		sender = msg.GetParticipant()
+	} else if isFromMe {
+		// DM from self - sender is our own JID
+		if client.Store.ID != nil {
+			sender = client.Store.ID.String()
+		}
+	} else {
+		// DM from other person
+		sender = key.GetRemoteJID()
 	}
 
 	timestamp := int64(msg.GetMessageTimestamp())
@@ -2259,15 +2220,66 @@ func saveHistoryMessageWithReadStatus(chatJID string, msg *waWeb.WebMessageInfo,
 		timestamp = time.Now().Unix()
 	}
 
-	// Sender is participant (for groups) or remoteJid (for DMs)
-	sender := msg.GetParticipant()
-	if sender == "" {
-		sender = key.GetRemoteJID()
+	return &NormalizedMessage{
+		ID:        key.GetID(),
+		ChatJID:   chatJID,
+		SenderJID: sender,
+		PushName:  msg.GetPushName(),
+		Timestamp: timestamp,
+		IsFromMe:  isFromMe,
+		IsGroup:   isGroup,
+		Message:   msg.GetMessage(),
+	}
+}
+
+func saveMessage(evt *events.Message) error {
+	normalized := normalizeFromEvent(evt)
+	_, err := saveNormalizedMessage(&normalized, normalized.IsFromMe, true)
+	return err
+}
+
+// saveHistoryMessageWithReadStatus saves a message from history sync with the specified read status.
+// Returns (saved, err) where saved indicates if the message was inserted into the messages table
+// (as opposed to skipped or saved as a reaction). This helps the caller track unread counts correctly.
+func saveHistoryMessageWithReadStatus(chatJID string, msg *waWeb.WebMessageInfo, isRead bool) (bool, error) {
+	normalized := normalizeFromHistory(chatJID, msg)
+	if normalized == nil {
+		return false, nil
+	}
+	return saveNormalizedMessage(normalized, isRead, false)
+}
+
+// saveNormalizedMessage saves a message to the database.
+// isRead determines the initial read status.
+// isLive indicates whether this is from a live event (updates text/media on conflict, triggers chat update).
+// Returns (saved, err) where saved indicates if the message was inserted into the messages table.
+// Reactions, protocol messages, and empty messages return saved=false.
+func saveNormalizedMessage(msg *NormalizedMessage, isRead bool, isLive bool) (bool, error) {
+	if msg.Message == nil {
+		return false, nil
 	}
 
-	// Save contact info from message sender (best-effort)
-	if pushName := msg.GetPushName(); pushName != "" && sender != "" {
-		_ = saveContact(sender, "", pushName)
+	// Handle reaction messages separately - they go to reactions table, not messages
+	if rm := msg.Message.GetReactionMessage(); rm != nil {
+		return false, saveReaction(msg, rm)
+	}
+
+	content := extractMessageContentFull(msg.Message)
+
+	// Skip system/protocol messages that have no user-visible content
+	switch content.MediaType {
+	case "key_distribution", "context_info", "protocol":
+		return false, nil
+	}
+
+	// Skip if no content was extracted (unhandled message types)
+	if content.MediaType == "" && content.Text == "" {
+		return false, nil
+	}
+
+	// Save contact info from history sync messages (live events use PushName handler)
+	if !isLive && msg.PushName != "" && msg.SenderJID != "" {
+		_ = saveContact(msg.SenderJID, "", msg.PushName)
 	}
 
 	// Prepare media metadata for storage
@@ -2295,31 +2307,63 @@ func saveHistoryMessageWithReadStatus(chatJID string, msg *waWeb.WebMessageInfo,
 		replyToText = sql.NullString{String: content.Reply.Text, Valid: content.Reply.Text != ""}
 	}
 
-	// UPSERT pattern: insert new messages, update existing ones only to mark as read (never unread).
-	// MAX(is_read, excluded.is_read) ensures read status only moves unread→read, never back.
-	_, err := messageDB.Exec(`
-		INSERT INTO messages (id, chat_jid, sender_jid, sender_name, timestamp, text, media_type, is_from_me, is_read, created_at,
-			mime_type_full, media_key, file_sha256, file_enc_sha256, file_length, direct_path, media_url,
-			reply_to_id, reply_to_sender, reply_to_text)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET
-			is_read = MAX(messages.is_read, excluded.is_read),
-			mime_type_full = COALESCE(excluded.mime_type_full, messages.mime_type_full),
-			media_key = COALESCE(excluded.media_key, messages.media_key),
-			file_sha256 = COALESCE(excluded.file_sha256, messages.file_sha256),
-			file_enc_sha256 = COALESCE(excluded.file_enc_sha256, messages.file_enc_sha256),
-			file_length = COALESCE(excluded.file_length, messages.file_length),
-			direct_path = COALESCE(excluded.direct_path, messages.direct_path),
-			media_url = COALESCE(excluded.media_url, messages.media_url),
-			reply_to_id = COALESCE(excluded.reply_to_id, messages.reply_to_id),
-			reply_to_sender = COALESCE(excluded.reply_to_sender, messages.reply_to_sender),
-			reply_to_text = COALESCE(excluded.reply_to_text, messages.reply_to_text)
-	`, key.GetID(), chatJID, sender, msg.GetPushName(), timestamp,
-		content.Text, content.MediaType, boolToInt(key.GetFromMe()), boolToInt(isRead), time.Now().Unix(),
-		mimeType, mediaKey, fileSHA256, fileEncSHA256, fileLength, directPath, mediaURL,
-		replyToID, replyToSender, replyToText)
+	// Choose SQL based on whether to update content on conflict (live messages can be edits)
+	var err error
+	if isLive {
+		_, err = messageDB.Exec(`
+			INSERT INTO messages (id, chat_jid, sender_jid, sender_name, timestamp, text, media_type, is_from_me, is_read, created_at,
+				mime_type_full, media_key, file_sha256, file_enc_sha256, file_length, direct_path, media_url,
+				reply_to_id, reply_to_sender, reply_to_text)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET
+				text = excluded.text,
+				media_type = excluded.media_type,
+				is_read = MAX(messages.is_read, excluded.is_read),
+				mime_type_full = COALESCE(excluded.mime_type_full, messages.mime_type_full),
+				media_key = COALESCE(excluded.media_key, messages.media_key),
+				file_sha256 = COALESCE(excluded.file_sha256, messages.file_sha256),
+				file_enc_sha256 = COALESCE(excluded.file_enc_sha256, messages.file_enc_sha256),
+				file_length = COALESCE(excluded.file_length, messages.file_length),
+				direct_path = COALESCE(excluded.direct_path, messages.direct_path),
+				media_url = COALESCE(excluded.media_url, messages.media_url),
+				reply_to_id = COALESCE(excluded.reply_to_id, messages.reply_to_id),
+				reply_to_sender = COALESCE(excluded.reply_to_sender, messages.reply_to_sender),
+				reply_to_text = COALESCE(excluded.reply_to_text, messages.reply_to_text)
+		`, msg.ID, msg.ChatJID, msg.SenderJID, msg.PushName, msg.Timestamp,
+			content.Text, content.MediaType, boolToInt(msg.IsFromMe), boolToInt(isRead), time.Now().Unix(),
+			mimeType, mediaKey, fileSHA256, fileEncSHA256, fileLength, directPath, mediaURL,
+			replyToID, replyToSender, replyToText)
+	} else {
+		// History sync: don't update text/media_type on conflict (preserve existing content)
+		_, err = messageDB.Exec(`
+			INSERT INTO messages (id, chat_jid, sender_jid, sender_name, timestamp, text, media_type, is_from_me, is_read, created_at,
+				mime_type_full, media_key, file_sha256, file_enc_sha256, file_length, direct_path, media_url,
+				reply_to_id, reply_to_sender, reply_to_text)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET
+				is_read = MAX(messages.is_read, excluded.is_read),
+				mime_type_full = COALESCE(excluded.mime_type_full, messages.mime_type_full),
+				media_key = COALESCE(excluded.media_key, messages.media_key),
+				file_sha256 = COALESCE(excluded.file_sha256, messages.file_sha256),
+				file_enc_sha256 = COALESCE(excluded.file_enc_sha256, messages.file_enc_sha256),
+				file_length = COALESCE(excluded.file_length, messages.file_length),
+				direct_path = COALESCE(excluded.direct_path, messages.direct_path),
+				media_url = COALESCE(excluded.media_url, messages.media_url),
+				reply_to_id = COALESCE(excluded.reply_to_id, messages.reply_to_id),
+				reply_to_sender = COALESCE(excluded.reply_to_sender, messages.reply_to_sender),
+				reply_to_text = COALESCE(excluded.reply_to_text, messages.reply_to_text)
+		`, msg.ID, msg.ChatJID, msg.SenderJID, msg.PushName, msg.Timestamp,
+			content.Text, content.MediaType, boolToInt(msg.IsFromMe), boolToInt(isRead), time.Now().Unix(),
+			mimeType, mediaKey, fileSHA256, fileEncSHA256, fileLength, directPath, mediaURL,
+			replyToID, replyToSender, replyToText)
+	}
 
-	return err
+	if err == nil && isLive {
+		// Update chat timestamp (best-effort, don't fail message save)
+		_ = saveChat(msg.ChatJID, "", msg.IsGroup, msg.Timestamp, false)
+	}
+
+	return err == nil, err
 }
 
 func saveContact(jid, name, pushName string) error {
@@ -2350,7 +2394,8 @@ func markMessageRead(msgID string) error {
 	return err
 }
 
-func saveReactionFromMessage(info types.MessageInfo, rm *waE2E.ReactionMessage) error {
+// saveReaction saves a reaction to the reactions table using the normalized message info.
+func saveReaction(msg *NormalizedMessage, rm *waE2E.ReactionMessage) error {
 	emoji := rm.GetText()
 	targetKey := rm.GetKey()
 	if targetKey == nil {
@@ -2361,7 +2406,7 @@ func saveReactionFromMessage(info types.MessageInfo, rm *waE2E.ReactionMessage) 
 	// Empty emoji means reaction was removed
 	if emoji == "" {
 		_, err := messageDB.Exec(`DELETE FROM reactions WHERE message_id = ? AND sender_jid = ?`,
-			messageID, info.Sender.String())
+			messageID, msg.SenderJID)
 		return err
 	}
 
@@ -2372,7 +2417,7 @@ func saveReactionFromMessage(info types.MessageInfo, rm *waE2E.ReactionMessage) 
 		ON CONFLICT(message_id, sender_jid) DO UPDATE SET
 			emoji = excluded.emoji,
 			timestamp = excluded.timestamp
-	`, messageID, info.Chat.String(), info.Sender.String(), info.PushName, emoji, info.Timestamp.Unix())
+	`, messageID, msg.ChatJID, msg.SenderJID, msg.PushName, emoji, msg.Timestamp)
 	return err
 }
 
