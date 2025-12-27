@@ -401,21 +401,13 @@ def _show_imessage_counts(conn) -> None:
     - Has content (text or attachments, not ghost records)
     """
     cursor = conn.execute("""
-        SELECT COUNT(*) FROM message
-        WHERE is_read = 0 AND is_from_me = 0 AND item_type = 0
-          AND (text IS NOT NULL AND text != '' OR cache_has_attachments = 1)
-    """)
-    total_unread = cursor.fetchone()[0]
-
-    cursor = conn.execute("""
-        SELECT COUNT(DISTINCT c.ROWID)
-        FROM chat c
-        JOIN chat_message_join cmj ON c.ROWID = cmj.chat_id
-        JOIN message m ON cmj.message_id = m.ROWID
+        SELECT COUNT(*), COUNT(DISTINCT cmj.chat_id)
+        FROM message m
+        JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
         WHERE m.is_read = 0 AND m.is_from_me = 0 AND m.item_type = 0
           AND (m.text IS NOT NULL AND m.text != '' OR m.cache_has_attachments = 1)
     """)
-    chats_with_unread = cursor.fetchone()[0]
+    total_unread, chats_with_unread = cursor.fetchone()
 
     if total_unread > 0:
         click.echo(
@@ -451,20 +443,7 @@ def _show_calendar_counts(cal) -> None:
     today_end = today_start + timedelta(days=1)
     week_end = today_start + timedelta(days=7)
 
-    # Count events today
-    today_result = (
-        cal.events()
-        .list(
-            calendarId="primary",
-            timeMin=today_start.isoformat(),
-            timeMax=today_end.isoformat(),
-            singleEvents=True,
-        )
-        .execute()
-    )
-    today_count = len(today_result.get("items", []))
-
-    # Count events this week
+    # Single API call for the week, filter locally for today
     week_result = (
         cal.events()
         .list(
@@ -475,7 +454,17 @@ def _show_calendar_counts(cal) -> None:
         )
         .execute()
     )
-    week_count = len(week_result.get("items", []))
+    week_events = week_result.get("items", [])
+    week_count = len(week_events)
+
+    # Filter for today: event starts before end of today
+    today_end_iso = today_end.isoformat()
+    today_count = sum(
+        1
+        for e in week_events
+        if e.get("start", {}).get("dateTime", e.get("start", {}).get("date", ""))
+        < today_end_iso
+    )
 
     if today_count > 0 or week_count > 0:
         parts = []
