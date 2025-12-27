@@ -480,6 +480,44 @@ print(urllib.parse.unquote(encoded_url))
 
 All calendar commands return JSON.
 
+### Calendar Safety (Non-Negotiable)
+
+**Dates are high-stakes. Mistakes waste people's time and cause confusion.**
+
+1. **Never guess dates from relative terms.** When the user says "Sunday",
+   "next week", or "tomorrow", explicitly calculate the date:
+   ```bash
+   date -v+0d "+%A %Y-%m-%d"  # Today's date and day of week
+   ```
+   Then verify: "Sunday is 2025-12-28 — creating the event for that date."
+
+2. **Never hallucinate email addresses.** If the user says "add Ursula", look
+   up her email (search contacts, check previous calendar events, or ask).
+   Never invent addresses like `ursula@domain.com`.
+
+3. **Verify after creating.** After `gcal create`, immediately run `gcal list`
+   for that date to confirm the event appears on the correct day. If wrong,
+   delete and recreate before telling the user it's done.
+
+4. **Show what you're creating.** Before running `gcal create`, state:
+   - Event title
+   - Date and time (with day of week)
+   - Attendees (with their actual email addresses)
+
+**Example workflow:**
+```
+User: "Add a meeting with Alice for next Tuesday at 2pm"
+
+1. Check today's date: date -v+0d "+%A %Y-%m-%d"  → "Friday 2025-12-26"
+2. Calculate: next Tuesday = 2025-12-30
+3. Look up Alice's email (search contacts or ask user)
+4. State: "Creating 'Meeting with Alice' for Tuesday 2025-12-30 at 2pm,
+   inviting alice@example.com"
+5. Create the event
+6. Verify: gcal list --from 2025-12-30 --to 2025-12-30
+7. Confirm to user only after verification
+```
+
 ### List Events
 
 ```bash

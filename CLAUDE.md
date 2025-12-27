@@ -67,6 +67,11 @@ auto-generated command reference. The script creates files in
 `skills/jean-claude/commands/` with hyphenated names mirroring the command
 structure (`gmail-draft.txt` for `gmail draft`, etc.).
 
+**Plugin cache vs repo:** For quick testing, you can edit files directly in
+`~/.claude/plugins/cache/jean-claude/...` — changes take effect immediately.
+However, only changes committed to this repo are retained. The plugin cache is
+overwritten when the plugin updates. Always copy tested changes back to the repo.
+
 ## Development Workflow
 
 ```bash
