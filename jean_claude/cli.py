@@ -436,7 +436,7 @@ def _show_calendar_counts(cal) -> None:
     """Show calendar event counts for today and this week."""
     from datetime import datetime, timedelta
 
-    from .gcal import LOCAL_TZ
+    from .gcal import LOCAL_TZ, get_event_start
 
     now = datetime.now(LOCAL_TZ)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -459,12 +459,7 @@ def _show_calendar_counts(cal) -> None:
 
     # Filter for today: event starts before end of today
     today_end_iso = today_end.isoformat()
-    today_count = sum(
-        1
-        for e in week_events
-        if e.get("start", {}).get("dateTime", e.get("start", {}).get("date", ""))
-        < today_end_iso
-    )
+    today_count = sum(1 for e in week_events if get_event_start(e) < today_end_iso)
 
     if today_count > 0 or week_count > 0:
         parts = []

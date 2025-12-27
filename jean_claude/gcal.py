@@ -43,6 +43,12 @@ def get_calendar():
     return build_service("calendar", "v3")
 
 
+def get_event_start(event: dict) -> str:
+    """Get the start time of an event as ISO string (dateTime or date)."""
+    start = event.get("start", {})
+    return start.get("dateTime", start.get("date", ""))
+
+
 def parse_datetime(s: str) -> datetime:
     """Parse datetime from various formats."""
     for fmt in ["%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y/%m/%d %H:%M", "%Y/%m/%d"]:
@@ -297,10 +303,7 @@ def invitations(days: int | None, expand: bool):
         output.append(first)
 
     # Sort by start time
-    def get_start(e: dict) -> str:
-        return e.get("start", {}).get("dateTime", e.get("start", {}).get("date", ""))
-
-    output.sort(key=get_start)
+    output.sort(key=get_event_start)
 
     click.echo(json.dumps(output, indent=2))
 

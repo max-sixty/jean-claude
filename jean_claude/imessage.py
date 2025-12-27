@@ -405,7 +405,7 @@ def _is_imessage_native_id(value: str) -> bool:
     return value.startswith(("any;", "iMessage;")) or "@" in value
 
 
-def resolve_recipient_from_string(value: str) -> str:
+def resolve_recipient(value: str) -> str:
     """Resolve a 'to' value to a phone/chat ID or iMessage handle.
 
     Auto-detects whether the value is:
@@ -679,7 +679,7 @@ def send(recipients: tuple[str, ...]):
 
     # Handle single recipient (existing behavior)
     if len(recipients) == 1:
-        recipient = resolve_recipient_from_string(recipients[0])
+        recipient = resolve_recipient(recipients[0])
 
         if recipient.startswith("any;"):
             # Chat ID - send directly to chat
@@ -704,7 +704,7 @@ end run"""
         return
 
     # Multiple recipients - find existing group chat or error
-    resolved = [resolve_recipient_from_string(r) for r in recipients]
+    resolved = [resolve_recipient(r) for r in recipients]
 
     # Can't use chat IDs with multiple recipients
     if any(r.startswith("any;") for r in resolved):
@@ -750,7 +750,7 @@ def send_file(recipient: str, file_path: Path):
         jean-claude imessage send-file "any;+;chat123456789" ./photo.jpg
         jean-claude imessage send-file "Kevin Seals" ./photo.jpg
     """
-    recipient = resolve_recipient_from_string(recipient)
+    recipient = resolve_recipient(recipient)
     abs_path = str(file_path.resolve())
 
     if recipient.startswith("any;"):
