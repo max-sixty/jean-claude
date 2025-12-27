@@ -1,0 +1,8 @@
+# Typos configuration
+# See: https://github.com/crate-ci/typos
+
+[default.extend-words]
+# Signal protocol terms - not typos
+aci = "aci"   # Access Control Identifier
+# Excel column names used in tests - not typos
+ba = "ba"     # Column BA (index 52)

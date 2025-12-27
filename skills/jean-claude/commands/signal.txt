@@ -1,0 +1,18 @@
+Usage: jean-claude signal [OPTIONS] COMMAND [ARGS]...
+
+  Signal CLI - send messages and list chats.
+
+  Requires linking via QR code scan. Uses the Signal protocol for end-to-end
+  encrypted messaging.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  chats     List Signal chats (contacts and groups).
+  link      Link as a secondary device by scanning QR code.
+  messages  Read stored messages from a chat.
+  receive   Receive pending messages.
+  send      Send a Signal message.
+  status    Show Signal connection status.
+  whoami    Show account information.

@@ -1,0 +1,50 @@
+[package]
+name = "signal-cli"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[[bin]]
+name = "signal-cli"
+path = "src/main.rs"
+
+[dependencies]
+# Signal protocol
+presage = { git = "https://github.com/whisperfish/presage" }
+presage-store-sqlite = { git = "https://github.com/whisperfish/presage" }
+
+# Async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+futures = "0.3"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Data handling
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+anyhow = "1"
+
+# Encoding
+hex = "0.4"
+
+# SQLite for read tracking
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# QR code for device linking
+qr2term = "0.3"
+qrcode = "0.14"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Platform directories
+directories = "6"
+
+[patch.crates-io]
+# Required by presage - use Signal's fork
+curve25519-dalek = { git = "https://github.com/signalapp/curve25519-dalek", tag = "signal-curve25519-4.1.3" }

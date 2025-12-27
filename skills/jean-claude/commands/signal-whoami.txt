@@ -1,0 +1,6 @@
+Usage: jean-claude signal whoami [OPTIONS]
+
+  Show account information.
+
+Options:
+  --help  Show this message and exit.

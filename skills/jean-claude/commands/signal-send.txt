@@ -1,0 +1,13 @@
+Usage: jean-claude signal send [OPTIONS] RECIPIENT
+
+  Send a Signal message.
+
+  RECIPIENT: UUID of the contact to send to.
+
+  Message body is read from stdin.
+
+  Examples:
+      echo "Hello!" | jean-claude signal send "abc123-uuid"
+
+Options:
+  --help  Show this message and exit.

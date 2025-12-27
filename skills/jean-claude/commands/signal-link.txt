@@ -1,0 +1,10 @@
+Usage: jean-claude signal link [OPTIONS]
+
+  Link as a secondary device by scanning QR code.
+
+  Opens a QR code in the terminal. Scan with Signal on your phone: Settings >
+  Linked Devices > Link New Device.
+
+Options:
+  -d, --device-name TEXT  Device name shown in Signal
+  --help                  Show this message and exit.

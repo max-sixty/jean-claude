@@ -17,6 +17,7 @@ from .gmail import cli as gmail_cli
 from .gsheets import cli as gsheets_cli
 from .imessage import cli as imessage_cli
 from .reminders import cli as reminders_cli
+from .signal import cli as signal_cli
 from .logging import JeanClaudeError, configure_logging, get_logger
 from .whatsapp import cli as whatsapp_cli
 
@@ -75,7 +76,7 @@ class ErrorHandlingGroup(click.Group):
     help='JSON log file path (default: auto, "-" for stdout, "none" to disable)',
 )
 def cli(verbose: bool, json_log: str):
-    """jean-claude: Gmail, Calendar, Drive, iMessage, and WhatsApp integration."""
+    """jean-claude: Gmail, Calendar, Drive, iMessage, WhatsApp, and Signal integration."""
     # Allow "none" to disable file logging
     log_file = None if json_log == "none" else json_log
     configure_logging(verbose=verbose, json_log=log_file)
@@ -88,6 +89,7 @@ cli.add_command(gdrive_cli, name="gdrive")
 cli.add_command(gsheets_cli, name="gsheets")
 cli.add_command(imessage_cli, name="imessage")
 cli.add_command(reminders_cli, name="reminders")
+cli.add_command(signal_cli, name="signal")
 cli.add_command(whatsapp_cli, name="whatsapp")
 
 
@@ -162,6 +164,10 @@ def status():
     # WhatsApp status
     click.echo()
     _check_whatsapp_status()
+
+    # Signal status
+    click.echo()
+    _check_signal_status()
 
 
 def _check_google_apis() -> None:
@@ -359,6 +365,36 @@ def _check_whatsapp_status() -> None:
         else:
             click.echo("  Auth: " + click.style("Not authenticated", fg="yellow"))
             click.echo("    Run 'jean-claude whatsapp auth' to authenticate")
+    except Exception as e:
+        click.echo("  Auth: " + click.style(f"Error - {e}", fg="red"))
+
+
+def _check_signal_status() -> None:
+    """Check Signal CLI availability and authentication."""
+    from .logging import JeanClaudeError
+    from .signal import _get_signal_cli_path, _run_signal_cli
+
+    click.echo("Signal:")
+
+    # Check if CLI binary exists
+    try:
+        _get_signal_cli_path()
+    except JeanClaudeError:
+        click.echo("  CLI: " + click.style("Not built", fg="yellow"))
+        click.echo("    Build with: cd signal && cargo build --release")
+        return
+
+    click.echo("  CLI: " + click.style("OK", fg="green"))
+
+    # Check authentication status
+    try:
+        result = _run_signal_cli("status")
+        if result and result.get("linked"):
+            phone = result.get("phone", "unknown")
+            click.echo("  Auth: " + click.style(f"Linked ({phone})", fg="green"))
+        else:
+            click.echo("  Auth: " + click.style("Not linked", fg="yellow"))
+            click.echo("    Run 'jean-claude signal link' to link device")
     except Exception as e:
         click.echo("  Auth: " + click.style(f"Error - {e}", fg="red"))
 

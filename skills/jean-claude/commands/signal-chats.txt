@@ -1,0 +1,9 @@
+Usage: jean-claude signal chats [OPTIONS]
+
+  List Signal chats (contacts and groups).
+
+  Shows contacts and groups with names and IDs.
+
+Options:
+  -n, --max-results INTEGER  Maximum chats to return
+  --help                     Show this message and exit.

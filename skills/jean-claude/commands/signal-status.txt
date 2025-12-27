@@ -1,0 +1,6 @@
+Usage: jean-claude signal status [OPTIONS]
+
+  Show Signal connection status.
+
+Options:
+  --help  Show this message and exit.

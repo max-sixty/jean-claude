@@ -1,0 +1,8 @@
+Usage: jean-claude signal receive [OPTIONS]
+
+  Receive pending messages.
+
+  Downloads and displays any pending messages from Signal.
+
+Options:
+  --help  Show this message and exit.

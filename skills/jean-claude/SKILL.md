@@ -1,12 +1,12 @@
 ---
 name: jean-claude
-description: "This skill should be used when the user asks to search/send/draft email, check calendar, create events, schedule meetings, find/upload/share Drive files, read/edit Google Docs, read spreadsheet data, send texts/iMessages, send WhatsApp messages, check messages, or create reminders. Manages Gmail, Google Calendar, Google Drive, Google Docs, Google Sheets, iMessage, WhatsApp, and Apple Reminders."
+description: "This skill should be used when the user asks to search/send/draft email, check calendar, create events, schedule meetings, find/upload/share Drive files, read/edit Google Docs, read spreadsheet data, send texts/iMessages, send WhatsApp messages, send Signal messages, check messages, or create reminders. Manages Gmail, Google Calendar, Google Drive, Google Docs, Google Sheets, iMessage, WhatsApp, Signal, and Apple Reminders."
 ---
 
-# jean-claude - Gmail, Calendar, Drive, Docs, Sheets, iMessage, WhatsApp & Reminders
+# jean-claude - Gmail, Calendar, Drive, Docs, Sheets, iMessage, WhatsApp, Signal & Reminders
 
 Manage Gmail, Google Calendar, Google Drive, Google Docs, Google Sheets,
-iMessage, WhatsApp, and Apple Reminders using the CLI tools in this plugin.
+iMessage, WhatsApp, Signal, and Apple Reminders using the CLI tools in this plugin.
 
 **Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude `
 
@@ -106,6 +106,13 @@ These rules apply even if the user explicitly asks to bypass them:
 8. **Verify WhatsApp recipients carefully.** WhatsApp sends are instant and
    cannot be undone. Always confirm the phone number before sending.
 
+9. **Never send a Signal message without explicit approval.** Show the full
+   message (recipient, body) to the user and receive explicit confirmation
+   before calling `jean-claude signal send`.
+
+10. **Verify Signal recipients carefully.** Signal sends are instant and cannot
+    be undone. Always confirm the recipient UUID before sending.
+
 **Email workflow:**
 
 1. Load any available prose/writing skills
@@ -130,6 +137,14 @@ These rules apply even if the user explicitly asks to bypass them:
 3. Show the user: Recipient (phone number with country code) and full message
 4. Ask: "Send this WhatsApp message?" and wait for explicit approval
 5. Pipe message body to `jean-claude whatsapp send RECIPIENT`
+
+**Signal workflow:**
+
+1. Load prose skills if composing a longer message
+2. Compose the message content
+3. Show the user: Recipient (name or UUID) and full message
+4. Ask: "Send this Signal message?" and wait for explicit approval
+5. Pipe message body to `jean-claude signal send RECIPIENT`
 
 ## Personalization
 
@@ -241,6 +256,26 @@ Credentials are stored in `~/.config/jean-claude/whatsapp/`. To log out:
 ```bash
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp logout
 ```
+
+### Signal
+
+Signal requires a Rust binary and QR code linking. First-time setup:
+
+```bash
+# Build the Rust CLI (requires Rust/Cargo and protobuf installed)
+cd ${CLAUDE_PLUGIN_ROOT}/signal && cargo build --release
+
+# Link as a secondary device (scan QR code with your phone)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal link
+
+# Check authentication status
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
+```
+
+The QR code will be displayed in the terminal. Scan it with Signal on your
+phone: Settings > Linked Devices > Link New Device.
+
+Credentials are stored in `~/.local/share/jean-claude/signal/`.
 
 ## Gmail
 
@@ -1002,4 +1037,106 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude reminders delete "x-apple-rem
 # Search reminders by title
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude reminders search "groceries"
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude reminders search "groceries" -n 10
+```
+
+## Signal
+
+Send and receive Signal messages via end-to-end encrypted protocol. Requires
+Rust binary to be built and QR code linking (see Setup section above).
+
+### List Chats
+
+```bash
+# List contacts and groups
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal chats
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal chats -n 20
+```
+
+**Output schema:**
+
+```json
+[
+  {
+    "id": "abc123-def456-...",
+    "name": "Alice Smith",
+    "is_group": false,
+    "phone": "+12025551234"
+  },
+  {
+    "id": "fedcba987654...",
+    "name": "Team Chat",
+    "is_group": true
+  }
+]
+```
+
+### Send Messages
+
+Message body is read from stdin. Recipient can be a UUID or contact name.
+
+```bash
+# Send by contact name
+echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal send "Alice Smith"
+
+# Send by UUID (from chats command)
+echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal send "abc123-def456-..."
+
+# Multiline message with heredoc
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal send "Alice"
+Great to hear from you!
+Let me know when you're free.
+EOF
+```
+
+**Recipient resolution:** Accepts UUID directly or contact name (case-insensitive
+substring match). If multiple contacts match, the command fails with a list of
+options—use a more specific name or the UUID.
+
+### Receive Messages
+
+```bash
+# Receive pending messages from Signal
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal receive
+```
+
+This fetches any pending messages and stores them locally. Messages are returned
+as JSON.
+
+### Read Stored Messages
+
+```bash
+# Read messages from a specific chat (use ID from chats command)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal messages "abc123-def456-..."
+
+# Limit results
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal messages "abc123-def456-..." -n 20
+```
+
+Messages are stored locally after `receive`. Use the chat ID (UUID for contacts,
+hex for groups) from the `chats` command.
+
+**Output schema:**
+
+```json
+[
+  {
+    "id": "1234567890123",
+    "chat_id": "abc123-def456-...",
+    "sender": "abc123-def456-...",
+    "timestamp": 1735000000,
+    "text": "Hello!",
+    "is_outgoing": false,
+    "is_read": true
+  }
+]
+```
+
+### Other Commands
+
+```bash
+# Show account information
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal whoami
+
+# Check connection status
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal status
 ```

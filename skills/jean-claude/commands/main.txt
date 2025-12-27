@@ -1,6 +1,7 @@
 Usage: jean-claude [OPTIONS] COMMAND [ARGS]...
 
-  jean-claude: Gmail, Calendar, Drive, iMessage, and WhatsApp integration.
+  jean-claude: Gmail, Calendar, Drive, iMessage, WhatsApp, and Signal
+  integration.
 
 Options:
   -v, --verbose    Enable verbose logging to stderr
@@ -18,5 +19,6 @@ Commands:
   gsheets      Google Sheets CLI - read and write spreadsheet data.
   imessage     iMessage CLI - send messages and list chats.
   reminders    Apple Reminders CLI - create, list, and manage reminders.
+  signal       Signal CLI - send messages and list chats.
   status       Show authentication status and API availability.
   whatsapp     WhatsApp CLI - send messages and list chats.

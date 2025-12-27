@@ -1,0 +1,15 @@
+Usage: jean-claude signal messages [OPTIONS] CHAT_ID
+
+  Read stored messages from a chat.
+
+  CHAT_ID: UUID of the contact or hex group ID.
+
+  Messages are stored locally after running 'receive'.
+
+  Examples:
+      jean-claude signal messages "abc123-def456-..."
+      jean-claude signal messages "abc123-def456-..." -n 20
+
+Options:
+  -n, --max-results INTEGER  Maximum messages to return
+  --help                     Show this message and exit.
