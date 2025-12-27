@@ -13,5 +13,6 @@ Options:
   --duration INTEGER  New duration in minutes (alternative to --end)
   --location TEXT     New location
   --description TEXT  New description
+  --attendees TEXT    Comma-separated attendee emails (replaces existing)
   --notify            Send update emails to attendees
   --help              Show this message and exit.

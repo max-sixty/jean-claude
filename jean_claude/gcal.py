@@ -408,6 +408,7 @@ def delete(event_id: str, notify: bool):
 )
 @click.option("--location", help="New location")
 @click.option("--description", help="New description")
+@click.option("--attendees", help="Comma-separated attendee emails (replaces existing)")
 @click.option("--notify", is_flag=True, help="Send update emails to attendees")
 def update(
     event_id: str,
@@ -417,6 +418,7 @@ def update(
     duration: int,
     location: str,
     description: str,
+    attendees: str,
     notify: bool,
 ):
     """Update/modify an existing calendar event.
@@ -437,6 +439,8 @@ def update(
         event["location"] = location
     if description:
         event["description"] = description
+    if attendees:
+        event["attendees"] = [{"email": e.strip()} for e in attendees.split(",")]
 
     if start:
         start_dt = parse_datetime(start)

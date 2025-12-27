@@ -104,6 +104,10 @@ uv run jean-claude gmail --help
 
 ## CLI API Conventions
 
+**Update commands should support all create options.** If `create` accepts a
+field, `update` should accept it too. Agents shouldn't need to delete and
+recreate resources just to change a field.
+
 Consistent flags across all commands:
 
 - **`-n` / `--max-results`** - Limit number of results (never `--limit`)
