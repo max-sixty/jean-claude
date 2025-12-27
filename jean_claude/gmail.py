@@ -1254,9 +1254,9 @@ def draft_get(draft_id: str):
 
 @draft.command("update")
 @click.argument("draft_id")
-@click.option("--to", "to_addr", help="Update To recipients")
-@click.option("--cc", help="Update CC recipients")
-@click.option("--bcc", help="Update BCC recipients")
+@click.option("--to", "to_addr", help="Update To recipients (comma-separated)")
+@click.option("--cc", help="Update CC recipients (comma-separated)")
+@click.option("--bcc", help="Update BCC recipients (comma-separated)")
 @click.option("--subject", help="Update subject line")
 def draft_update(
     draft_id: str,

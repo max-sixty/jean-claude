@@ -202,8 +202,8 @@ Usage: jean-claude gmail draft update [OPTIONS] DRAFT_ID
       --cc "new@example.com"
 
 Options:
-  --to TEXT       Update To recipients
-  --cc TEXT       Update CC recipients
-  --bcc TEXT      Update BCC recipients
+  --to TEXT       Update To recipients (comma-separated)
+  --cc TEXT       Update CC recipients (comma-separated)
+  --bcc TEXT      Update BCC recipients (comma-separated)
   --subject TEXT  Update subject line
   --help          Show this message and exit.
