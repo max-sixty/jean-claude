@@ -231,6 +231,13 @@ Error: Event not found: abc123
 
 Unexpected errors propagate with full traceback for debugging.
 
+**Never silently swallow exceptions.** If you catch a broad exception, log it:
+
+```python
+except Exception as e:
+    logger.warning("Failed to fetch counts", error=str(e))
+```
+
 ### API Error Handling
 
 All Google API errors (`HttpError`) are handled at the top-level CLI entry point

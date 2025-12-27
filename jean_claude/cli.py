@@ -165,8 +165,22 @@ def status():
 
 
 def _check_google_apis() -> None:
-    """Check Google API availability."""
+    """Check Google API availability and show message counts."""
     from .auth import build_service
+
+    gmail = build_service("gmail", "v1")
+
+    # Check Gmail API and show counts
+    try:
+        gmail.users().getProfile(userId="me").execute()
+    except HttpError as e:
+        _print_api_error("Gmail", e)
+    else:
+        click.echo("  Gmail: " + click.style("OK", fg="green"))
+        try:
+            _show_gmail_counts(gmail)
+        except Exception as e:
+            logger.warning("Failed to fetch Gmail counts", error=str(e))
 
     def check_api(name: str, test_call):
         try:
@@ -175,11 +189,17 @@ def _check_google_apis() -> None:
         except HttpError as e:
             _print_api_error(name, e)
 
-    gmail = build_service("gmail", "v1")
-    check_api("Gmail", lambda: gmail.users().getProfile(userId="me").execute())
-
     cal = build_service("calendar", "v3")
-    check_api("Calendar", lambda: cal.calendarList().list(maxResults=1).execute())
+    try:
+        cal.calendarList().list(maxResults=1).execute()
+    except HttpError as e:
+        _print_api_error("Calendar", e)
+    else:
+        click.echo("  Calendar: " + click.style("OK", fg="green"))
+        try:
+            _show_calendar_counts(cal)
+        except Exception as e:
+            logger.warning("Failed to fetch calendar counts", error=str(e))
 
     drive = build_service("drive", "v3")
     check_api("Drive", lambda: drive.about().get(fields="user").execute())
@@ -253,8 +273,6 @@ def _check_imessage_status() -> None:
         try:
             conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
             conn.execute("SELECT 1 FROM message LIMIT 1")
-            conn.close()
-            click.echo("  Read: " + click.style("OK", fg="green"))
         except sqlite3.OperationalError as e:
             if "unable to open" in str(e):
                 click.echo("  Read: " + click.style("No Full Disk Access", fg="yellow"))
@@ -264,6 +282,14 @@ def _check_imessage_status() -> None:
                 click.echo("    Add and enable your terminal app")
             else:
                 click.echo("  Read: " + click.style(f"Error - {e}", fg="red"))
+        else:
+            click.echo("  Read: " + click.style("OK", fg="green"))
+            try:
+                _show_imessage_counts(conn)
+            except Exception as e:
+                logger.warning("Failed to fetch iMessage counts", error=str(e))
+            finally:
+                conn.close()
 
 
 def _check_reminders_status() -> None:
@@ -287,6 +313,10 @@ def _check_reminders_status() -> None:
     )
     if result.returncode == 0:
         click.echo("  Access: " + click.style("OK", fg="green"))
+        try:
+            _show_reminders_counts()
+        except Exception as e:
+            logger.warning("Failed to fetch reminders counts", error=str(e))
     else:
         error = result.stderr.strip()
         if "not allowed" in error.lower() or "assistive" in error.lower():
@@ -322,6 +352,10 @@ def _check_whatsapp_status() -> None:
         if result and result.get("authenticated"):
             phone = result.get("phone", "unknown")
             click.echo("  Auth: " + click.style(f"Authenticated ({phone})", fg="green"))
+            try:
+                _show_whatsapp_counts()
+            except Exception as e:
+                logger.warning("Failed to fetch WhatsApp counts", error=str(e))
         else:
             click.echo("  Auth: " + click.style("Not authenticated", fg="yellow"))
             click.echo("    Run 'jean-claude whatsapp auth' to authenticate")
@@ -339,6 +373,140 @@ def _print_api_error(api_name: str, error: Exception) -> None:
         click.echo(f"  {api_name}: " + click.style("Access denied", fg="red"))
     else:
         click.echo(f"  {api_name}: " + click.style(f"Error - {error}", fg="red"))
+
+
+def _show_gmail_counts(gmail) -> None:
+    """Show Gmail inbox/unread/draft counts."""
+    inbox = gmail.users().labels().get(userId="me", id="INBOX").execute()
+    inbox_threads = inbox["threadsTotal"]
+    inbox_unread = inbox["threadsUnread"]
+
+    draft = gmail.users().labels().get(userId="me", id="DRAFT").execute()
+    draft_count = draft["threadsTotal"]
+
+    parts = [f"{inbox_threads} inbox"]
+    if inbox_unread > 0:
+        parts.append(click.style(f"{inbox_unread} unread", fg="yellow"))
+    if draft_count > 0:
+        parts.append(f"{draft_count} drafts")
+
+    click.echo(f"    {', '.join(parts)}")
+
+
+def _show_imessage_counts(conn) -> None:
+    """Show iMessage unread counts.
+
+    Filters to:
+    - item_type = 0 (regular messages, not system events like joins/leaves)
+    - Has content (text or attachments, not ghost records)
+    """
+    cursor = conn.execute("""
+        SELECT COUNT(*) FROM message
+        WHERE is_read = 0 AND is_from_me = 0 AND item_type = 0
+          AND (text IS NOT NULL AND text != '' OR cache_has_attachments = 1)
+    """)
+    total_unread = cursor.fetchone()[0]
+
+    cursor = conn.execute("""
+        SELECT COUNT(DISTINCT c.ROWID)
+        FROM chat c
+        JOIN chat_message_join cmj ON c.ROWID = cmj.chat_id
+        JOIN message m ON cmj.message_id = m.ROWID
+        WHERE m.is_read = 0 AND m.is_from_me = 0 AND m.item_type = 0
+          AND (m.text IS NOT NULL AND m.text != '' OR m.cache_has_attachments = 1)
+    """)
+    chats_with_unread = cursor.fetchone()[0]
+
+    if total_unread > 0:
+        click.echo(
+            f"    {click.style(f'{total_unread} unread', fg='yellow')} "
+            f"across {chats_with_unread} chats"
+        )
+
+
+def _show_whatsapp_counts() -> None:
+    """Show WhatsApp unread counts."""
+    from .whatsapp import _run_whatsapp_cli
+
+    result = _run_whatsapp_cli("chats", "--unread")
+    if result and isinstance(result, list):
+        total_unread = sum(chat["unread_count"] for chat in result)
+        chats_with_unread = len(result)
+
+        if total_unread > 0:
+            click.echo(
+                f"    {click.style(f'{total_unread} unread', fg='yellow')} "
+                f"across {chats_with_unread} chats"
+            )
+
+
+def _show_calendar_counts(cal) -> None:
+    """Show calendar event counts for today and this week."""
+    from datetime import datetime, timedelta
+
+    from .gcal import LOCAL_TZ
+
+    now = datetime.now(LOCAL_TZ)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+    week_end = today_start + timedelta(days=7)
+
+    # Count events today
+    today_result = (
+        cal.events()
+        .list(
+            calendarId="primary",
+            timeMin=today_start.isoformat(),
+            timeMax=today_end.isoformat(),
+            singleEvents=True,
+        )
+        .execute()
+    )
+    today_count = len(today_result.get("items", []))
+
+    # Count events this week
+    week_result = (
+        cal.events()
+        .list(
+            calendarId="primary",
+            timeMin=today_start.isoformat(),
+            timeMax=week_end.isoformat(),
+            singleEvents=True,
+        )
+        .execute()
+    )
+    week_count = len(week_result.get("items", []))
+
+    if today_count > 0 or week_count > 0:
+        parts = []
+        if today_count > 0:
+            parts.append(f"{today_count} today")
+        if week_count > today_count:
+            parts.append(f"{week_count} this week")
+        click.echo(f"    {', '.join(parts)}")
+
+
+def _show_reminders_counts() -> None:
+    """Show incomplete reminders count."""
+    import subprocess
+
+    # Count incomplete reminders across all lists
+    script = """tell application "Reminders"
+    set totalCount to 0
+    repeat with lst in lists
+        set totalCount to totalCount + (count of (reminders of lst whose completed is false))
+    end repeat
+    return totalCount
+end tell"""
+    result = subprocess.run(
+        ["osascript", "-e", script],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        count = int(result.stdout.strip())
+        if count > 0:
+            click.echo(f"    {count} incomplete")
 
 
 @cli.command()

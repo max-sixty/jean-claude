@@ -22,16 +22,36 @@ When this skill loads for inbox/email/message tasks:
    commands
 3. User preferences in those skills override the defaults below
 
-## First-Time Setup
+## Session Start (Always Run First)
 
-When this skill is first loaded, check Google authentication status:
+**Every time this skill loads, run status to get context:**
 
 ```bash
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
 ```
 
-If the output shows "Google: Not authenticated", use the AskUserQuestion tool to
-ask the user which access level they want:
+This shows authentication status and counts across all services. Use these to
+understand the user's workflow:
+
+**Gmail:**
+- **13 inbox, 11 unread** → inbox zero person, wants to triage everything
+- **2,847 inbox, 89 unread** → not inbox zero, focus on recent/unread/starred
+- **5 drafts** → has pending drafts to review or send
+
+**Calendar:**
+- **3 today, 12 this week** → busy schedule, may need help with conflicts
+- **0 today** → open day, good time for focused work
+
+**Reminders:**
+- **7 incomplete** → has pending tasks, may want to review or complete them
+
+**Messaging:**
+- **54 unread across 12 WhatsApp chats** → active messaging, may want summary
+- **1,353 unread across 113 iMessage chats** → backlog, focus on recent/important
+
+**If not authenticated:** If nothing is authenticated, or the user asks for
+services that are not authenticated, use the AskUserQuestion tool to help them
+set up. For Google services, ask which access level they want:
 
 **Question:** "jean-claude needs Google access. Which mode would you like?"
 
@@ -134,13 +154,11 @@ Use these defaults in lieu of any user preferences:
 
 ### Email Defaults
 - Fetch both read and unread messages (context helps)
-- 20 messages per request
 - Present messages neutrally — don't assume priority
 - No automatic archiving without user guidance
 
 ### iMessage Defaults
 - Prioritize known contacts over unknown senders
-- 20 messages per request
 
 ### Response Drafting Defaults
 - Load prose/writing skills before composing
