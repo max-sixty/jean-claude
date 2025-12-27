@@ -42,6 +42,14 @@ def get_calendar():
     return build_service("calendar", "v3")
 
 
+def _paginated_output(key: str, result: dict) -> dict:
+    """Build paginated output dict from API result."""
+    output: dict = {key: result.get("items", [])}
+    if next_token := result.get("nextPageToken"):
+        output["nextPageToken"] = next_token
+    return output
+
+
 def parse_datetime(s: str) -> datetime:
     """Parse datetime from various formats."""
     for fmt in ["%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y/%m/%d %H:%M", "%Y/%m/%d"]:
@@ -96,11 +104,7 @@ def list_events(
         list_kwargs["pageToken"] = page_token
 
     result = service.events().list(**list_kwargs).execute()
-
-    output: dict = {"events": result.get("items", [])}
-    if next_token := result.get("nextPageToken"):
-        output["nextPageToken"] = next_token
-    click.echo(json.dumps(output, indent=2))
+    click.echo(json.dumps(_paginated_output("events", result), indent=2))
 
 
 @cli.command()
@@ -211,11 +215,7 @@ def search(query: str, days: int, max_results: int, page_token: str):
         list_kwargs["pageToken"] = page_token
 
     result = service.events().list(**list_kwargs).execute()
-
-    output: dict = {"events": result.get("items", [])}
-    if next_token := result.get("nextPageToken"):
-        output["nextPageToken"] = next_token
-    click.echo(json.dumps(output, indent=2))
+    click.echo(json.dumps(_paginated_output("events", result), indent=2))
 
 
 @cli.command()

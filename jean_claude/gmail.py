@@ -99,9 +99,9 @@ def get_my_from_address(service=None) -> str:
     # Get primary email and any configured display name from send-as settings
     send_as = service.users().settings().sendAs().list(userId="me").execute()
     email = ""
-    for alias in send_as.get("sendAs", []):
-        if alias.get("isPrimary"):
-            email = alias.get("sendAsEmail", "")
+    for alias in send_as["sendAs"]:
+        if alias["isPrimary"]:
+            email = alias["sendAsEmail"]
             display_name = alias.get("displayName", "")
             if display_name:
                 return formataddr((display_name, email))
@@ -316,6 +316,24 @@ def _batch_fetch(
     return responses
 
 
+def _get_headers(msg: dict) -> dict[str, str]:
+    """Extract headers from a message payload as a name->value dict."""
+    return {h["name"]: h["value"] for h in msg["payload"]["headers"]}
+
+
+def _get_headers_lower(msg: dict) -> dict[str, str]:
+    """Extract headers from a message payload as a lowercase name->value dict."""
+    return {h["name"].lower(): h["value"] for h in msg["payload"]["headers"]}
+
+
+def _paginated_output(key: str, items: list, next_page_token: str | None) -> dict:
+    """Build paginated output dict with optional nextPageToken."""
+    output: dict = {key: items}
+    if next_page_token:
+        output["nextPageToken"] = next_page_token
+    return output
+
+
 def _strip_html(html: str) -> str:
     """Strip HTML tags for basic text extraction."""
     import re
@@ -446,10 +464,10 @@ def extract_message_summary(msg: dict) -> dict:
 
     Writes self-contained JSON to cache with full body (and html_body when present).
     """
-    headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
+    headers = _get_headers(msg)
     result = {
         "id": msg["id"],
-        "threadId": msg.get("threadId"),
+        "threadId": msg["threadId"],
         "from": headers.get("From", ""),
         "to": headers.get("To", ""),
         "subject": headers.get("Subject", ""),
@@ -460,8 +478,7 @@ def extract_message_summary(msg: dict) -> dict:
     if cc := headers.get("Cc"):
         result["cc"] = cc
 
-    payload = msg.get("payload", {})
-    body, html_body = extract_body(payload)
+    body, html_body = extract_body(msg["payload"])
     result["file"] = _write_email_json("email", msg["id"], result, body, html_body)
     return result
 
@@ -478,9 +495,7 @@ def extract_thread_summary(thread: dict) -> dict:
 
     # Get the latest message for display
     latest_msg = messages[-1]
-    headers = {
-        h["name"]: h["value"] for h in latest_msg.get("payload", {}).get("headers", [])
-    }
+    headers = _get_headers(latest_msg)
 
     # Aggregate labels across all messages in thread
     all_labels = set()
@@ -506,8 +521,7 @@ def extract_thread_summary(thread: dict) -> dict:
     if cc := headers.get("Cc"):
         result["cc"] = cc
 
-    payload = latest_msg.get("payload", {})
-    body, html_body = extract_body(payload)
+    body, html_body = extract_body(latest_msg["payload"])
     result["file"] = _write_email_json("thread", thread["id"], result, body, html_body)
 
     return result
@@ -515,11 +529,11 @@ def extract_thread_summary(thread: dict) -> dict:
 
 def extract_draft_summary(draft: dict) -> dict:
     """Extract essential fields from a draft for compact output."""
-    msg = draft.get("message", {})
-    headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
+    msg = draft["message"]
+    headers = _get_headers(msg)
     result = {
         "id": draft["id"],
-        "messageId": msg.get("id"),
+        "messageId": msg["id"],
         "to": headers.get("To", ""),
         "subject": headers.get("Subject", ""),
         "snippet": msg.get("snippet", ""),
@@ -603,10 +617,9 @@ def _search_messages(query: str, max_results: int, page_token: str | None = None
     logger.debug(f"Found {len(messages)} messages")
 
     if not messages:
-        output: dict = {"messages": []}
-        if next_page_token:
-            output["nextPageToken"] = next_page_token
-        click.echo(json.dumps(output, indent=2))
+        click.echo(
+            json.dumps(_paginated_output("messages", [], next_page_token), indent=2)
+        )
         return
 
     # Batch fetch messages (15/chunk × 5 units = 75 units, 0.3s delay)
@@ -621,10 +634,9 @@ def _search_messages(query: str, max_results: int, page_token: str | None = None
         for m in messages
         if m["id"] in responses
     ]
-    output = {"messages": detailed}
-    if next_page_token:
-        output["nextPageToken"] = next_page_token
-    click.echo(json.dumps(output, indent=2))
+    click.echo(
+        json.dumps(_paginated_output("messages", detailed, next_page_token), indent=2)
+    )
 
 
 def _search_threads(query: str, max_results: int, page_token: str | None = None):
@@ -645,10 +657,9 @@ def _search_threads(query: str, max_results: int, page_token: str | None = None)
     logger.debug(f"Found {len(threads)} threads")
 
     if not threads:
-        output: dict = {"threads": []}
-        if next_page_token:
-            output["nextPageToken"] = next_page_token
-        click.echo(json.dumps(output, indent=2))
+        click.echo(
+            json.dumps(_paginated_output("threads", [], next_page_token), indent=2)
+        )
         return
 
     # Batch fetch threads (10/chunk - threads.get is heavier than messages.get)
@@ -663,10 +674,9 @@ def _search_threads(query: str, max_results: int, page_token: str | None = None)
         for t in threads
         if t["id"] in responses
     ]
-    output = {"threads": detailed}
-    if next_page_token:
-        output["nextPageToken"] = next_page_token
-    click.echo(json.dumps(output, indent=2))
+    click.echo(
+        json.dumps(_paginated_output("threads", detailed, next_page_token), indent=2)
+    )
 
 
 # Draft command group
@@ -898,11 +908,8 @@ def _create_reply_draft(
     my_from_addr = get_my_from_address(service)
     _, my_email = parseaddr(my_from_addr)
 
-    headers = {
-        h["name"].lower(): h["value"]
-        for h in original.get("payload", {}).get("headers", [])
-    }
-    thread_id = original.get("threadId")
+    headers = _get_headers_lower(original)
+    thread_id = original["threadId"]
 
     subject = headers.get("subject", "")
     date = headers.get("date", "")
@@ -914,8 +921,7 @@ def _create_reply_draft(
     orig_refs = headers.get("references", "")
 
     # Get original body for quoting (both plain text and HTML)
-    payload = original.get("payload", {})
-    original_body, original_html = extract_body(payload)
+    original_body, original_html = extract_body(original["payload"])
 
     # Use SENT label to detect own messages (handles send-as aliases)
     labels = original.get("labelIds", [])
@@ -1091,17 +1097,13 @@ def draft_forward(message_id: str, to: str):
         .execute()
     )
 
-    headers = {
-        h["name"].lower(): h["value"]
-        for h in original.get("payload", {}).get("headers", [])
-    }
+    headers = _get_headers_lower(original)
     orig_subject = headers.get("subject", "")
     from_addr = headers.get("from", "")
     date = headers.get("date", "")
 
     # Get both plain text and HTML for proper forwarding
-    payload = original.get("payload", {})
-    original_text, original_html = extract_body(payload)
+    original_text, original_html = extract_body(original["payload"])
 
     # Build forward subject
     if orig_subject.lower().startswith("fwd:"):
@@ -1154,12 +1156,12 @@ def draft_list(max_results: int, page_token: str | None):
 
     results = service.users().drafts().list(**list_kwargs).execute()
     drafts = results.get("drafts", [])
+    next_page_token = results.get("nextPageToken")
 
     if not drafts:
-        output: dict = {"drafts": []}
-        if next_token := results.get("nextPageToken"):
-            output["nextPageToken"] = next_token
-        click.echo(json.dumps(output, indent=2))
+        click.echo(
+            json.dumps(_paginated_output("drafts", [], next_page_token), indent=2)
+        )
         return
 
     # Batch fetch draft details
@@ -1177,10 +1179,9 @@ def draft_list(max_results: int, page_token: str | None):
         for d in drafts
         if d["id"] in responses
     ]
-    output = {"drafts": detailed}
-    if next_token := results.get("nextPageToken"):
-        output["nextPageToken"] = next_token
-    click.echo(json.dumps(output, indent=2))
+    click.echo(
+        json.dumps(_paginated_output("drafts", detailed, next_page_token), indent=2)
+    )
 
 
 @draft.command("get")
@@ -1205,11 +1206,9 @@ def draft_get(draft_id: str):
     draft = (
         service.users().drafts().get(userId="me", id=draft_id, format="full").execute()
     )
-    msg = draft.get("message", {})
-    headers = {
-        h["name"].lower(): h["value"] for h in msg.get("payload", {}).get("headers", [])
-    }
-    body = decode_body(msg.get("payload", {}))
+    msg = draft["message"]
+    headers = _get_headers_lower(msg)
+    body = decode_body(msg["payload"])
 
     # Build JSON with editable fields (matches draft update input)
     draft_data = {
@@ -1263,13 +1262,12 @@ def draft_update(draft_id: str):
     existing = (
         service.users().drafts().get(userId="me", id=draft_id, format="full").execute()
     )
-    existing_msg = existing.get("message", {})
-    existing_headers = existing_msg.get("payload", {}).get("headers", [])
+    existing_msg = existing["message"]
     thread_id = existing_msg.get("threadId")
 
     # Copy all headers from original, then apply updates
-    headers = {h["name"].lower(): h["value"] for h in existing_headers}
-    headers["body"] = decode_body(existing_msg.get("payload", {}))
+    headers = _get_headers_lower(existing_msg)
+    headers["body"] = decode_body(existing_msg["payload"])
     headers |= {k.lower(): v for k, v in data.items()}
 
     # Build new message

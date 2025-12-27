@@ -946,30 +946,7 @@ SyncLoop:
 	}
 
 	// Fetch names for chats that don't have them
-	type chatToUpdate struct {
-		jid     string
-		isGroup bool
-	}
-	var chatsNeedingNames []chatToUpdate
-
-	rows, err := messageDB.Query(`
-		SELECT jid, is_group FROM chats
-		WHERE name IS NULL OR name = ''
-		ORDER BY last_message_time DESC
-		LIMIT 50
-	`)
-	if err == nil {
-		for rows.Next() {
-			var jid string
-			var isGroup int
-			if rows.Scan(&jid, &isGroup) == nil {
-				chatsNeedingNames = append(chatsNeedingNames, chatToUpdate{jid, isGroup == 1})
-			}
-		}
-		rows.Close()
-	}
-
-	// Now update names (with cursor closed)
+	chatsNeedingNames, _ := getChatsNeedingNames(50)
 	for _, chat := range chatsNeedingNames {
 		name := getChatName(ctx, chat.jid, chat.isGroup)
 		if name != "" {
@@ -1359,7 +1336,14 @@ func cmdChats(args []string) error {
 	// For groups: use chat name only (don't fall back to sender name)
 	// For DMs: try contact name, then sender name from messages
 	// Compute unread_count from messages table (single source of truth)
+	// Use CTE to calculate unread count once, then use it in both SELECT and WHERE
 	query := `
+		WITH chat_unread AS (
+			SELECT chat_jid, COUNT(*) as cnt
+			FROM messages
+			WHERE is_read = 0 AND is_from_me = 0
+			GROUP BY chat_jid
+		)
 		SELECT c.jid,
 			CASE
 				WHEN c.is_group = 1 THEN COALESCE(NULLIF(c.name, ''), '')
@@ -1375,14 +1359,14 @@ func cmdChats(args []string) error {
 			END,
 			c.is_group,
 			c.last_message_time,
-			(SELECT COUNT(*) FROM messages m WHERE m.chat_jid = c.jid AND m.is_read = 0 AND m.is_from_me = 0) as unread_count,
+			COALESCE(cu.cnt, 0) as unread_count,
 			c.marked_as_unread
 		FROM chats c
-		LEFT JOIN contacts ct ON c.jid = ct.jid`
+		LEFT JOIN contacts ct ON c.jid = ct.jid
+		LEFT JOIN chat_unread cu ON c.jid = cu.chat_jid`
 	if unreadOnly {
 		query += `
-		WHERE (SELECT COUNT(*) FROM messages m WHERE m.chat_jid = c.jid AND m.is_read = 0 AND m.is_from_me = 0) > 0
-		   OR c.marked_as_unread = 1`
+		WHERE COALESCE(cu.cnt, 0) > 0 OR c.marked_as_unread = 1`
 	}
 	query += `
 		ORDER BY c.last_message_time DESC`
@@ -1603,29 +1587,9 @@ func cmdRefresh() error {
 	time.Sleep(2 * time.Second)
 
 	// Get chats without names
-	rows, err := messageDB.Query(`
-		SELECT jid, is_group FROM chats
-		WHERE name IS NULL OR name = ''
-		ORDER BY last_message_time DESC
-		LIMIT 100
-	`)
+	chatsToRefresh, err := getChatsNeedingNames(100)
 	if err != nil {
 		return fmt.Errorf("failed to query chats: %w", err)
-	}
-	defer rows.Close()
-
-	type chatInfo struct {
-		jid     string
-		isGroup bool
-	}
-	var chatsToRefresh []chatInfo
-	for rows.Next() {
-		var jid string
-		var isGroup int
-		if err := rows.Scan(&jid, &isGroup); err != nil {
-			continue
-		}
-		chatsToRefresh = append(chatsToRefresh, chatInfo{jid, isGroup == 1})
 	}
 
 	fmt.Fprintf(os.Stderr, "Refreshing names for %d chats...\n", len(chatsToRefresh))
@@ -2006,6 +1970,37 @@ func cmdLogout() error {
 }
 
 // Helper functions
+
+// chatForNameUpdate represents a chat that needs its name fetched/updated
+type chatForNameUpdate struct {
+	jid     string
+	isGroup bool
+}
+
+// getChatsNeedingNames returns chats that don't have names cached locally
+func getChatsNeedingNames(limit int) ([]chatForNameUpdate, error) {
+	rows, err := messageDB.Query(`
+		SELECT jid, is_group FROM chats
+		WHERE name IS NULL OR name = ''
+		ORDER BY last_message_time DESC
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var chats []chatForNameUpdate
+	for rows.Next() {
+		var jid string
+		var isGroup int
+		if err := rows.Scan(&jid, &isGroup); err != nil {
+			continue
+		}
+		chats = append(chats, chatForNameUpdate{jid, isGroup == 1})
+	}
+	return chats, rows.Err()
+}
 
 // getChatName returns the name for a chat, fetching from WhatsApp if not cached
 func getChatName(ctx context.Context, chatJID string, isGroup bool) string {

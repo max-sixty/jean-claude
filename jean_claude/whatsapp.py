@@ -19,6 +19,7 @@ import click
 
 from .input import read_body_stdin
 from .logging import JeanClaudeError, get_logger
+from .phone import looks_like_phone
 
 logger = get_logger(__name__)
 
@@ -308,9 +309,8 @@ def resolve_recipient(value: str) -> str:
     if "@" in value:
         return value
 
-    # Phone numbers: + followed by digits
-    cleaned = value.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-    if cleaned.startswith("+") and cleaned[1:].isdigit() and len(cleaned) >= 8:
+    # Phone numbers pass through directly
+    if looks_like_phone(value):
         return value
 
     # Try chat name lookup

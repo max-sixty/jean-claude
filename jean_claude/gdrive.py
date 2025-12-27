@@ -20,6 +20,14 @@ def get_drive():
     return build_service("drive", "v3")
 
 
+def _paginated_output(result: dict) -> dict:
+    """Build paginated output dict from API result."""
+    output: dict = {"files": result.get("files", [])}
+    if next_token := result.get("nextPageToken"):
+        output["nextPageToken"] = next_token
+    return output
+
+
 @click.group()
 def cli():
     """Google Drive CLI - list, search, and manage files."""
@@ -45,11 +53,7 @@ def list_files(folder: str | None, max_results: int, page_token: str):
         list_kwargs["pageToken"] = page_token
 
     result = get_drive().files().list(**list_kwargs).execute()
-
-    output: dict = {"files": result.get("files", [])}
-    if next_token := result.get("nextPageToken"):
-        output["nextPageToken"] = next_token
-    click.echo(json.dumps(output, indent=2))
+    click.echo(json.dumps(_paginated_output(result), indent=2))
 
 
 @cli.command()
@@ -76,11 +80,7 @@ def search(query: str, max_results: int, page_token: str):
         list_kwargs["pageToken"] = page_token
 
     result = get_drive().files().list(**list_kwargs).execute()
-
-    output: dict = {"files": result.get("files", [])}
-    if next_token := result.get("nextPageToken"):
-        output["nextPageToken"] = next_token
-    click.echo(json.dumps(output, indent=2))
+    click.echo(json.dumps(_paginated_output(result), indent=2))
 
 
 @cli.command()

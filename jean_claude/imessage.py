@@ -12,6 +12,7 @@ import click
 
 from .input import read_body_stdin
 from .logging import JeanClaudeError, get_logger
+from .phone import looks_like_phone, normalize_phone
 
 logger = get_logger(__name__)
 
@@ -204,13 +205,6 @@ return ""
 end run"""
     result = run_applescript(script, phone)
     return result if result else None
-
-
-def normalize_phone(phone: str) -> str:
-    """Normalize phone number to digits only (with leading + if present)."""
-    has_plus = phone.startswith("+")
-    digits = "".join(c for c in phone if c.isdigit())
-    return f"+{digits}" if has_plus else digits
 
 
 def find_group_chat_with_participants(participants: list[str]) -> str | None:
@@ -434,9 +428,6 @@ def resolve_recipient_from_string(value: str) -> str:
     - A phone number (starts with "+" followed by digits, or digit-only string)
     - A chat name (looked up in Messages.app)
     - A contact name (looked up in Contacts.app)
-
-    Phone number detection uses formatting-stripped values for matching but
-    returns the original value to preserve any user formatting.
     """
     # Chat IDs pass through directly
     if value.startswith("any;") or value.startswith("iMessage;"):
@@ -446,21 +437,8 @@ def resolve_recipient_from_string(value: str) -> str:
     if "@" in value:
         return value
 
-    # Phone numbers: check against formatting-stripped version
-    cleaned = (
-        value.replace(" ", "")
-        .replace("-", "")
-        .replace("(", "")
-        .replace(")", "")
-        .replace(".", "")
-    )
-
-    # +1234567890 format: must have + followed by digits only
-    if cleaned.startswith("+") and cleaned[1:].isdigit() and len(cleaned) >= 8:
-        return value
-
-    # Local format: all digits, at least 7 (shortest valid phone numbers)
-    if cleaned.isdigit() and len(cleaned) >= 7:
+    # Phone numbers pass through directly (preserving user formatting)
+    if looks_like_phone(value):
         return value
 
     # Try chat name first (groups and named individual chats)
@@ -555,20 +533,13 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
     """
     cursor = conn.cursor()
 
-    # Build SELECT columns - include is_from_me only when needed
-    is_from_me_col = "m.is_from_me," if query.include_is_from_me else ""
-    sender_col = (
-        "CASE WHEN m.is_from_me = 1 THEN 'me' ELSE COALESCE(h.id, c.chat_identifier, 'unknown') END"
-        if query.include_is_from_me
-        else "COALESCE(h.id, c.chat_identifier, 'unknown')"
-    )
-
+    # Always fetch is_from_me - simpler than conditional column building
     # Use subqueries with GROUP_CONCAT/json_group_array for participants and attachments
-    # This avoids N+1 queries
+    # to avoid N+1 queries
     sql = f"""
         SELECT
             datetime(m.date/1000000000 + {APPLE_EPOCH_OFFSET}, 'unixepoch', 'localtime') as date,
-            {sender_col} as sender,
+            CASE WHEN m.is_from_me = 1 THEN 'me' ELSE COALESCE(h.id, c.chat_identifier, 'unknown') END as sender,
             m.text,
             m.attributedBody,
             c.display_name,
@@ -587,8 +558,8 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
              WHERE maj.message_id = m.ROWID
                AND a.filename IS NOT NULL
                AND a.transfer_state IN (0, 5)
-            ) as attachments_json
-            {"," + is_from_me_col.rstrip(",") if is_from_me_col else ""}
+            ) as attachments_json,
+            m.is_from_me
         FROM message m
         LEFT JOIN handle h ON m.handle_id = h.ROWID
         LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
@@ -627,8 +598,8 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
             style,
             participants_str,
             attachments_json,
-        ) = row[:8]
-        is_from_me = row[8] if query.include_is_from_me else False
+            is_from_me_int,
+        ) = row
 
         msg_text = get_message_text(text, attributed_body)
         attachments = parse_attachments(attachments_json)
@@ -648,6 +619,9 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
             group_name = ", ".join(participant_names)
         else:
             group_name = None
+
+        # Only include is_from_me when requested (e.g., for chat history views)
+        is_from_me = bool(is_from_me_int) if query.include_is_from_me else False
 
         messages.append(
             build_message_dict(
