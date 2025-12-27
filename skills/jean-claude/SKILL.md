@@ -233,9 +233,29 @@ user limit), download your OAuth JSON from Google Cloud Console and save it as
 `~/.config/jean-claude/client_secret.json` before running the auth script. See
 README for detailed setup steps.
 
+### Feature Flags (WhatsApp & Signal)
+
+WhatsApp and Signal are **disabled by default**. These services require
+compiling native binaries (Go for WhatsApp, Rust for Signal), and we want
+jean-claude to work smoothly for Gmail/Calendar users without those toolchains.
+Enable explicitly if you need messaging:
+
+```bash
+# Enable via environment variable (for current session)
+export JEAN_CLAUDE_ENABLE_WHATSAPP=1
+export JEAN_CLAUDE_ENABLE_SIGNAL=1
+
+# Or enable via config file (persistent)
+mkdir -p ~/.config/jean-claude
+echo '{"enable_whatsapp": true, "enable_signal": true}' > ~/.config/jean-claude/config.json
+```
+
+The `status` command shows whether each service is enabled or disabled.
+
 ### WhatsApp
 
-WhatsApp requires a Go binary and QR code authentication. First-time setup:
+WhatsApp requires enabling the feature flag, a Go binary, and QR code
+authentication. First-time setup:
 
 ```bash
 # Build the Go CLI (requires Go installed)
@@ -259,7 +279,8 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp logout
 
 ### Signal
 
-Signal requires a Rust binary and QR code linking. First-time setup:
+Signal requires enabling the feature flag, a Rust binary, and QR code linking.
+First-time setup:
 
 ```bash
 # Build the Rust CLI (requires Rust/Cargo and protobuf installed)

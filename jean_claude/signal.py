@@ -11,6 +11,7 @@ from pathlib import Path
 
 import click
 
+from .config import is_signal_enabled
 from .input import read_body_stdin
 from .logging import JeanClaudeError, get_logger
 
@@ -113,6 +114,12 @@ def _run_signal_cli(*args: str, capture: bool = True) -> dict | list | None:
     Returns:
         Parsed JSON output, or None if capture=False
     """
+    if not is_signal_enabled():
+        raise JeanClaudeError(
+            "Signal is disabled. Enable via:\n"
+            "  - Environment: JEAN_CLAUDE_ENABLE_SIGNAL=1\n"
+            "  - Config: {\"enable_signal\": true} in ~/.config/jean-claude/config.json"
+        )
     cli_path = _get_signal_cli_path()
     cmd = [str(cli_path), *args]
     logger.debug("Running signal-cli", args=args)
@@ -161,6 +168,12 @@ def _run_signal_cli_with_stdin(*args: str, stdin_data: str) -> dict | list | Non
     Returns:
         Parsed JSON output
     """
+    if not is_signal_enabled():
+        raise JeanClaudeError(
+            "Signal is disabled. Enable via:\n"
+            "  - Environment: JEAN_CLAUDE_ENABLE_SIGNAL=1\n"
+            "  - Config: {\"enable_signal\": true} in ~/.config/jean-claude/config.json"
+        )
     cli_path = _get_signal_cli_path()
     cmd = [str(cli_path), *args]
     logger.debug("Running signal-cli with stdin", args=args)

@@ -17,6 +17,7 @@ from pathlib import Path
 
 import click
 
+from .config import is_whatsapp_enabled
 from .input import read_body_stdin
 from .logging import JeanClaudeError, get_logger
 from .messaging import (
@@ -230,6 +231,12 @@ def _run_whatsapp_cli(*args: str, capture: bool = True) -> dict | list | None:
     Returns:
         Parsed JSON output, or None if capture=False
     """
+    if not is_whatsapp_enabled():
+        raise JeanClaudeError(
+            "WhatsApp is disabled. Enable via:\n"
+            "  - Environment: JEAN_CLAUDE_ENABLE_WHATSAPP=1\n"
+            "  - Config: {\"enable_whatsapp\": true} in ~/.config/jean-claude/config.json"
+        )
     cli_path = _get_whatsapp_cli_path()
     cmd = [str(cli_path), *args]
     logger.debug("Running whatsapp-cli", args=args)
