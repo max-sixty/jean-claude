@@ -59,6 +59,26 @@ def parse_datetime(s: str) -> datetime:
     raise click.BadParameter(f"Cannot parse datetime: {s}")
 
 
+def calculate_all_day_dates(
+    start: str, end: str | None, duration: int | None
+) -> tuple[str, str]:
+    """Calculate start/end dates for all-day events.
+
+    Returns (start_date, end_date) as YYYY-MM-DD strings.
+    Note: end_date is exclusive per Google Calendar API.
+    """
+    start_dt = parse_datetime(start)
+    start_date = start_dt.strftime("%Y-%m-%d")
+    if end:
+        end_dt = parse_datetime(end)
+        end_date = (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+    elif duration:
+        end_date = (start_dt + timedelta(days=duration)).strftime("%Y-%m-%d")
+    else:
+        end_date = (start_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+    return start_date, end_date
+
+
 @click.group()
 def cli():
     """Google Calendar CLI - list, create, and search events."""
@@ -141,27 +161,15 @@ def create(
         jean-claude gcal create "Meeting" --start "2024-01-15 14:00"
         jean-claude gcal create "Vacation" --start 2024-01-15 --end 2024-01-20 --all-day
     """
-    start_dt = parse_datetime(start)
-
     if all_day:
-        # All-day events use date strings, not datetime
-        start_date = start_dt.strftime("%Y-%m-%d")
-        if end:
-            end_dt = parse_datetime(end)
-            # All-day end date is exclusive, so add 1 day
-            end_date = (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
-        elif duration:
-            end_date = (start_dt + timedelta(days=duration)).strftime("%Y-%m-%d")
-        else:
-            # Default: 1-day event (end is exclusive)
-            end_date = (start_dt + timedelta(days=1)).strftime("%Y-%m-%d")
-
+        start_date, end_date = calculate_all_day_dates(start, end, duration)
         event_body = {
             "summary": summary,
             "start": {"date": start_date},
             "end": {"date": end_date},
         }
     else:
+        start_dt = parse_datetime(start)
         if end:
             end_dt = parse_datetime(end)
         elif duration:
@@ -401,10 +409,16 @@ def delete(event_id: str, notify: bool):
 @cli.command()
 @click.argument("event_id")
 @click.option("--summary", help="New event title")
-@click.option("--start", help="New start time (YYYY-MM-DD HH:MM)")
-@click.option("--end", help="New end time (YYYY-MM-DD HH:MM)")
+@click.option("--start", help="New start time (YYYY-MM-DD HH:MM) or date (YYYY-MM-DD)")
+@click.option("--end", help="New end time (YYYY-MM-DD HH:MM) or date (YYYY-MM-DD)")
 @click.option(
-    "--duration", type=int, help="New duration in minutes (alternative to --end)"
+    "--duration", type=int, help="New duration in minutes (or days if --all-day)"
+)
+@click.option(
+    "--all-day",
+    "all_day",
+    is_flag=True,
+    help="Make this an all-day event (uses date only)",
 )
 @click.option("--location", help="New location")
 @click.option("--description", help="New description")
@@ -416,6 +430,7 @@ def update(
     start: str,
     end: str,
     duration: int,
+    all_day: bool,
     location: str,
     description: str,
     attendees: str,
@@ -442,7 +457,13 @@ def update(
     if attendees:
         event["attendees"] = [{"email": e.strip()} for e in attendees.split(",")]
 
-    if start:
+    if all_day:
+        if not start:
+            raise click.UsageError("--all-day requires --start to specify the date")
+        start_date, end_date = calculate_all_day_dates(start, end, duration)
+        event["start"] = {"date": start_date}
+        event["end"] = {"date": end_date}
+    elif start:
         start_dt = parse_datetime(start)
         event["start"] = {"dateTime": start_dt.isoformat(), "timeZone": TIMEZONE}
 
