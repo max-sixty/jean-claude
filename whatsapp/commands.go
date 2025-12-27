@@ -19,6 +19,7 @@ import (
 	"github.com/mdp/qrterminal/v3"
 	"github.com/skip2/go-qrcode"
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/appstate"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/proto/waWeb"
 	"go.mau.fi/whatsmeow/types"
@@ -504,8 +505,7 @@ func doSync(ctx context.Context) (messagesSaved int64, namesUpdated int, err err
 				}
 			}
 		case *events.MarkChatAsRead:
-			// Fired when we read messages on another device (e.g., phone)
-			// Only process if the action is marking as read (not unread)
+			// Fired when we read messages on another device (e.g., phone) or from app state sync
 			if v.Action != nil && v.Action.GetRead() {
 				chatJID := v.JID.String()
 				if _, err := messageDB.Exec(`UPDATE messages SET is_read = 1 WHERE chat_jid = ? AND is_read = 0`, chatJID); err != nil {
@@ -519,6 +519,14 @@ func doSync(ctx context.Context) (messagesSaved int64, namesUpdated int, err err
 
 	if err := client.Connect(); err != nil {
 		return 0, 0, fmt.Errorf("failed to connect: %w", err)
+	}
+
+	// Explicitly fetch read status from app state. WhatsApp doesn't push this
+	// automatically - we must request it. WAPatchRegularLow contains read/unread
+	// status, archive, and pin settings. This emits MarkChatAsRead events that
+	// our handler catches and uses to update the local database.
+	if err := client.FetchAppState(ctx, appstate.WAPatchRegularLow, false, false); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to fetch app state: %v\n", err)
 	}
 
 	// Idle-based sync completion.
@@ -1008,10 +1016,8 @@ func cmdChats(args []string) error {
 
 		chat := map[string]any{
 			"jid":      jid,
+			"name":     name, // Always include for consistent schema
 			"is_group": isGroup == 1,
-		}
-		if name != "" {
-			chat["name"] = name
 		}
 		if lastMessageTime.Valid {
 			chat["last_message_time"] = lastMessageTime.Int64
@@ -1267,7 +1273,6 @@ func cmdMarkRead(args []string) error {
 	if err := initMessageDB(); err != nil {
 		return err
 	}
-
 	// Get unread message IDs and sender JIDs for sending read receipts
 	rows, err := messageDB.Query(`
 		SELECT id, sender_jid FROM messages
@@ -1292,6 +1297,9 @@ func cmdMarkRead(args []string) error {
 		}
 	}
 	_ = rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to iterate rows: %w", err)
+	}
 
 	// Send read receipts to WhatsApp if there are unread messages
 	receiptsSent := 0
@@ -1304,6 +1312,7 @@ func cmdMarkRead(args []string) error {
 		if client.Store.ID != nil {
 			if err := client.Connect(); err == nil {
 				defer client.Disconnect()
+				// Wait for connection to stabilize before sending read receipts
 				time.Sleep(2 * time.Second)
 
 				// Parse chat JID
