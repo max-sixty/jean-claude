@@ -2155,6 +2155,12 @@ func saveMessage(evt *events.Message) error {
 
 	content := extractMessageContentFull(evt.Message)
 
+	// Skip system/protocol messages that have no user-visible content
+	switch content.MediaType {
+	case "key_distribution", "context_info", "protocol":
+		return nil
+	}
+
 	// New messages from others are unread; messages from self are read
 	// UPSERT: insert new messages, preserve read status if already marked read (MAX prevents read→unread)
 	isRead := boolToInt(info.IsFromMe)
@@ -2230,6 +2236,12 @@ func saveHistoryMessageWithReadStatus(chatJID string, msg *waWeb.WebMessageInfo,
 	}
 
 	content := extractMessageContentFull(msg.GetMessage())
+
+	// Skip system/protocol messages that have no user-visible content
+	switch content.MediaType {
+	case "key_distribution", "context_info", "protocol":
+		return nil
+	}
 
 	timestamp := int64(msg.GetMessageTimestamp())
 	if timestamp == 0 {
@@ -2569,6 +2581,51 @@ func extractMessageContentFull(m *waE2E.Message) MessageContent {
 			// Other protocol messages (key distribution, ephemeral settings, etc.)
 			content.MediaType = "protocol"
 		}
+
+	// Signal protocol key distribution - no user content, skip
+	case m.GetSenderKeyDistributionMessage() != nil:
+		content.MediaType = "key_distribution"
+	case m.GetFastRatchetKeySenderKeyDistributionMessage() != nil:
+		content.MediaType = "key_distribution"
+
+	// Metadata-only container - no user content
+	case m.GetMessageContextInfo() != nil:
+		content.MediaType = "context_info"
+
+	// Ephemeral/disappearing messages - unwrap the inner message
+	case m.GetEphemeralMessage() != nil:
+		if inner := m.GetEphemeralMessage().GetMessage(); inner != nil {
+			content = extractMessageContentFull(inner)
+		}
+
+	// Document with caption wrapper - unwrap the inner message
+	case m.GetDocumentWithCaptionMessage() != nil:
+		if inner := m.GetDocumentWithCaptionMessage().GetMessage(); inner != nil {
+			content = extractMessageContentFull(inner)
+		}
+
+	// Top-level edited message wrapper (different from ProtocolMessage edit)
+	case m.GetEditedMessage() != nil:
+		if inner := m.GetEditedMessage().GetMessage(); inner != nil {
+			content = extractMessageContentFull(inner)
+		}
+
+	// Push-to-talk video (circular video notes)
+	case m.GetPtvMessage() != nil:
+		vid := m.GetPtvMessage()
+		content.MediaType = "video"
+		content.Text = vid.GetCaption()
+		content.Media = &MediaMetadata{
+			MediaType:     "video",
+			MimeType:      vid.GetMimetype(),
+			MediaKey:      vid.GetMediaKey(),
+			FileSHA256:    vid.GetFileSHA256(),
+			FileEncSHA256: vid.GetFileEncSHA256(),
+			FileLength:    int64(vid.GetFileLength()),
+			DirectPath:    vid.GetDirectPath(),
+			URL:           vid.GetURL(),
+		}
+		extractReply(vid.GetContextInfo())
 
 	default:
 		// Log unrecognized message types for debugging
