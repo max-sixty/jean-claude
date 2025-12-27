@@ -44,13 +44,24 @@ var (
 )
 
 func init() {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Fatal: failed to get home directory: %v\n", err)
-		os.Exit(1)
+	// Allow override via environment variables (for testing)
+	configDir = os.Getenv("WHATSAPP_CONFIG_DIR")
+	dataDir = os.Getenv("WHATSAPP_DATA_DIR")
+
+	// Fall back to XDG-compliant defaults
+	if configDir == "" || dataDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Fatal: failed to get home directory: %v\n", err)
+			os.Exit(1)
+		}
+		if configDir == "" {
+			configDir = filepath.Join(home, ".config", "jean-claude", "whatsapp")
+		}
+		if dataDir == "" {
+			dataDir = filepath.Join(home, ".local", "share", "jean-claude", "whatsapp")
+		}
 	}
-	configDir = filepath.Join(home, ".config", "jean-claude", "whatsapp")
-	dataDir = filepath.Join(home, ".local", "share", "jean-claude", "whatsapp")
 }
 
 func main() {
