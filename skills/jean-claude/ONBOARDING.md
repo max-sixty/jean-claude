@@ -34,8 +34,8 @@ Ask which services they want. Present options conversationally, not as a menu:
 - Google Drive, Docs, Sheets (same OAuth, just more scopes)
 - iMessage (macOS only, requires granting permissions)
 - Apple Reminders (macOS only)
-- WhatsApp (requires phone pairing)
-- Signal (requires Signal Desktop)
+- WhatsApp (requires phone pairing via QR code)
+- Signal (requires phone pairing via QR code)
 
 Ask: "What would you like to set up? Most people start with email and calendar."
 
@@ -71,6 +71,12 @@ This opens their browser. Tell the user:
 
 > A browser window should open asking you to sign in with Google. After you
 > grant permission, you'll see a success message. Let me know when that's done.
+
+**If the user sees "This app isn't verified":** Explain that this warning
+appears because jean-claude uses a personal OAuth app that hasn't gone through
+Google's verification process (which costs money and requires a company). It's
+safe to proceed—they should click "Advanced" → "Go to jean-claude (unsafe)" →
+then grant the permissions. The "unsafe" label just means unverified.
 
 ### Step 3: Verify authentication
 

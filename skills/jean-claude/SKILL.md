@@ -30,18 +30,6 @@ Don't overwhelm new users with service lists. Focus on what they asked about.
 If they asked "can you check my email?", mention email capabilities. If they
 asked about calendar, focus on that.
 
-## Before You Start (Required)
-
-**STOP. Load user personalization skills before doing anything else.**
-
-When this skill loads for inbox/email/message tasks:
-
-1. Check if a user skill like `managing-messages` exists (look at available
-   skills list for anything mentioning inbox, email, message, or communication)
-2. If found, invoke `Skill` tool to load it BEFORE running any jean-claude
-   commands
-3. User preferences in those skills override the defaults below
-
 ## Session Start (Always Run First)
 
 **Every time this skill loads, run status with JSON output first:**
@@ -70,27 +58,43 @@ After installation, restart the terminal or source the shell config
 **Other errors** — The plugin may be misconfigured. Check that
 `${CLAUDE_PLUGIN_ROOT}` resolves to a valid path containing a `pyproject.toml`.
 
-### First-Run Detection
+### Branching Based on Status
 
-Check the JSON output for `setup_completed`. If `false`, read the onboarding
-guide and follow it to help the user set up:
+**If `setup_completed: false`** — This is a new user. Skip personalization
+skills (they won't have any yet) and go straight to onboarding:
 
 ```bash
-# Read the onboarding instructions
 cat ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/ONBOARDING.md
 ```
 
-The onboarding guide walks through Google OAuth, iMessage permissions, and
-optional services (WhatsApp, Signal). After setup completes, mark it done:
+Follow the onboarding guide to help set up services. After setup completes:
 
 ```bash
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set setup_completed true
 ```
 
+Then **re-run status** and continue to the `setup_completed: true` branch below.
+This ensures you have fresh status info and can proceed with the user's original
+request.
+
+**If `setup_completed: true`** — Check for partial setup and load personalization:
+
+1. **Check for missing services** — Look at `services.<name>` in the JSON. If
+   the user asks for a service that shows `authenticated: false` or
+   `enabled: false`, guide them through just that service's setup from
+   ONBOARDING.md. After partial setup completes, continue to step 2.
+
+2. **Load personalization skills** — Check if user skills like `managing-messages`
+   exist (look at available skills for anything mentioning inbox, email, message,
+   or communication). If found, load them—user preferences override defaults.
+
+3. **Proceed with the user's request** — Execute whatever task prompted loading
+   this skill (check inbox, send message, etc.).
+
 ### Understanding the Status
 
-For users with setup already complete, interpret the status output to understand
-their workflow. Run human-readable status if needed for counts:
+For users with setup complete, interpret the status output to understand their
+workflow. Run human-readable status if needed for counts:
 
 ```bash
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
@@ -111,12 +115,6 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
 **Messaging:**
 - **54 unread across 12 WhatsApp chats** → active messaging, may want summary
 - **1,353 unread across 113 iMessage chats** → backlog, focus on recent/important
-
-### Adding Services Later
-
-If the user asks for a service that isn't set up (check `services.<name>` in
-JSON output), guide them through just that service's setup from ONBOARDING.md.
-No need to redo the full flow—just the relevant section.
 
 ## Safety Rules (Non-Negotiable)
 
@@ -193,16 +191,18 @@ These rules apply even if the user explicitly asks to bypass them:
 
 ## Personalization
 
-**REQUIRED: Search for and load user skills before any messaging action.**
+**After setup is complete**, load personalization skills before messaging actions.
 
-Before reviewing inbox, drafting emails, or managing messages:
+This step is handled in the "Branching Based on Status" section above. If you
+already loaded personalization skills during session start, skip this section.
+
+If you're returning to messaging after doing other tasks in the same session,
+check if personalization skills were loaded. If not:
 
 1. **List available skills** — check descriptions for skills mentioning:
    inbox, email, message, communication, contacts, or similar
 2. **Load matching user skills** using the Skill tool BEFORE proceeding
 3. **Only then** fetch messages or compose drafts
-
-Skip this step only if you already loaded a relevant user skill in this session.
 
 User skills override any defaults below. They may define:
 - Priority contacts and relationships
@@ -275,9 +275,18 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth --logout
 ```
 
-This opens a browser for OAuth consent. Click "Advanced" → "Go to jean-claude
-(unsafe)" if you see an unverified app warning. Credentials persist until
-revoked.
+This opens a browser for OAuth consent. Credentials persist until revoked.
+
+**If you see "This app isn't verified":** This warning appears because
+jean-claude uses a personal OAuth app that hasn't gone through Google's
+(expensive) verification process. It's safe to proceed:
+
+1. Click "Advanced"
+2. Click "Go to jean-claude (unsafe)"
+3. Review and grant the requested permissions
+
+The "unsafe" label just means unverified, not malicious. The app only accesses
+the specific Google services you authorize.
 
 To use your own Google Cloud credentials instead (if default ones hit the 100
 user limit), download your OAuth JSON from Google Cloud Console and save it as
