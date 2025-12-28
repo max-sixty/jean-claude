@@ -4,39 +4,15 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta
-from pathlib import Path
-from zoneinfo import ZoneInfo
 
 import click
 
 from .auth import build_service
 from .logging import JeanClaudeError, get_logger
 from .pagination import paginated_output
+from .timezone import LOCAL_TZ, TIMEZONE
 
 logger = get_logger(__name__)
-
-
-# Auto-detect timezone from system
-def _get_local_timezone() -> str:
-    """Get local timezone in IANA format."""
-    # Try reading from macOS symlink (most reliable)
-    try:
-        tz_link = Path("/etc/localtime")
-        if tz_link.is_symlink():
-            target = str(tz_link.readlink())  # readlink, not resolve
-            parts = target.split("/")
-            if "zoneinfo" in parts:
-                idx = parts.index("zoneinfo")
-                return "/".join(parts[idx + 1 :])
-    except OSError as e:
-        logger.debug("Could not read /etc/localtime", error=str(e))
-    # Fallback with warning
-    logger.warning("Could not detect timezone, using America/Los_Angeles")
-    return "America/Los_Angeles"
-
-
-TIMEZONE = _get_local_timezone()
-LOCAL_TZ = ZoneInfo(TIMEZONE)
 
 
 def get_calendar():

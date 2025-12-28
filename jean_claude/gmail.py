@@ -59,7 +59,7 @@ import json
 import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.utils import formataddr, getaddresses, parseaddr
+from email.utils import formataddr, getaddresses, parseaddr, parsedate_to_datetime
 from pathlib import Path
 from typing import NoReturn
 
@@ -71,8 +71,21 @@ from .input import read_body_stdin, read_stdin_optional
 from .logging import JeanClaudeError, get_logger
 from .pagination import paginated_output
 from .paths import ATTACHMENT_CACHE_DIR, DRAFT_CACHE_DIR, EMAIL_CACHE_DIR
+from .timezone import LOCAL_TZ
 
 logger = get_logger(__name__)
+
+
+def _convert_to_local_time(date_str: str) -> str:
+    """Convert RFC 2822 date string to local time ISO format.
+
+    Input:  "Sun, 28 Dec 2025 07:01:08 +0000"
+    Output: "2025-12-27T23:01:08-08:00" (in user's local timezone)
+    """
+    if not date_str:
+        return date_str
+    dt = parsedate_to_datetime(date_str)
+    return dt.astimezone(LOCAL_TZ).isoformat()
 
 
 def get_gmail():
@@ -483,7 +496,7 @@ def extract_message_summary(msg: dict) -> dict:
         "from": headers.get("From", ""),
         "to": headers.get("To", ""),
         "subject": headers.get("Subject", ""),
-        "date": headers.get("Date", ""),
+        "date": _convert_to_local_time(headers.get("Date", "")),
         "snippet": msg.get("snippet", ""),
         "labels": msg.get("labelIds", []),
     }
@@ -526,7 +539,7 @@ def extract_thread_summary(thread: dict) -> dict:
         "from": headers.get("From", ""),
         "to": headers.get("To", ""),
         "subject": headers.get("Subject", ""),
-        "date": headers.get("Date", ""),
+        "date": _convert_to_local_time(headers.get("Date", "")),
         "snippet": latest_msg.get("snippet", ""),
         "labels": sorted(all_labels),
     }
@@ -755,16 +768,8 @@ def draft_send(draft_id: str):
 
 def _format_gmail_date(date_str: str) -> str:
     """Format date string to Gmail's reply format: 'Mon, 22 Dec 2025 at 02:50'."""
-    from email.utils import parsedate_to_datetime
-
-    try:
-        dt = parsedate_to_datetime(date_str)
-        # Gmail format: "Mon, 22 Dec 2025 at 02:50"
-        return dt.strftime("%a, %d %b %Y at %H:%M")
-    except ValueError as e:
-        # Malformed date header - log for debugging, fall back to original
-        logger.warning("Could not parse date header", date=date_str, error=str(e))
-        return date_str
+    dt = parsedate_to_datetime(date_str)
+    return dt.strftime("%a, %d %b %Y at %H:%M")
 
 
 def _build_quoted_reply(
