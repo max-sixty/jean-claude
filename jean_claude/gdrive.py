@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -13,8 +14,18 @@ from .auth import build_service
 from .logging import get_logger
 from .pagination import paginated_output
 from .paths import DRIVE_CACHE_DIR
+from .timezone import LOCAL_TZ
 
 logger = get_logger(__name__)
+
+
+def _convert_times_to_local(file: dict) -> dict:
+    """Convert modifiedTime/createdTime from UTC to local time."""
+    for field in ("modifiedTime", "createdTime"):
+        if field in file:
+            dt = datetime.fromisoformat(file[field].replace("Z", "+00:00"))
+            file[field] = dt.astimezone(LOCAL_TZ).isoformat()
+    return file
 
 
 def get_drive():
@@ -46,9 +57,8 @@ def list_files(folder: str | None, max_results: int, page_token: str):
         list_kwargs["pageToken"] = page_token
 
     result = get_drive().files().list(**list_kwargs).execute()
-    output = paginated_output(
-        "files", result.get("files", []), result.get("nextPageToken")
-    )
+    files = [_convert_times_to_local(f) for f in result.get("files", [])]
+    output = paginated_output("files", files, result.get("nextPageToken"))
     click.echo(json.dumps(output, indent=2))
 
 
@@ -76,9 +86,8 @@ def search(query: str, max_results: int, page_token: str):
         list_kwargs["pageToken"] = page_token
 
     result = get_drive().files().list(**list_kwargs).execute()
-    output = paginated_output(
-        "files", result.get("files", []), result.get("nextPageToken")
-    )
+    files = [_convert_times_to_local(f) for f in result.get("files", [])]
+    output = paginated_output("files", files, result.get("nextPageToken"))
     click.echo(json.dumps(output, indent=2))
 
 
@@ -96,7 +105,7 @@ def get(file_id: str):
         .execute()
     )
 
-    click.echo(json.dumps(f, indent=2))
+    click.echo(json.dumps(_convert_times_to_local(f), indent=2))
 
 
 @cli.command()
