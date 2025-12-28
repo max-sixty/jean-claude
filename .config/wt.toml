@@ -1,3 +1,6 @@
+# Run tests before merging (blocking, fail-fast)
+pre-merge = "uv run pytest"
+
 # Post-merge hooks
 # These run in the main worktree after successful merge and push
 # Available template variables: {{ repo }}, {{ branch }}, {{ worktree }}, {{ repo_root }}, {{ target }}
