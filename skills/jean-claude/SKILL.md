@@ -10,6 +10,26 @@ iMessage, WhatsApp, Signal, and Apple Reminders using the CLI tools in this plug
 
 **Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude `
 
+## What This Does (For First-Time Users)
+
+When a user asks about email, calendar, or messages and hasn't used jean-claude
+before, explain briefly:
+
+> I can connect to your email, calendar, and messaging apps to help you:
+>
+> - Read and send emails, manage drafts
+> - Check your calendar, create events, respond to invitations
+> - Send and read iMessages, WhatsApp, or Signal messages
+> - Find and manage files in Google Drive
+> - Create reminders
+>
+> This requires a one-time setup where you'll grant permissions. Want me to
+> help you get started?
+
+Don't overwhelm new users with service lists. Focus on what they asked about.
+If they asked "can you check my email?", mention email capabilities. If they
+asked about calendar, focus on that.
+
 ## Before You Start (Required)
 
 **STOP. Load user personalization skills before doing anything else.**
@@ -29,6 +49,26 @@ When this skill loads for inbox/email/message tasks:
 ```bash
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status --json
 ```
+
+### If Status Command Fails
+
+If the status command fails entirely (not just showing services as disabled):
+
+**"uv: command not found"** — The uv package manager isn't installed. Tell the
+user:
+
+> jean-claude requires the `uv` package manager. Let me install it for you.
+
+Then run:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+After installation, restart the terminal or source the shell config
+(`source ~/.zshrc` on macOS, `source ~/.bashrc` on Linux).
+
+**Other errors** — The plugin may be misconfigured. Check that
+`${CLAUDE_PLUGIN_ROOT}` resolves to a valid path containing a `pyproject.toml`.
 
 ### First-Run Detection
 

@@ -2,6 +2,11 @@
 
 Instructions for guiding a new user through jean-claude setup.
 
+**Command prefix:** All commands in this guide use the full prefix:
+```bash
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude ...
+```
+
 ## When to Load This Guide
 
 Load this guide when:
@@ -58,8 +63,8 @@ access.
 Run the appropriate command:
 
 ```bash
-jean-claude auth           # Full access
-jean-claude auth --readonly  # Read-only
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth           # Full access
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth --readonly  # Read-only
 ```
 
 This opens their browser. Tell the user:
@@ -72,7 +77,7 @@ This opens their browser. Tell the user:
 After user confirms, run:
 
 ```bash
-jean-claude status --json
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status --json
 ```
 
 Check `services.google.authenticated`. If true, confirm success and mention
@@ -82,7 +87,7 @@ which Google account is connected.
 
 - Browser didn't open? Ask user to check for a URL in terminal output to open
   manually
-- Wrong account? Run `jean-claude auth --logout` and retry
+- Wrong account? Run `jean-claude auth --logout` (with prefix) and retry
 - Permission denied? Work/school accounts may have admin restrictions
 
 ### Step 4: Confirm scope
@@ -110,7 +115,7 @@ Tell the user:
 Run a read-only command to trigger the Automation permission prompt:
 
 ```bash
-jean-claude imessage chats -n 1
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage chats -n 1
 ```
 
 If this returns a permission error, guide the user:
@@ -134,7 +139,7 @@ error, guide the user:
 >
 > Let me know when you've done this and restarted your terminal.
 
-After user confirms, re-run `jean-claude imessage chats -n 5` to verify.
+After user confirms, re-run `jean-claude imessage chats -n 5` (with prefix) to verify.
 
 ### Step 4: Confirm success
 
@@ -148,7 +153,7 @@ Reminders only needs Automation permission, granted automatically on first use.
 Run:
 
 ```bash
-jean-claude reminders list
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude reminders list
 ```
 
 If permission prompt appears, tell user to allow it. If denied, same Automation
@@ -168,7 +173,7 @@ Only proceed if user explicitly wants WhatsApp. It's not part of default setup.
 Run:
 
 ```bash
-jean-claude config set enable_whatsapp true
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set enable_whatsapp true
 ```
 
 ### Step 3: Authenticate
@@ -176,7 +181,7 @@ jean-claude config set enable_whatsapp true
 Run:
 
 ```bash
-jean-claude whatsapp auth
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp auth
 ```
 
 This displays a QR code in the terminal. Tell the user:
@@ -190,47 +195,44 @@ This displays a QR code in the terminal. Tell the user:
 After user confirms, run:
 
 ```bash
-jean-claude whatsapp chats -n 5
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp chats -n 5
 ```
 
 If successful, summarize: "WhatsApp is connected. I can see your recent chats."
 
 ## Signal Setup (Optional)
 
-Signal links as a secondary device to Signal Desktop.
+Signal links jean-claude as a secondary device to the user's Signal account.
+The user scans a QR code with their phone to authorize the connection.
 
-### Step 1: Check prerequisites
+**Prerequisite:** Confirm the user has Signal installed on their phone—they'll
+need it to scan the QR code.
 
-Ask: "Is Signal Desktop installed and signed in on this computer?"
-
-If not, this won't work. Signal CLI links to Signal Desktop, not directly to
-phone.
-
-### Step 2: Enable in config
+### Step 1: Enable in config
 
 ```bash
-jean-claude config set enable_signal true
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set enable_signal true
 ```
 
-### Step 3: Link device
+### Step 2: Link device
 
 Run:
 
 ```bash
-jean-claude signal link --device-name "jean-claude"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal link --device-name "jean-claude"
 ```
 
 Tell the user:
 
-> A QR code should appear. On your phone, open Signal → Settings → Linked
-> Devices → Link New Device, and scan the code.
+> A QR code should appear in the terminal. On your phone, open Signal →
+> Settings → Linked Devices → Link New Device, and scan the code.
 
-### Step 4: Verify
+### Step 3: Verify
 
 After user confirms:
 
 ```bash
-jean-claude signal chats -n 5
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal chats -n 5
 ```
 
 ## Setup Completion
@@ -238,13 +240,13 @@ jean-claude signal chats -n 5
 After all desired services are configured, mark setup complete:
 
 ```bash
-jean-claude config set setup_completed true
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set setup_completed true
 ```
 
 Run final status check:
 
 ```bash
-jean-claude status
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
 ```
 
 Summarize what's configured in natural language:
@@ -273,31 +275,32 @@ The agent runs the appropriate commands and presents results conversationally.
 If user wants to add services later or change access level:
 
 - "Add WhatsApp" → WhatsApp Setup section
-- "Switch to read-only" → `jean-claude auth --logout` then `jean-claude auth --readonly`
-- "What's configured?" → `jean-claude status`
+- "Switch to read-only" → Run `auth --logout` then `auth --readonly` (with prefix)
+- "What's configured?" → Run `status` (with prefix)
 
 ## Troubleshooting Reference
 
 ### Google auth issues
 
 - Browser didn't open: Look for URL in terminal output
-- Wrong account: `jean-claude auth --logout` and retry
+- Wrong account: Run `auth --logout` (with prefix) and retry
 - Scope issues: Re-run auth, pay attention to checkboxes in Google consent
 
 ### iMessage permission issues
 
-- Automation denied: System Preferences → Automation → enable terminal
+- Automation denied: System Preferences → Automation → enable terminal app
 - Full Disk Access: System Preferences → Full Disk Access → add terminal app
-- Still failing: Restart terminal completely after granting permissions
+- Still failing: Quit and reopen the terminal app after granting permissions
+- **Which terminal app?** Use the app where Claude Code is running (Terminal,
+  iTerm2, VS Code, Cursor, etc.)
 
 ### WhatsApp issues
 
 - QR code not appearing: Check `enable_whatsapp` is true in config
-- Won't connect: Phone must be online; try `jean-claude whatsapp auth --logout`
-  and re-pair
-- Connection drops: WhatsApp has a limit on linked devices
+- Won't connect: Phone must be online; run `whatsapp logout` and re-pair
+- Connection drops: WhatsApp limits linked devices to 4
 
 ### Signal issues
 
-- QR code not working: Signal Desktop must be running and signed in
-- Won't link: Try `jean-claude signal unlink` and re-link
+- QR code not working: Ensure phone has Signal installed and is online
+- Won't link: Run `signal unlink` and re-link
