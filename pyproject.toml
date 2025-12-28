@@ -38,6 +38,11 @@ artifacts = ["jean_claude/bin/*"]
 testpaths = ["tests"]
 markers = ["integration: tests requiring Google API credentials (deselected by default)"]
 addopts = "-m 'not integration'"
+filterwarnings = [
+    # httplib2 uses deprecated pyparsing API (setName, setParseAction, etc.)
+    # This is a third-party issue - httplib2 needs to update to pyparsing 3.x API
+    "ignore::DeprecationWarning:httplib2.auth",
+]
 
 [tool.typos.default.extend-words]
 # BA is a valid spreadsheet column (A-Z, AA-AZ, BA-BZ, etc.)
