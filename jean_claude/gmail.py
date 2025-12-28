@@ -497,7 +497,7 @@ def extract_message_summary(msg: dict) -> dict:
         "to": headers.get("To", ""),
         "subject": headers.get("Subject", ""),
         "date": _convert_to_local_time(headers.get("Date", "")),
-        "snippet": msg.get("snippet", ""),
+        "snippet": html.unescape(msg.get("snippet", "")),
         "labels": msg.get("labelIds", []),
     }
     if cc := headers.get("Cc"):
@@ -540,7 +540,7 @@ def extract_thread_summary(thread: dict) -> dict:
         "to": headers.get("To", ""),
         "subject": headers.get("Subject", ""),
         "date": _convert_to_local_time(headers.get("Date", "")),
-        "snippet": latest_msg.get("snippet", ""),
+        "snippet": html.unescape(latest_msg.get("snippet", "")),
         "labels": sorted(all_labels),
     }
     if cc := headers.get("Cc"):
@@ -561,7 +561,7 @@ def extract_draft_summary(draft: dict) -> dict:
         "messageId": msg["id"],
         "to": headers.get("To", ""),
         "subject": headers.get("Subject", ""),
-        "snippet": msg.get("snippet", ""),
+        "snippet": html.unescape(msg.get("snippet", "")),
     }
     if cc := headers.get("Cc"):
         result["cc"] = cc
