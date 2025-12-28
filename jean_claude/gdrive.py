@@ -52,6 +52,9 @@ def list_files(folder: str | None, max_results: int, page_token: str):
         "pageSize": max_results,
         "fields": "nextPageToken, files(id, name, mimeType, size, modifiedTime, webViewLink)",
         "orderBy": "folder, name",
+        "corpora": "allDrives",
+        "includeItemsFromAllDrives": True,
+        "supportsAllDrives": True,
     }
     if page_token:
         list_kwargs["pageToken"] = page_token
@@ -81,6 +84,9 @@ def search(query: str, max_results: int, page_token: str):
         "q": query,
         "pageSize": max_results,
         "fields": "nextPageToken, files(id, name, mimeType, size, modifiedTime, webViewLink)",
+        "corpora": "allDrives",
+        "includeItemsFromAllDrives": True,
+        "supportsAllDrives": True,
     }
     if page_token:
         list_kwargs["pageToken"] = page_token
@@ -101,6 +107,7 @@ def get(file_id: str):
         .get(
             fileId=file_id,
             fields="id, name, mimeType, size, createdTime, modifiedTime, webViewLink, parents, owners",
+            supportsAllDrives=True,
         )
         .execute()
     )
@@ -132,7 +139,11 @@ def download(file_id: str, output: str | None):
     service = get_drive()
 
     # Get file metadata first
-    f = service.files().get(fileId=file_id, fields="name, mimeType").execute()
+    f = (
+        service.files()
+        .get(fileId=file_id, fields="name, mimeType", supportsAllDrives=True)
+        .execute()
+    )
     filename = f.get("name", file_id)
     mime_type = f.get("mimeType", "")
 
@@ -153,7 +164,7 @@ def download(file_id: str, output: str | None):
         if not filename.endswith(ext):
             filename += ext
     else:
-        request = service.files().get_media(fileId=file_id)
+        request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
 
     fh = io.BytesIO()
     downloader = MediaIoBaseDownload(fh, request)
@@ -198,6 +209,7 @@ def upload(file_path: str, folder: str | None, name: str | None):
             body=file_metadata,
             media_body=media,
             fields="id, name, webViewLink",
+            supportsAllDrives=True,
         )
         .execute()
     )
@@ -227,6 +239,7 @@ def mkdir(name: str, folder: str | None):
         .create(
             body=file_metadata,
             fields="id, name, webViewLink",
+            supportsAllDrives=True,
         )
         .execute()
     )
@@ -261,6 +274,7 @@ def share(file_id: str, email: str, role: str, notify: bool):
         fileId=file_id,
         body=permission,
         sendNotificationEmail=notify,
+        supportsAllDrives=True,
     ).execute()
 
     logger.info("Shared file", file_id=file_id, email=email, role=role)
@@ -276,6 +290,7 @@ def trash(file_id: str):
     get_drive().files().update(
         fileId=file_id,
         body={"trashed": True},
+        supportsAllDrives=True,
     ).execute()
     logger.info("Trashed file", file_id=file_id)
     click.echo(json.dumps({"fileId": file_id, "trashed": True}, indent=2))
@@ -288,6 +303,7 @@ def untrash(file_id: str):
     get_drive().files().update(
         fileId=file_id,
         body={"trashed": False},
+        supportsAllDrives=True,
     ).execute()
     logger.info("Restored file", file_id=file_id)
     click.echo(json.dumps({"fileId": file_id, "restored": True}, indent=2))
@@ -305,7 +321,11 @@ def move(file_id: str, folder_id: str):
     service = get_drive()
 
     # Get current parents
-    f = service.files().get(fileId=file_id, fields="parents").execute()
+    f = (
+        service.files()
+        .get(fileId=file_id, fields="parents", supportsAllDrives=True)
+        .execute()
+    )
     previous_parents = ",".join(f["parents"])
 
     # Move to new folder
@@ -316,6 +336,7 @@ def move(file_id: str, folder_id: str):
             addParents=folder_id,
             removeParents=previous_parents,
             fields="id, name, webViewLink, parents",
+            supportsAllDrives=True,
         )
         .execute()
     )
