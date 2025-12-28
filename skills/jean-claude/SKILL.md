@@ -24,14 +24,37 @@ When this skill loads for inbox/email/message tasks:
 
 ## Session Start (Always Run First)
 
-**Every time this skill loads, run status to get context:**
+**Every time this skill loads, run status with JSON output first:**
+
+```bash
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status --json
+```
+
+### First-Run Detection
+
+Check the JSON output for `setup_completed`. If `false`, read the onboarding
+guide and follow it to help the user set up:
+
+```bash
+# Read the onboarding instructions
+cat ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/ONBOARDING.md
+```
+
+The onboarding guide walks through Google OAuth, iMessage permissions, and
+optional services (WhatsApp, Signal). After setup completes, mark it done:
+
+```bash
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set setup_completed true
+```
+
+### Understanding the Status
+
+For users with setup already complete, interpret the status output to understand
+their workflow. Run human-readable status if needed for counts:
 
 ```bash
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
 ```
-
-This shows authentication status and counts across all services. Use these to
-understand the user's workflow:
 
 **Gmail:**
 - **13 inbox, 11 unread** → inbox zero person, wants to triage everything
@@ -49,29 +72,11 @@ understand the user's workflow:
 - **54 unread across 12 WhatsApp chats** → active messaging, may want summary
 - **1,353 unread across 113 iMessage chats** → backlog, focus on recent/important
 
-**If not authenticated:** If nothing is authenticated, or the user asks for
-services that are not authenticated, use the AskUserQuestion tool to help them
-set up. For Google services, ask which access level they want:
+### Adding Services Later
 
-**Question:** "jean-claude needs Google access. Which mode would you like?"
-
-**Options:**
-1. **Read-only (Recommended to start)** - Can read emails, calendar, and Drive
-   files, but cannot send, modify, or delete anything. Good for getting
-   comfortable with the plugin first.
-2. **Full access** - Can read, send emails, create/modify calendar events, and
-   manage Drive files.
-
-**Context to include:** All data stays between your machine and Google—nothing
-is sent to Anthropic or any third party. The plugin uses OAuth to authenticate
-directly with your Google account.
-
-Based on their choice, run the appropriate auth command:
-- Read-only: `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth --readonly`
-- Full access: `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth`
-
-This opens a browser for OAuth consent. After authentication, verify with
-`status` again.
+If the user asks for a service that isn't set up (check `services.<name>` in
+JSON output), guide them through just that service's setup from ONBOARDING.md.
+No need to redo the full flow—just the relevant section.
 
 ## Safety Rules (Non-Negotiable)
 
@@ -247,13 +252,8 @@ jean-claude to work smoothly for Gmail/Calendar users without those toolchains.
 Enable explicitly if you need messaging:
 
 ```bash
-# Enable via environment variable (for current session)
-export JEAN_CLAUDE_ENABLE_WHATSAPP=1
-export JEAN_CLAUDE_ENABLE_SIGNAL=1
-
-# Or enable via config file (persistent)
-mkdir -p ~/.config/jean-claude
-echo '{"enable_whatsapp": true, "enable_signal": true}' > ~/.config/jean-claude/config.json
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set enable_whatsapp true
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set enable_signal true
 ```
 
 The `status` command shows whether each service is enabled or disabled.

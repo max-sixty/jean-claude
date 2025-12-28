@@ -1,0 +1,11 @@
+Usage: jean-claude config set [OPTIONS] KEY VALUE
+
+  Set a configuration value.
+
+  Examples:
+      jean-claude config set enable_whatsapp true
+      jean-claude config set enable_signal true
+      jean-claude config set setup_completed true
+
+Options:
+  --help  Show this message and exit.

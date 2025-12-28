@@ -33,6 +33,17 @@ the skill in sync.
 
 **Skill files are instructions for agents, not documentation for humans.**
 
+**Agents only receive SKILL.md initially.** When the plugin loads, Claude Code
+reads `skills/jean-claude/SKILL.md` and nothing else. Any other files in the
+skill directory (like `ONBOARDING.md`) must be explicitly referenced with a path
+so the agent knows to read them:
+
+```markdown
+# In SKILL.md
+If setup is needed, read the onboarding guide:
+cat ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/ONBOARDING.md
+```
+
 When writing or editing files in `skills/jean-claude/`, remember:
 
 - The **agent** reads the skill and runs commands

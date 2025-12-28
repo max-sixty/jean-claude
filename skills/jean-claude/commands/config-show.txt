@@ -1,0 +1,6 @@
+Usage: jean-claude config show [OPTIONS]
+
+  Show current configuration.
+
+Options:
+  --help  Show this message and exit.

@@ -117,8 +117,7 @@ def _run_signal_cli(*args: str, capture: bool = True) -> dict | list | None:
     if not is_signal_enabled():
         raise JeanClaudeError(
             "Signal is disabled. Enable via:\n"
-            "  - Environment: JEAN_CLAUDE_ENABLE_SIGNAL=1\n"
-            '  - Config: {"enable_signal": true} in ~/.config/jean-claude/config.json'
+            "  jean-claude config set enable_signal true"
         )
     cli_path = _get_signal_cli_path()
     cmd = [str(cli_path), *args]
@@ -171,8 +170,7 @@ def _run_signal_cli_with_stdin(*args: str, stdin_data: str) -> dict | list | Non
     if not is_signal_enabled():
         raise JeanClaudeError(
             "Signal is disabled. Enable via:\n"
-            "  - Environment: JEAN_CLAUDE_ENABLE_SIGNAL=1\n"
-            '  - Config: {"enable_signal": true} in ~/.config/jean-claude/config.json'
+            "  jean-claude config set enable_signal true"
         )
     cli_path = _get_signal_cli_path()
     cmd = [str(cli_path), *args]

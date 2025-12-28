@@ -10,7 +10,14 @@ import click
 from googleapiclient.errors import HttpError
 
 from .auth import SCOPES_FULL, SCOPES_READONLY, TOKEN_FILE, run_auth
-from .config import is_signal_enabled, is_whatsapp_enabled
+from .config import (
+    CONFIG_FILE,
+    get_config,
+    is_setup_completed,
+    is_signal_enabled,
+    is_whatsapp_enabled,
+    set_config_value,
+)
 from .gcal import cli as gcal_cli
 from .gdocs import cli as gdocs_cli
 from .gdrive import cli as gdrive_cli
@@ -117,8 +124,47 @@ def auth(readonly: bool, logout: bool):
 
 
 @cli.command()
-def status():
+@click.option(
+    "--json", "as_json", is_flag=True, help="Output as JSON for programmatic use"
+)
+def status(as_json: bool):
     """Show authentication status and API availability."""
+    if as_json:
+        _status_json()
+    else:
+        _status_human()
+
+
+def _status_json():
+    """Output status as JSON for programmatic use."""
+    services: dict[str, dict] = {}
+
+    # Google status
+    services["google"] = _get_google_status()
+
+    # iMessage status (macOS only)
+    if sys.platform == "darwin":
+        services["imessage"] = _get_imessage_status()
+        services["reminders"] = _get_reminders_status()
+
+    # WhatsApp status
+    services["whatsapp"] = _get_whatsapp_status()
+
+    # Signal status
+    services["signal"] = _get_signal_status()
+
+    result = {
+        "platform": sys.platform,
+        "config_exists": CONFIG_FILE.exists(),
+        "setup_completed": is_setup_completed(),
+        "services": services,
+    }
+
+    click.echo(json.dumps(result, indent=2))
+
+
+def _status_human():
+    """Output status as human-readable text."""
     # Google Workspace status
     if not TOKEN_FILE.exists():
         click.echo("Google: " + click.style("Not authenticated", fg="yellow"))
@@ -168,6 +214,184 @@ def status():
     # Signal status
     click.echo()
     _check_signal_status()
+
+
+def _get_google_status() -> dict:
+    """Get Google service status as a dict."""
+    if not TOKEN_FILE.exists():
+        return {"enabled": True, "authenticated": False}
+
+    try:
+        token_data = json.loads(TOKEN_FILE.read_text())
+        scopes = set(token_data.get("scopes", []))
+    except (json.JSONDecodeError, KeyError):
+        return {
+            "enabled": True,
+            "authenticated": False,
+            "error": "Token file corrupted",
+        }
+
+    # Determine scope level
+    if scopes == set(SCOPES_FULL):
+        scope_level = "full"
+    elif scopes == set(SCOPES_READONLY):
+        scope_level = "readonly"
+    else:
+        scope_level = "custom"
+
+    result = {
+        "enabled": True,
+        "authenticated": True,
+        "scopes": scope_level,
+    }
+
+    # Try to get user email
+    try:
+        from .auth import build_service
+
+        gmail = build_service("gmail", "v1")
+        profile = gmail.users().getProfile(userId="me").execute()
+        result["user"] = profile.get("emailAddress", "unknown")
+    except Exception as e:
+        result["user_fetch_error"] = str(e)
+
+    return result
+
+
+def _get_imessage_status() -> dict:
+    """Get iMessage status as a dict."""
+    import sqlite3
+    import subprocess
+    from pathlib import Path
+
+    result = {"enabled": True}
+
+    # Check send capability (AppleScript/Automation permission)
+    test_script = 'tell application "Messages" to get name'
+    proc = subprocess.run(
+        ["osascript", "-e", test_script],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    result["send_permission"] = proc.returncode == 0
+    if not result["send_permission"]:
+        error = proc.stderr.strip()
+        if "not allowed" in error.lower() or "assistive" in error.lower():
+            result["send_error"] = "Automation permission required"
+        else:
+            result["send_error"] = error
+
+    # Check read capability (Full Disk Access to Messages database)
+    db_path = Path.home() / "Library" / "Messages" / "chat.db"
+    if not db_path.exists():
+        result["read_permission"] = False
+        result["read_error"] = "Messages database not found"
+    else:
+        try:
+            with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+                conn.execute("SELECT 1 FROM message LIMIT 1")
+                result["read_permission"] = True
+        except sqlite3.OperationalError as e:
+            result["read_permission"] = False
+            if "unable to open" in str(e):
+                result["read_error"] = "Full Disk Access required"
+            else:
+                result["read_error"] = str(e)
+
+    return result
+
+
+def _get_reminders_status() -> dict:
+    """Get Apple Reminders status as a dict."""
+    import subprocess
+
+    result = {"enabled": True}
+
+    test_script = 'tell application "Reminders" to get name of default list'
+    proc = subprocess.run(
+        ["osascript", "-e", test_script],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    result["authenticated"] = proc.returncode == 0
+    if not result["authenticated"]:
+        error = proc.stderr.strip()
+        if "not allowed" in error.lower() or "assistive" in error.lower():
+            result["error"] = "Automation permission required"
+        else:
+            result["error"] = error
+
+    return result
+
+
+def _get_whatsapp_status() -> dict:
+    """Get WhatsApp status as a dict."""
+    from .logging import JeanClaudeError
+    from .whatsapp import _get_whatsapp_cli_path, _run_whatsapp_cli
+
+    if not is_whatsapp_enabled():
+        return {"enabled": False}
+
+    result = {"enabled": True}
+
+    # Check if CLI binary exists
+    try:
+        _get_whatsapp_cli_path()
+        result["cli_available"] = True
+    except JeanClaudeError:
+        result["cli_available"] = False
+        result["error"] = "CLI binary not built"
+        return result
+
+    # Check authentication status
+    try:
+        status = _run_whatsapp_cli("status")
+        if status and isinstance(status, dict) and status.get("authenticated"):
+            result["authenticated"] = True
+            result["phone"] = status.get("phone", "unknown")
+        else:
+            result["authenticated"] = False
+    except Exception as e:
+        result["authenticated"] = False
+        result["error"] = str(e)
+
+    return result
+
+
+def _get_signal_status() -> dict:
+    """Get Signal status as a dict."""
+    from .logging import JeanClaudeError
+    from .signal import _get_signal_cli_path, _run_signal_cli
+
+    if not is_signal_enabled():
+        return {"enabled": False}
+
+    result = {"enabled": True}
+
+    # Check if CLI binary exists
+    try:
+        _get_signal_cli_path()
+        result["cli_available"] = True
+    except JeanClaudeError:
+        result["cli_available"] = False
+        result["error"] = "CLI binary not built"
+        return result
+
+    # Check authentication status
+    try:
+        status = _run_signal_cli("status")
+        if status and isinstance(status, dict) and status.get("linked"):
+            result["authenticated"] = True
+            result["phone"] = status.get("phone", "unknown")
+        else:
+            result["authenticated"] = False
+    except Exception as e:
+        result["authenticated"] = False
+        result["error"] = str(e)
+
+    return result
 
 
 def _check_google_apis() -> None:
@@ -257,6 +481,7 @@ def _check_imessage_status() -> None:
         ["osascript", "-e", test_script],
         capture_output=True,
         text=True,
+        timeout=10,
     )
     if result.returncode == 0:
         click.echo("  Send: " + click.style("OK", fg="green"))
@@ -316,6 +541,7 @@ def _check_reminders_status() -> None:
         ["osascript", "-e", test_script],
         capture_output=True,
         text=True,
+        timeout=10,
     )
     if result.returncode == 0:
         click.echo("  Access: " + click.style("OK", fg="green"))
@@ -345,7 +571,7 @@ def _check_whatsapp_status() -> None:
     # Check if feature is enabled
     if not is_whatsapp_enabled():
         click.echo("  " + click.style("Disabled", fg="yellow"))
-        click.echo("    Enable: JEAN_CLAUDE_ENABLE_WHATSAPP=1")
+        click.echo("    Enable: jean-claude config set enable_whatsapp true")
         return
 
     # Check if CLI binary exists
@@ -361,7 +587,7 @@ def _check_whatsapp_status() -> None:
     # Check authentication status
     try:
         result = _run_whatsapp_cli("status")
-        if result and result.get("authenticated"):
+        if result and isinstance(result, dict) and result.get("authenticated"):
             phone = result.get("phone", "unknown")
             click.echo("  Auth: " + click.style(f"Authenticated ({phone})", fg="green"))
             try:
@@ -385,7 +611,7 @@ def _check_signal_status() -> None:
     # Check if feature is enabled
     if not is_signal_enabled():
         click.echo("  " + click.style("Disabled", fg="yellow"))
-        click.echo("    Enable: JEAN_CLAUDE_ENABLE_SIGNAL=1")
+        click.echo("    Enable: jean-claude config set enable_signal true")
         return
 
     # Check if CLI binary exists
@@ -401,7 +627,7 @@ def _check_signal_status() -> None:
     # Check authentication status
     try:
         result = _run_signal_cli("status")
-        if result and result.get("linked"):
+        if result and isinstance(result, dict) and result.get("linked"):
             phone = result.get("phone", "unknown")
             click.echo("  Auth: " + click.style(f"Linked ({phone})", fg="green"))
         else:
@@ -562,3 +788,53 @@ def completions(shell: str):
 
     comp = comp_cls(cli, {}, "jean-claude", "_JEAN_CLAUDE_COMPLETE")
     click.echo(comp.source())
+
+
+@cli.group()
+def config():
+    """Manage jean-claude configuration."""
+    pass
+
+
+@config.command("show")
+def config_show():
+    """Show current configuration."""
+    current = get_config()
+    click.echo(json.dumps(current, indent=2))
+
+
+@config.command("set")
+@click.argument("key")
+@click.argument("value")
+def config_set(key: str, value: str):
+    """Set a configuration value.
+
+    \b
+    Examples:
+        jean-claude config set enable_whatsapp true
+        jean-claude config set enable_signal true
+        jean-claude config set setup_completed true
+    """
+    from .config import DEFAULT_CONFIG
+
+    # Validate key is known
+    if key not in DEFAULT_CONFIG:
+        valid_keys = ", ".join(sorted(DEFAULT_CONFIG.keys()))
+        raise JeanClaudeError(f"Unknown config key: {key}. Valid keys: {valid_keys}")
+
+    # Parse boolean values
+    if value.lower() in ("true", "1", "yes", "on"):
+        parsed_value: bool | str = True
+    elif value.lower() in ("false", "0", "no", "off"):
+        parsed_value = False
+    else:
+        parsed_value = value
+
+    # Reject non-boolean values for boolean keys
+    if isinstance(DEFAULT_CONFIG[key], bool) and not isinstance(parsed_value, bool):
+        raise JeanClaudeError(
+            f"Config key '{key}' requires a boolean value (true/false), got: {value}"
+        )
+
+    set_config_value(key, parsed_value)
+    logger.info(f"Set {key}={parsed_value}")

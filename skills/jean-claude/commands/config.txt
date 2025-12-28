@@ -1,0 +1,10 @@
+Usage: jean-claude config [OPTIONS] COMMAND [ARGS]...
+
+  Manage jean-claude configuration.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  set   Set a configuration value.
+  show  Show current configuration.

@@ -12,6 +12,7 @@ Options:
 Commands:
   auth         Authenticate with Google APIs.
   completions  Generate shell completion script.
+  config       Manage jean-claude configuration.
   gcal         Google Calendar CLI - list, create, and search events.
   gdocs        Google Docs CLI - read and write document content.
   gdrive       Google Drive CLI - list, search, and manage files.
