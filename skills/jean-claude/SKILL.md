@@ -562,6 +562,56 @@ print(urllib.parse.unquote(encoded_url))
 - Cloudflare-protected sites (Coinbase, etc.) block automated requests — provide
   the decoded URL to the user to click manually
 
+### Labels
+
+List all Gmail labels to get label IDs for filtering:
+
+```bash
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail labels
+```
+
+Returns system labels (INBOX, SENT, TRASH, etc.) and custom labels (Label_123...).
+
+### Filters
+
+Filters automatically process incoming mail based on criteria.
+
+```bash
+# List all filters
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter list
+
+# Get a specific filter
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter get FILTER_ID
+
+# Delete a filter
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter delete FILTER_ID
+```
+
+**Creating filters** — query + label operations:
+
+```bash
+# Archive (remove INBOX label)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter create \
+    "to:reports@company.com" -r INBOX
+
+# Star and mark important
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter create \
+    "from:boss@company.com" -a STARRED -a IMPORTANT
+
+# Mark as read (remove UNREAD label)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter create \
+    "from:alerts@service.com" -r UNREAD
+
+# Forward
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter create \
+    "from:vip@example.com" -f backup@example.com
+```
+
+**Common labels:** `INBOX`, `UNREAD`, `STARRED`, `IMPORTANT`, `TRASH`, `SPAM`,
+`CATEGORY_PROMOTIONS`, `CATEGORY_SOCIAL`, `CATEGORY_UPDATES`
+
+**Custom labels:** Use `gmail labels` to get IDs like `Label_123456`.
+
 ## Calendar
 
 All calendar commands return JSON.

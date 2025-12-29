@@ -1,0 +1,15 @@
+Usage: jean-claude gmail labels [OPTIONS]
+
+  List all Gmail labels.
+
+  Returns label IDs and names. Use label IDs with filter --add-label/--remove-
+  label.
+
+  System labels have fixed IDs like INBOX, SENT, TRASH, SPAM, STARRED, UNREAD.
+  Custom labels have generated IDs like Label_123456789.
+
+  Example:
+      jean-claude gmail labels
+
+Options:
+  --help  Show this message and exit.

@@ -1,0 +1,90 @@
+# gmail filter
+
+Usage: jean-claude gmail filter [OPTIONS] COMMAND [ARGS]...
+
+  Manage Gmail filters.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  create  Create a new Gmail filter.
+  delete  Delete a Gmail filter.
+  get     Get a specific filter by ID.
+  list    List all Gmail filters.
+
+
+## gmail filter create
+
+Usage: jean-claude gmail filter create [OPTIONS] QUERY
+
+  Create a new Gmail filter.
+
+  QUERY uses Gmail search syntax. Actions are label operations or forwarding.
+
+  Common labels:
+      INBOX, UNREAD, STARRED, IMPORTANT, TRASH, SPAM
+      CATEGORY_PERSONAL, CATEGORY_SOCIAL, CATEGORY_PROMOTIONS, CATEGORY_UPDATES
+
+  Examples:
+      # Archive (remove from inbox)
+      jean-claude gmail filter create "to:reports@company.com" -r INBOX
+
+      # Star and mark important     jean-claude gmail filter create
+      "from:boss@company.com" -a STARRED -a IMPORTANT
+
+      # Mark as read (remove UNREAD label)     jean-claude gmail filter create
+      "from:notifications@github.com" -r UNREAD
+
+      # Apply custom label (use 'gmail labels' to get IDs)     jean-claude
+      gmail filter create "from:client@example.com" -a Label_123
+
+      # Forward     jean-claude gmail filter create "from:vip@example.com" -f
+      backup@example.com
+
+Options:
+  -a, --add-label TEXT     Label to add (can repeat)
+  -r, --remove-label TEXT  Label to remove (can repeat)
+  -f, --forward TEXT       Email address to forward to (must be verified)
+  --help                   Show this message and exit.
+
+
+## gmail filter delete
+
+Usage: jean-claude gmail filter delete [OPTIONS] FILTER_ID
+
+  Delete a Gmail filter.
+
+  Example:
+      jean-claude gmail filter delete ANe1BmjXYZ123
+
+Options:
+  --help  Show this message and exit.
+
+
+## gmail filter get
+
+Usage: jean-claude gmail filter get [OPTIONS] FILTER_ID
+
+  Get a specific filter by ID.
+
+  Example:
+      jean-claude gmail filter get ANe1BmjXYZ123
+
+Options:
+  --help  Show this message and exit.
+
+
+## gmail filter list
+
+Usage: jean-claude gmail filter list [OPTIONS]
+
+  List all Gmail filters.
+
+  Returns all filters with their criteria and actions.
+
+  Example:
+      jean-claude gmail filter list
+
+Options:
+  --help  Show this message and exit.

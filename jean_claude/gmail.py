@@ -1539,6 +1539,166 @@ def extract_attachments_from_payload(payload: dict) -> list[dict]:
     return attachments
 
 
+# Filter command group
+@cli.group()
+def filter():
+    """Manage Gmail filters."""
+    pass
+
+
+@filter.command("list")
+def filter_list():
+    """List all Gmail filters.
+
+    Returns all filters with their criteria and actions.
+
+    \b
+    Example:
+        jean-claude gmail filter list
+    """
+    service = get_gmail()
+    results = service.users().settings().filters().list(userId="me").execute()
+    filters = results.get("filter", [])
+
+    # Transform to consistent output format
+    output = [
+        {"id": f["id"], "criteria": f["criteria"], "action": f["action"]}
+        for f in filters
+    ]
+
+    click.echo(json.dumps({"filters": output}, indent=2))
+
+
+@filter.command("get")
+@click.argument("filter_id")
+def filter_get(filter_id: str):
+    """Get a specific filter by ID.
+
+    \b
+    Example:
+        jean-claude gmail filter get ANe1BmjXYZ123
+    """
+    service = get_gmail()
+    f = service.users().settings().filters().get(userId="me", id=filter_id).execute()
+
+    output = {"id": f["id"], "criteria": f["criteria"], "action": f["action"]}
+    click.echo(json.dumps(output, indent=2))
+
+
+@filter.command("create")
+@click.argument("query")
+@click.option("--add-label", "-a", multiple=True, help="Label to add (can repeat)")
+@click.option(
+    "--remove-label", "-r", multiple=True, help="Label to remove (can repeat)"
+)
+@click.option("--forward", "-f", help="Email address to forward to (must be verified)")
+def filter_create(
+    query: str,
+    add_label: tuple[str, ...],
+    remove_label: tuple[str, ...],
+    forward: str | None,
+):
+    """Create a new Gmail filter.
+
+    QUERY uses Gmail search syntax. Actions are label operations or forwarding.
+
+    \b
+    Common labels:
+        INBOX, UNREAD, STARRED, IMPORTANT, TRASH, SPAM
+        CATEGORY_PERSONAL, CATEGORY_SOCIAL, CATEGORY_PROMOTIONS, CATEGORY_UPDATES
+
+    \b
+    Examples:
+        # Archive (remove from inbox)
+        jean-claude gmail filter create "to:reports@company.com" -r INBOX
+
+        # Star and mark important
+        jean-claude gmail filter create "from:boss@company.com" -a STARRED -a IMPORTANT
+
+        # Mark as read (remove UNREAD label)
+        jean-claude gmail filter create "from:notifications@github.com" -r UNREAD
+
+        # Apply custom label (use 'gmail labels' to get IDs)
+        jean-claude gmail filter create "from:client@example.com" -a Label_123
+
+        # Forward
+        jean-claude gmail filter create "from:vip@example.com" -f backup@example.com
+    """
+    action: dict = {}
+    if add_label:
+        action["addLabelIds"] = list(add_label)
+    if remove_label:
+        action["removeLabelIds"] = list(remove_label)
+    if forward:
+        action["forward"] = forward
+
+    if not action:
+        raise JeanClaudeError(
+            "At least one action required: --add-label, --remove-label, or --forward"
+        )
+
+    service = get_gmail()
+    criteria = {"query": query}
+    body = {"criteria": criteria, "action": action}
+    result = (
+        service.users().settings().filters().create(userId="me", body=body).execute()
+    )
+
+    logger.info("Created filter", id=result["id"])
+    click.echo(
+        json.dumps(
+            {"id": result["id"], "criteria": criteria, "action": action}, indent=2
+        )
+    )
+
+
+@filter.command("delete")
+@click.argument("filter_id")
+def filter_delete(filter_id: str):
+    """Delete a Gmail filter.
+
+    \b
+    Example:
+        jean-claude gmail filter delete ANe1BmjXYZ123
+    """
+    service = get_gmail()
+    service.users().settings().filters().delete(userId="me", id=filter_id).execute()
+    logger.info("Deleted filter", id=filter_id)
+
+
+@cli.command()
+def labels():
+    """List all Gmail labels.
+
+    Returns label IDs and names. Use label IDs with filter --add-label/--remove-label.
+
+    System labels have fixed IDs like INBOX, SENT, TRASH, SPAM, STARRED, UNREAD.
+    Custom labels have generated IDs like Label_123456789.
+
+    \b
+    Example:
+        jean-claude gmail labels
+    """
+    service = get_gmail()
+    results = service.users().labels().list(userId="me").execute()
+    labels_list = results.get("labels", [])
+
+    # Sort: system labels first, then custom labels alphabetically
+    def sort_key(label):
+        # System labels (INBOX, SENT, etc.) typically don't have 'Label_' prefix
+        is_custom = label["id"].startswith("Label_")
+        return (is_custom, label["name"])
+
+    labels_list.sort(key=sort_key)
+
+    output = [
+        {"id": label["id"], "name": label["name"], "type": label["type"]}
+        for label in labels_list
+    ]
+
+    click.echo(json.dumps({"labels": output}, indent=2))
+
+
 @cli.command()
 @click.argument("message_id")
 def attachments(message_id: str):
