@@ -230,22 +230,39 @@ Use these defaults in lieu of any user preferences:
 When showing messages (inbox, unread, search results), use a numbered list so
 the user can reference items by number: "archive 1, reply to 2", "star 3 and 5".
 
-**Always include dates.** Recency matters for prioritization. An email from
-today is urgent; the same email from two weeks ago is a missed follow-up.
-Include the date (and time for today's messages) so the user can assess urgency.
+**Always include dates conversationally.** Recency matters for prioritization.
+Present dates relative to now so the user can immediately assess urgency without
+mental math. Check today's date before formatting:
 
+```bash
+date "+%Y-%m-%d %H:%M %Z"  # Current date/time for reference
 ```
-1. **Squarespace** (Dec 27, 9:15 AM) — Domain transfer rejected
+
+**Date formatting rules:**
+- **Today**: "today at 9:15 AM" or "3 hours ago"
+- **Yesterday**: "yesterday at 2:30 PM"
+- **This week**: "Monday at 10:00 AM" (day name, not date)
+- **This year**: "Dec 15" or "Dec 15 at 3pm" (if time matters)
+- **Older**: "Nov 15, 2024"
+
+**Example** (assuming today is Sunday, Dec 29):
+```
+1. **DoorDash** (2 hours ago) — Your order from Superba
+   Order confirmed for pickup...
+
+2. **Squarespace** (yesterday at 9:15 AM) — Domain transfer rejected
    The transfer for fitzalanhoward.uk was rejected...
 
-2. **Ailish Campbell** (Nov 15) — Forwarded: Aspen Institute Fellowship
-   To discuss...
+3. **GitHub** (Friday at 4:30 PM) — PR merged: fix-auth-flow
+   Your pull request was merged...
 
-3. **DoorDash** (Dec 27, 1:40 PM) — Your order from Superba
-   Order confirmed for pickup...
+4. **Ailish Campbell** (Nov 15) — Forwarded: Aspen Institute Fellowship
+   To discuss...
 ```
 
-For today's messages, include the time. For older messages, date alone suffices.
+Never show raw dates like "Dec 27" when "yesterday" or "2 days ago" conveys
+the same information more naturally. The user shouldn't have to calculate how
+long ago something was.
 
 ## Proactive Follow-Through
 
