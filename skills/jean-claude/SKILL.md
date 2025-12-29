@@ -247,6 +247,44 @@ Include the date (and time for today's messages) so the user can assess urgency.
 
 For today's messages, include the time. For older messages, date alone suffices.
 
+## Proactive Follow-Through
+
+When the user asks to read or review something, complete the task fully:
+
+- **"Read the email from X"** → Fetch the email, read the body, AND if it has
+  attachments (PDFs, images), download and read them without asking
+- **"Check my messages"** → If messages contain images, view them and describe
+  what they show
+- **"Look at the calendar invite"** → Open the attachment or linked document
+
+Don't stop at metadata and ask "want me to download the attachment?" — that's
+asking the user to do your job. The user said "read the email," not "list the
+email's attachments."
+
+<example>
+<bad>
+
+User: "read the amex email"
+
+Agent: _fetches email metadata_
+
+"The AMEX email has a PDF attachment (claim_docs.pdf, 28KB). Want me to download it?"
+
+</bad>
+<good>
+
+User: "read the amex email"
+
+Agent: _fetches email, downloads PDF, reads it_
+
+"AMEX sent claim documents for #12266792. The PDF contains:
+- Claim form to fill out
+- Instructions to mail to [address]
+- Supporting documentation requirements"
+
+</good>
+</example>
+
 ## Setup
 
 ### Prerequisites
