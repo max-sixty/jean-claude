@@ -587,6 +587,11 @@ def inbox(max_results: int, unread: bool, page_token: str | None):
 
     Returns threads (conversations) matching Gmail UI behavior.
     A thread shows as unread if ANY message in it is unread.
+
+    Note: Gmail has a known bug where previously-snoozed threads may appear in
+    --unread results even after being read. The snooze state isn't exposed via
+    the API, so we can't filter these client-side. See:
+    https://issuetracker.google.com/issues/151714665
     """
     query = "in:inbox"
     if unread:
