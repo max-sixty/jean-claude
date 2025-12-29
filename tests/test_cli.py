@@ -72,6 +72,10 @@ def test_status_no_auth(tmp_path, monkeypatch):
 
     monkeypatch.setattr(whatsapp, "_get_whatsapp_cli_path", mock_get_path)
 
+    # Mock Reminders status check (osascript can timeout in CI)
+    monkeypatch.setattr(cli_module, "_get_reminders_status", lambda: {"enabled": False})
+    monkeypatch.setattr(cli_module, "_check_reminders_status", lambda: None)
+
     runner = CliRunner()
     result = runner.invoke(cli, ["status"])
     assert result.exit_code == 0
