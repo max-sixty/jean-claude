@@ -975,6 +975,14 @@ end run"""
         click.echo(json.dumps({"participants": []}))
 
 
+_OPEN_CHAT_SCRIPT = """on run {chatId}
+  tell application "Messages"
+    activate
+    set targetChat to chat id chatId
+  end tell
+end run"""
+
+
 @cli.command("open")
 @click.argument("chat_id")
 def open_chat(chat_id: str):
@@ -987,15 +995,38 @@ def open_chat(chat_id: str):
         jean-claude imessage open "any;-;+12025551234"
         jean-claude imessage open "any;+;chat123456789"
     """
-    script = """on run {chatId}
-  tell application "Messages"
-    activate
-    set targetChat to chat id chatId
-  end tell
-end run"""
-
-    run_applescript(script, chat_id)
+    run_applescript(_OPEN_CHAT_SCRIPT, chat_id)
     click.echo(f"Opened chat: {chat_id}")
+
+
+@cli.command("mark-read")
+@click.argument("chat_ids", nargs=-1, required=True)
+def mark_read(chat_ids: tuple[str, ...]):
+    """Mark messages in chats as read by opening them in Messages.app.
+
+    CHAT_IDS: One or more chat IDs (e.g., any;-;+12025551234 or any;+;chat123...)
+
+    Note: This opens each chat in Messages.app briefly to mark messages as read.
+    Messages.app must be running for this to work.
+
+    \b
+    Examples:
+        jean-claude imessage mark-read "any;-;+12025551234"
+        jean-claude imessage mark-read "chat1" "chat2" "chat3"
+    """
+    chats_marked = 0
+    for chat_id in chat_ids:
+        try:
+            run_applescript(_OPEN_CHAT_SCRIPT, chat_id)
+            chats_marked += 1
+        except Exception as e:
+            logger.warning("Failed to mark chat as read", chat_id=chat_id, error=str(e))
+
+    output = {
+        "success": True,
+        "chats_marked": chats_marked,
+    }
+    click.echo(json.dumps(output, indent=2))
 
 
 @cli.command()

@@ -298,3 +298,20 @@ def messages(chat_id: str, max_results: int):
     result = _run_signal_cli("messages", chat_id, "-n", str(max_results))
     if result:
         click.echo(json.dumps(result, indent=2))
+
+
+@cli.command("mark-read")
+@click.argument("chat_ids", nargs=-1, required=True)
+def mark_read(chat_ids: tuple[str, ...]):
+    """Mark messages in chats as read (local only).
+
+    CHAT_IDS: One or more UUIDs of contacts or hex group IDs.
+
+    \b
+    Examples:
+        jean-claude signal mark-read "abc123-def456-..."
+        jean-claude signal mark-read "uuid1" "uuid2" "grouphex"
+    """
+    result = _run_signal_cli("mark-read", *chat_ids)
+    if result:
+        click.echo(json.dumps(result, indent=2))

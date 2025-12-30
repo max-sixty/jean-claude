@@ -1,0 +1,12 @@
+Usage: jean-claude signal mark-read [OPTIONS] CHAT_IDS...
+
+  Mark messages in chats as read (local only).
+
+  CHAT_IDS: One or more UUIDs of contacts or hex group IDs.
+
+  Examples:
+      jean-claude signal mark-read "abc123-def456-..."
+      jean-claude signal mark-read "uuid1" "uuid2" "grouphex"
+
+Options:
+  --help  Show this message and exit.

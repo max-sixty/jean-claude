@@ -1,0 +1,16 @@
+Usage: jean-claude imessage mark-read [OPTIONS] CHAT_IDS...
+
+  Mark messages in chats as read by opening them in Messages.app.
+
+  CHAT_IDS: One or more chat IDs (e.g., any;-;+12025551234 or
+  any;+;chat123...)
+
+  Note: This opens each chat in Messages.app briefly to mark messages as read.
+  Messages.app must be running for this to work.
+
+  Examples:
+      jean-claude imessage mark-read "any;-;+12025551234"
+      jean-claude imessage mark-read "chat1" "chat2" "chat3"
+
+Options:
+  --help  Show this message and exit.

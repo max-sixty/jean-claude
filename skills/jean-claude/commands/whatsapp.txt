@@ -14,7 +14,7 @@ Commands:
   contacts      List WhatsApp contacts from local database.
   download      Download media from a message.
   logout        Log out and clear WhatsApp credentials.
-  mark-read     Mark all messages in a chat as read.
+  mark-read     Mark all messages in chats as read.
   messages      List messages from local database.
   participants  List participants of a group chat.
   search        Search message history.

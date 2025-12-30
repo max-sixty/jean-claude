@@ -9,10 +9,11 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  chats     List Signal chats (contacts and groups).
-  link      Link as a secondary device by scanning QR code.
-  messages  Read stored messages from a chat.
-  receive   Receive pending messages.
-  send      Send a Signal message.
-  status    Show Signal connection status.
-  whoami    Show account information.
+  chats      List Signal chats (contacts and groups).
+  link       Link as a secondary device by scanning QR code.
+  mark-read  Mark messages in chats as read (local only).
+  messages   Read stored messages from a chat.
+  receive    Receive pending messages.
+  send       Send a Signal message.
+  status     Show Signal connection status.
+  whoami     Show account information.

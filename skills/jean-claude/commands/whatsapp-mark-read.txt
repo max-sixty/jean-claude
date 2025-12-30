@@ -1,11 +1,12 @@
-Usage: jean-claude whatsapp mark-read [OPTIONS] CHAT_ID
+Usage: jean-claude whatsapp mark-read [OPTIONS] CHAT_IDS...
 
-  Mark all messages in a chat as read.
+  Mark all messages in chats as read.
 
-  CHAT_ID: The chat ID (e.g., "120363277025153496@g.us")
+  CHAT_IDS: One or more chat IDs (e.g., "120363277025153496@g.us")
 
   Examples:
       jean-claude whatsapp mark-read "120363277025153496@g.us"
+      jean-claude whatsapp mark-read "chat1@g.us" "chat2@s.whatsapp.net"
 
 Options:
   --help  Show this message and exit.

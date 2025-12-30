@@ -10,6 +10,7 @@ Options:
 
 Commands:
   chats         List available iMessage chats.
+  mark-read     Mark messages in chats as read by opening them in...
   messages      List messages from local database (requires Full Disk...
   open          Open a chat in Messages.app (marks messages as read).
   participants  List participants of a group chat.

@@ -211,6 +211,30 @@ Consistent flags across all commands:
 - **`-n` / `--max-results`** - Limit number of results (never `--limit`)
 - **`--page-token`** - Pagination token for large result sets
 
+### Batch Operations
+
+**Commands that operate on items should accept multiple IDs.** Use `nargs=-1` in
+Click so agents can process many items in one invocation:
+
+```python
+@cli.command("mark-read")
+@click.argument("thread_ids", nargs=-1, required=True)
+def mark_read(thread_ids: tuple[str, ...]):
+    for thread_id in thread_ids:
+        # process each
+```
+
+This lets agents write `mark-read id1 id2 id3` instead of looping with separate
+commands. The library handles iteration, aggregates results, and returns a
+summary:
+
+```json
+{"success": true, "chats_marked": 3, "total_messages_marked": 47}
+```
+
+**Why this matters:** Each CLI invocation has overhead (process spawn, auth,
+connection). Batch support reduces agent round-trips and keeps workflows simple.
+
 ### Input Conventions
 
 - **Stdin** — Content that needs to avoid shell escaping

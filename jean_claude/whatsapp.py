@@ -522,19 +522,35 @@ def participants(chat_id: str):
 
 
 @cli.command("mark-read")
-@click.argument("chat_id")
-def mark_read(chat_id: str):
-    """Mark all messages in a chat as read.
+@click.argument("chat_ids", nargs=-1, required=True)
+def mark_read(chat_ids: tuple[str, ...]):
+    """Mark all messages in chats as read.
 
-    CHAT_ID: The chat ID (e.g., "120363277025153496@g.us")
+    CHAT_IDS: One or more chat IDs (e.g., "120363277025153496@g.us")
 
     \b
     Examples:
         jean-claude whatsapp mark-read "120363277025153496@g.us"
+        jean-claude whatsapp mark-read "chat1@g.us" "chat2@s.whatsapp.net"
     """
-    result = _run_whatsapp_cli("mark-read", chat_id)
-    if result:
-        click.echo(json.dumps(result, indent=2))
+    results = []
+    total_messages = 0
+    total_receipts = 0
+
+    for chat_id in chat_ids:
+        result = _run_whatsapp_cli("mark-read", chat_id)
+        if result:
+            results.append(result)
+            total_messages += result.get("messages_marked", 0)
+            total_receipts += result.get("receipts_sent", 0)
+
+    output = {
+        "success": True,
+        "chats_marked": len(results),
+        "total_messages_marked": total_messages,
+        "total_receipts_sent": total_receipts,
+    }
+    click.echo(json.dumps(output, indent=2))
 
 
 @cli.command()

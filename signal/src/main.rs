@@ -79,6 +79,12 @@ enum Command {
 
     /// Show connection status
     Status,
+
+    /// Mark messages in a chat as read (local only)
+    MarkRead {
+        /// Chat IDs (UUID for contacts, hex for groups)
+        chat_ids: Vec<String>,
+    },
 }
 
 /// Output types for JSON serialization
@@ -132,6 +138,13 @@ struct LinkOutput {
     success: bool,
     uuid: String,
     device_name: String,
+}
+
+#[derive(Serialize)]
+struct MarkReadOutput {
+    success: bool,
+    chats_marked: usize,
+    messages_marked: i64,
 }
 
 fn get_data_dir() -> Result<PathBuf> {
@@ -212,6 +225,20 @@ mod read_sync {
                 mark_as_read(&tx, sender_aci, timestamp)?;
                 count += 1;
             }
+        }
+
+        tx.commit()?;
+        Ok(count)
+    }
+
+    /// Mark all messages from a sender as read.
+    pub fn mark_sender_read(conn: &mut Connection, sender_aci: &str, timestamps: &[u64]) -> Result<i64> {
+        let tx = conn.transaction()?;
+        let mut count = 0i64;
+
+        for &ts in timestamps {
+            mark_as_read(&tx, sender_aci, ts)?;
+            count += 1;
         }
 
         tx.commit()?;
@@ -636,6 +663,66 @@ async fn cmd_status() -> Result<()> {
     Ok(())
 }
 
+async fn cmd_mark_read(chat_ids: Vec<String>) -> Result<()> {
+    let manager = load_registered_manager().await?;
+    let store = manager.store();
+    let my_uuid = manager.whoami().await?.aci;
+
+    let mut read_db = read_sync::open_read_sync_db()?;
+    let mut total_messages = 0i64;
+    let mut chats_marked = 0usize;
+
+    for chat_id in &chat_ids {
+        // Parse chat_id as UUID (contact) or hex (group)
+        let thread = if let Ok(uuid) = chat_id.parse::<Uuid>() {
+            Thread::Contact(uuid)
+        } else if let Ok(master_key) = hex::decode(chat_id) {
+            let key: [u8; 32] = master_key
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("Group master key must be 32 bytes"))?;
+            Thread::Group(key)
+        } else {
+            warn!("Invalid chat_id: {}", chat_id);
+            continue;
+        };
+
+        // Get all incoming messages from this chat and mark them read
+        // Collect (sender_aci, timestamp) pairs - groups have multiple senders
+        let messages_iter = store.messages(&thread, ..).await?;
+        let mut to_mark: Vec<(String, u64)> = Vec::new();
+
+        for content in messages_iter.flatten() {
+            if let ContentBody::DataMessage(dm) = &content.body {
+                let sender_uuid = content.metadata.sender.raw_uuid();
+                if sender_uuid != my_uuid {
+                    // Incoming message
+                    if let Some(ts) = dm.timestamp {
+                        let sender_aci = sender_uuid.to_string();
+                        if !read_sync::is_read(&read_db, &sender_aci, ts) {
+                            to_mark.push((sender_aci, ts));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Mark each message with its actual sender
+        for (sender_aci, ts) in &to_mark {
+            read_sync::mark_sender_read(&mut read_db, sender_aci, &[*ts])?;
+        }
+        total_messages += to_mark.len() as i64;
+        chats_marked += 1;
+    }
+
+    let output = MarkReadOutput {
+        success: true,
+        chats_marked,
+        messages_marked: total_messages,
+    };
+    println!("{}", serde_json::to_string_pretty(&output)?);
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -656,5 +743,6 @@ async fn main() -> Result<()> {
         Command::Receive => cmd_receive().await,
         Command::Messages { chat_id, max_results } => cmd_messages(chat_id, max_results).await,
         Command::Status => cmd_status().await,
+        Command::MarkRead { chat_ids } => cmd_mark_read(chat_ids).await,
     }
 }
