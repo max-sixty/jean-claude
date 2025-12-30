@@ -1401,3 +1401,26 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal whoami
 # Check connection status
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal status
 ```
+
+## Location Context
+
+When you need the user's location for "near me" queries or search context, use
+these sources in order of reliability:
+
+1. **User preferences** — Check if the user has a home/work location in their
+   personalization skills or previous conversations
+
+2. **Recent calendar events** — Search for events with locations (home address,
+   frequent venues, school addresses reveal neighborhood)
+
+3. **System timezone** — Narrows to region (e.g., America/Los_Angeles → US West Coast)
+
+4. **IP geolocation** (last resort) — Can be inaccurate:
+   ```bash
+   curl -s ipinfo.io/json | jq '{city, region, country, loc}'
+   ```
+   This often returns a nearby city rather than the actual location (e.g., shows
+   "La Puente" for someone in Santa Monica). Treat as approximate region only.
+
+When using any inferred location, state your assumption so the user can correct
+it: "I see you're in the LA area based on your calendar — searching there."
