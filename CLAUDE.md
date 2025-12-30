@@ -146,6 +146,50 @@ cd whatsapp && go build -o whatsapp-cli . # Build the binary
 The Python wrapper (`jean_claude/whatsapp.py`) auto-compiles the Go binary on
 first use if Go is installed, or downloads a pre-built binary from PyPI.
 
+### WhatsApp Read Status Sync Architecture
+
+Understanding how WhatsApp syncs read/unread status is critical for debugging
+unread count issues. This is based on the official WhatsApp Security Whitepaper
+and whatsmeow library behavior.
+
+**Two separate sync mechanisms:**
+
+1. **Chat-level read status** (app state)
+   - Stored as encrypted patches on WhatsApp servers (`WAPatchRegular*`)
+   - Contains `markChatAsRead` entries when user marks a chat as read
+   - Synced via `FetchAppState()` → emits `events.MarkChatAsRead`
+   - Persistent: survives device disconnection, available on reconnect
+
+2. **Message-level read receipts** (real-time)
+   - Per-message read receipts sent when messages are read
+   - `events.Receipt` with `ReceiptTypeReadSelf` for cross-device reads
+   - Real-time: must be connected to receive
+
+**Key configuration for correct sync:**
+
+```go
+// Must be set BEFORE connecting - enables MarkChatAsRead events during sync
+client.EmitAppStateEventsOnFullSync = true
+
+// Fetch with fullSync=true to get all app state patches
+client.FetchAppState(ctx, appstate.WAPatchRegularLow, true, false)
+```
+
+**HistorySync is one-time only:** The `events.HistorySync` with `unreadCount`
+per conversation only fires when first pairing a device. It's not the ongoing
+reconnect mechanism - app state patches handle that.
+
+**Debugging unread issues:**
+
+1. Check if `MarkChatAsRead` events are firing during sync (add debug logging)
+2. Verify `EmitAppStateEventsOnFullSync = true` is set before `Connect()`
+3. Verify `FetchAppState` is called with `fullSync=true`
+4. The `mark-all-read` command exists as a manual reset escape hatch
+
+**Sources:**
+- [WhatsApp Security Whitepaper](https://www.whatsapp.com/security/WhatsApp-Security-Whitepaper.pdf) - App State Syncing section
+- [whatsmeow appstate package](https://pkg.go.dev/go.mau.fi/whatsmeow/appstate)
+
 ## Testing Commands
 
 Commands can be tested directly:

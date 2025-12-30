@@ -49,6 +49,9 @@ func initClient(ctx context.Context) error {
 	}
 
 	client = whatsmeow.NewClient(device, logger)
+	// Enable app state events during full sync so we receive MarkChatAsRead events
+	// when re-syncing read status for all chats
+	client.EmitAppStateEventsOnFullSync = true
 	return nil
 }
 

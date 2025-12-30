@@ -431,6 +431,16 @@ func doSync(ctx context.Context) (messagesSaved int64, namesUpdated int, err err
 				// Get unread count from WhatsApp - this is the authoritative source
 				unreadCount := int(conv.GetUnreadCount())
 
+				// If unreadCount is 0, mark ALL existing messages in this chat as read.
+				// This handles the case where messages were marked read on the phone before sync.
+				// The MAX(is_read, excluded.is_read) in saveHistoryMessage prevents us from
+				// downgrading read status, so we need to explicitly update here.
+				if unreadCount == 0 && !conv.GetMarkedAsUnread() {
+					if _, err := messageDB.Exec(`UPDATE messages SET is_read = 1 WHERE chat_jid = ? AND is_read = 0`, chatJID); err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: failed to mark chat messages read during history sync: %v\n", err)
+					}
+				}
+
 				// Track most recent message timestamp for this conversation
 				var latestTimestamp int64
 
@@ -505,15 +515,19 @@ func doSync(ctx context.Context) (messagesSaved int64, namesUpdated int, err err
 				}
 			}
 		case *events.MarkChatAsRead:
-			// Fired when we read messages on another device (e.g., phone) or from app state sync
+			// Fired when we read messages on another device (e.g., phone) or from app state sync.
+			// v.Action.GetRead() returns true if the chat was marked as read, false if marked as unread.
+			chatJID := v.JID.String()
 			if v.Action != nil && v.Action.GetRead() {
-				chatJID := v.JID.String()
+				// Mark all messages in this chat as read
 				if _, err := messageDB.Exec(`UPDATE messages SET is_read = 1 WHERE chat_jid = ? AND is_read = 0`, chatJID); err != nil {
 					fmt.Fprintf(os.Stderr, "Warning: failed to mark chat messages read: %v\n", err)
 				}
 				// Clear the "marked as unread" flag
 				_, _ = messageDB.Exec(`UPDATE chats SET marked_as_unread = 0 WHERE jid = ?`, chatJID)
 			}
+			// Note: read:false means "mark as unread" - we don't need to do anything since
+			// messages are already unread by default when they arrive.
 		}
 	})
 
@@ -521,11 +535,14 @@ func doSync(ctx context.Context) (messagesSaved int64, namesUpdated int, err err
 		return 0, 0, fmt.Errorf("failed to connect: %w", err)
 	}
 
-	// Explicitly fetch read status from app state. WhatsApp doesn't push this
-	// automatically - we must request it. WAPatchRegularLow contains read/unread
-	// status, archive, and pin settings. This emits MarkChatAsRead events that
-	// our handler catches and uses to update the local database.
-	if err := client.FetchAppState(ctx, appstate.WAPatchRegularLow, false, false); err != nil {
+	// Fetch read status from app state. WAPatchRegularLow contains MarkChatAsRead
+	// mutations that tell us which chats have been explicitly marked as read/unread.
+	// This syncs read status for chats where the user has explicitly interacted.
+	//
+	// Note: WhatsApp only tracks explicit "mark as read/unread" actions in app state,
+	// not implicit reading (viewing messages). For chats without explicit markers,
+	// we rely on HistorySync unreadCount or user's manual mark-read commands.
+	if err := client.FetchAppState(ctx, appstate.WAPatchRegularLow, true, false); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to fetch app state: %v\n", err)
 	}
 
@@ -1258,6 +1275,29 @@ func cmdRefresh() error {
 		"success":       true,
 		"chats_found":   len(chatsToRefresh),
 		"names_updated": updated,
+	}
+	return printJSON(output)
+}
+
+// cmdMarkAllRead marks all messages in all chats as read (local only)
+func cmdMarkAllRead() error {
+	if err := initMessageDB(); err != nil {
+		return err
+	}
+
+	// Mark all messages as read
+	result, err := messageDB.Exec(`UPDATE messages SET is_read = 1 WHERE is_read = 0`)
+	if err != nil {
+		return fmt.Errorf("failed to mark messages as read: %w", err)
+	}
+	affected, _ := result.RowsAffected()
+
+	// Clear all "marked as unread" flags
+	_, _ = messageDB.Exec(`UPDATE chats SET marked_as_unread = 0 WHERE marked_as_unread = 1`)
+
+	output := map[string]any{
+		"success":         true,
+		"messages_marked": affected,
 	}
 	return printJSON(output)
 }

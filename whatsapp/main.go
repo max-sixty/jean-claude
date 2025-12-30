@@ -98,6 +98,8 @@ func main() {
 		err = cmdRefresh()
 	case "mark-read":
 		err = cmdMarkRead(args)
+	case "mark-all-read":
+		err = cmdMarkAllRead()
 	case "download":
 		err = cmdDownload(args)
 	case "status":
@@ -135,6 +137,7 @@ Commands:
   participants  List group participants: participants <group-jid>
   refresh       Fetch chat/group names from WhatsApp
   mark-read     Mark messages in a chat as read: mark-read <chat-jid>
+  mark-all-read Mark all messages in all chats as read
   download      Download media from a message: download <message-id> [--output path]
   status        Show connection status
   logout        Log out and clear credentials
