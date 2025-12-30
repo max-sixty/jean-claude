@@ -671,6 +671,20 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter create \
 
 All calendar commands return JSON.
 
+### Proactive Calendar Management
+
+When creating or updating calendar events, proactively add useful information:
+
+- **Add attendees** — If the user mentions meeting someone, add them to the
+  invite. Look up their email from previous events or contacts.
+- **Add locations** — If the user mentions a place, add the full address. Search
+  for the venue to get the complete address.
+- **Add video links** — For remote meetings, include the video call link if
+  known.
+
+Don't just create a bare event title. A calendar invite should have everything
+attendees need to show up prepared.
+
 ### Calendar Safety (Non-Negotiable)
 
 **Dates are high-stakes. Mistakes waste people's time and cause confusion.**
@@ -694,6 +708,12 @@ All calendar commands return JSON.
    - Event title
    - Date and time (with day of week)
    - Attendees (with their actual email addresses)
+   - Location (with full address)
+
+5. **Confirm ambiguous locations.** When adding a location, if the place name
+   could refer to multiple locations (chains, common names, multiple branches),
+   ask the user which one before setting it. "SVB" could mean San Vicente
+   Bungalows in West Hollywood or Santa Monica—don't guess.
 
 **Example workflow:**
 ```
@@ -707,6 +727,18 @@ User: "Add a meeting with Alice for next Tuesday at 2pm"
 5. Create the event
 6. Verify: gcal list --from 2025-12-30 --to 2025-12-30
 7. Confirm to user only after verification
+```
+
+**Example: location disambiguation:**
+```
+User: "Add the address to the dinner invite — it's at SVB"
+
+1. Search for the event to update
+2. Note: "SVB" is ambiguous (San Vicente Bungalows has locations in West
+   Hollywood and Santa Monica)
+3. Ask: "Which SVB location? West Hollywood (845 N San Vicente Blvd) or
+   Santa Monica?"
+4. Wait for user response before updating
 ```
 
 ### List Events
