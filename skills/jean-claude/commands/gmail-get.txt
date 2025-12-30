@@ -1,12 +1,13 @@
-Usage: jean-claude gmail get [OPTIONS] MESSAGE_ID
+Usage: jean-claude gmail get [OPTIONS] MESSAGE_IDS...
 
-  Get a single message by ID, written to file.
+  Get messages by ID, written to files.
 
-  Fetches the full message content and writes it to ~/.cache/jean-
-  claude/emails/. Returns the message summary JSON to stdout.
+  Fetches full message content and writes to ~/.cache/jean-claude/emails/.
+  Returns message summaries as JSON to stdout.
 
-  Example:
+  Examples:
       jean-claude gmail get 19b51f93fcf3f8ca
+      jean-claude gmail get id1 id2 id3
 
 Options:
   --help  Show this message and exit.

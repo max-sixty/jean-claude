@@ -612,26 +612,29 @@ def search(query: str, max_results: int, page_token: str | None):
 
 
 @cli.command()
-@click.argument("message_id")
-def get(message_id: str):
-    """Get a single message by ID, written to file.
+@click.argument("message_ids", nargs=-1, required=True)
+def get(message_ids: tuple[str, ...]):
+    """Get messages by ID, written to files.
 
-    Fetches the full message content and writes it to ~/.cache/jean-claude/emails/.
-    Returns the message summary JSON to stdout.
+    Fetches full message content and writes to ~/.cache/jean-claude/emails/.
+    Returns message summaries as JSON to stdout.
 
     \b
-    Example:
+    Examples:
         jean-claude gmail get 19b51f93fcf3f8ca
+        jean-claude gmail get id1 id2 id3
     """
     service = get_gmail()
-    msg = (
-        service.users()
-        .messages()
-        .get(userId="me", id=message_id, format="full")
-        .execute()
-    )
-    summary = extract_message_summary(msg)
-    click.echo(json.dumps(summary, indent=2))
+    summaries = []
+    for message_id in message_ids:
+        msg = (
+            service.users()
+            .messages()
+            .get(userId="me", id=message_id, format="full")
+            .execute()
+        )
+        summaries.append(extract_message_summary(msg))
+    click.echo(json.dumps(summaries, indent=2))
 
 
 def _search_messages(query: str, max_results: int, page_token: str | None = None):

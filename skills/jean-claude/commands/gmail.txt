@@ -11,7 +11,7 @@ Commands:
   attachments          List attachments for a message.
   draft                Manage email drafts.
   filter               Manage Gmail filters.
-  get                  Get a single message by ID, written to file.
+  get                  Get messages by ID, written to files.
   inbox                List threads in inbox.
   labels               List all Gmail labels.
   mark-read            Mark threads as read (all messages in thread).
