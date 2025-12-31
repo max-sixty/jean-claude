@@ -276,6 +276,27 @@ Don't list commands—ask what they'd like to do:
 
 The agent runs the appropriate commands and presents results conversationally.
 
+## Creating Preferences (Optional)
+
+After helping with their first request, offer to create a preferences skill if
+they don't have one yet. This teaches jean-claude their communication style.
+
+See [PREFERENCES.md](PREFERENCES.md) for the full guide. Quick version:
+
+> I can learn your communication style from your sent messages—how you sign off,
+> your tone, people you message often. Want me to take a look? You'll review
+> before I save anything.
+
+If they agree:
+1. Read their sent emails to infer sign-off, tone, greeting style
+2. Check messages for frequent contacts
+3. Generate a skill file and show it to them for review
+4. Save to `~/.claude/skills/managing-messages/SKILL.md` after approval
+
+Don't push this—preferences also emerge naturally through corrections
+("actually, sign it 'Best' not 'Cheers'"). When users correct you, offer to
+save it as a preference.
+
 ## Re-Running Setup
 
 If user wants to add services later or change access level:

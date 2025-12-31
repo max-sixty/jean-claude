@@ -88,7 +88,12 @@ request.
    exist (look at available skills for anything mentioning inbox, email, message,
    or communication). If found, load them—user preferences override defaults.
 
-3. **Proceed with the user's request** — Execute whatever task prompted loading
+3. **Offer to create preferences** — If no personalization skill was found in
+   step 2, offer to create one after completing the user's immediate request.
+   See [PREFERENCES.md](PREFERENCES.md) for the creation flow. Don't interrupt
+   the user's task—help them first, then offer.
+
+4. **Proceed with the user's request** — Execute whatever task prompted loading
    this skill (check inbox, send message, etc.).
 
 ### Understanding the Status
@@ -1453,3 +1458,78 @@ these sources in order of reliability:
 
 When using any inferred location, state your assumption so the user can correct
 it: "I see you're in the LA area based on your calendar — searching there."
+
+## Learning from Corrections
+
+When users correct your drafts or behavior, these are opportunities to learn
+preferences and save them to their preferences skill file.
+
+**Examples of learnable corrections:**
+- "Actually, sign it 'Best' not 'Cheers'" → sign-off preference
+- "Always CC my assistant on work emails" → email rule
+- "Don't use exclamation marks" → tone preference
+- "My mom's new number is..." → contact update
+
+**Not everything is a preference.** One-off corrections like "make this email
+shorter" or "add more detail here" are situational, not preferences.
+
+### Confirmation Mode (Default)
+
+When the user corrects something that seems like a preference:
+
+1. Make the correction
+2. Offer to save it: "Want me to remember this for next time?"
+3. If yes, update the skill file in `~/.claude/skills/managing-messages/SKILL.md`
+
+### Auto-Learn Mode
+
+After a few corrections, offer to enable auto-learning:
+
+> I've saved a few preferences now. Want me to automatically save corrections
+> like these going forward? I'll still tell you when I do.
+
+If enabled, add this to their preferences file:
+
+```markdown
+## Meta
+
+Auto-learn: enabled
+```
+
+**When auto-learn is enabled:**
+
+1. Recognize correction as a preference
+2. Update the skill file
+3. Briefly confirm: "Noted—I'll sign emails 'Best' from now on."
+
+**What to auto-learn:** Sign-off changes, tone corrections, contact updates,
+phrase preferences, CC/BCC rules.
+
+**What NOT to auto-learn** (always ask first): Anything affecting recipients,
+major workflow changes, deletions from preferences.
+
+## Reporting Issues
+
+When you encounter technical difficulties that suggest a problem with the
+jean-claude library (not user configuration), offer to file a GitHub issue.
+
+**Signs of a library problem:**
+- Unexpected exceptions or stack traces from jean-claude code
+- API responses that don't match documented schemas
+- Commands that worked before suddenly failing
+- Behavior that contradicts the documentation
+
+**Not library problems** (don't offer to file):
+- Authentication failures (user needs to re-auth)
+- Permission errors (user needs to grant access)
+- Network issues or user configuration problems
+
+When you hit what looks like a bug:
+
+> I ran into an issue that looks like a bug in jean-claude. Want me to create
+> a GitHub issue so the maintainers can fix it? I'll show you the report first
+> and remove any personal information.
+
+Only proceed if user agrees. See [ISSUES.md](ISSUES.md) for the full guide on
+scrubbing personal info, formatting the issue, and submitting via `gh` or
+pre-filled URL.
