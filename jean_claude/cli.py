@@ -246,14 +246,27 @@ def _get_google_status() -> dict:
     }
 
     # Try to get user email
+    user_email = None
     try:
         from .auth import build_service
 
         gmail = build_service("gmail", "v1")
         profile = gmail.users().getProfile(userId="me").execute()
-        result["user"] = profile.get("emailAddress", "unknown")
+        user_email = profile.get("emailAddress")
+        result["user"] = user_email or "unknown"
     except Exception as e:
         result["user_fetch_error"] = str(e)
+
+    # Get calendars list with stats
+    try:
+        from .auth import build_service
+
+        cal = build_service("calendar", "v3")
+        result["calendars"] = _get_calendars_list(
+            cal, with_stats=True, user_email=user_email
+        )
+    except Exception as e:
+        result["calendars_fetch_error"] = str(e)
 
     return result
 
@@ -401,8 +414,10 @@ def _check_google_apis() -> None:
     gmail = build_service("gmail", "v1")
 
     # Check Gmail API and show counts
+    user_email = None
     try:
-        gmail.users().getProfile(userId="me").execute()
+        profile = gmail.users().getProfile(userId="me").execute()
+        user_email = profile.get("emailAddress")
     except HttpError as e:
         _print_api_error("Gmail", e)
     else:
@@ -428,8 +443,9 @@ def _check_google_apis() -> None:
         click.echo("  Calendar: " + click.style("OK", fg="green"))
         try:
             _show_calendar_counts(cal)
+            _show_calendars_list(cal, user_email=user_email)
         except Exception as e:
-            logger.warning("Failed to fetch calendar counts", error=str(e))
+            logger.warning("Failed to fetch calendar info", error=str(e))
 
     drive = build_service("drive", "v3")
     check_api("Drive", lambda: drive.about().get(fields="user").execute())
@@ -706,6 +722,94 @@ def _show_whatsapp_counts() -> None:
             )
 
 
+def _get_calendars_list(
+    cal, with_stats: bool = False, user_email: str | None = None
+) -> list[dict]:
+    """Get list of calendars with access info and optional event stats.
+
+    When with_stats=True, also fetches:
+    - upcoming: total events in next 30 days
+    - organized: events where user is organizer (actively created)
+    - invited: events where user is an attendee (invited by someone else)
+
+    The organized/invited split helps distinguish active calendars from "block"
+    calendars that just show someone else's events.
+    """
+    from datetime import datetime, timedelta
+
+    from .gcal import LOCAL_TZ
+
+    result = cal.calendarList().list().execute()
+    calendars = []
+
+    # Time range for stats: next 30 days
+    now = datetime.now(LOCAL_TZ)
+    time_min = now.isoformat()
+    time_max = (now + timedelta(days=30)).isoformat()
+
+    for item in result.get("items", []):
+        calendar_data = {
+            "id": item["id"],
+            "name": item.get("summary", "(no name)"),
+            "primary": item.get("primary", False),
+            "accessRole": item.get("accessRole"),
+        }
+
+        if with_stats:
+            # Fetch upcoming events for this calendar
+            try:
+                events_result = (
+                    cal.events()
+                    .list(
+                        calendarId=item["id"],
+                        timeMin=time_min,
+                        timeMax=time_max,
+                        singleEvents=True,
+                        maxResults=100,
+                    )
+                    .execute()
+                )
+                events = events_result.get("items", [])
+                calendar_data["upcoming"] = len(events)
+
+                # Count organized vs invited events (requires user email)
+                if user_email:
+                    user_email_lower = user_email.lower()
+                    organized = 0
+                    invited = 0
+                    for event in events:
+                        organizer_email = event.get("organizer", {}).get("email", "")
+
+                        if organizer_email.lower() == user_email_lower:
+                            organized += 1
+                        elif any(
+                            a.get("email", "").lower() == user_email_lower
+                            for a in event.get("attendees", [])
+                        ):
+                            invited += 1
+
+                    calendar_data["organized"] = organized
+                    calendar_data["invited"] = invited
+            except Exception:
+                # Some calendars might not allow event listing (e.g., freeBusyReader)
+                calendar_data["upcoming"] = None
+
+        calendars.append(calendar_data)
+
+    # Sort: primary first, then by relevance (organized + invited), then total upcoming
+    def sort_key(c):
+        # Primary always first (0), others after (1)
+        primary_order = 0 if c["primary"] else 1
+        # Higher relevance first (events user is involved in)
+        relevance = -((c.get("organized") or 0) + (c.get("invited") or 0))
+        # Higher event counts first (negative for descending)
+        event_order = -(c.get("upcoming") or 0)
+        return (primary_order, relevance, event_order, c["name"].lower())
+
+    calendars.sort(key=sort_key)
+    return calendars
+
+
 def _show_calendar_counts(cal) -> None:
     """Show calendar event counts for today and this week."""
     from datetime import datetime, timedelta
@@ -742,6 +846,54 @@ def _show_calendar_counts(cal) -> None:
         if week_count > today_count:
             parts.append(f"{week_count} this week")
         click.echo(f"    {', '.join(parts)}")
+
+
+def _show_calendars_list(cal, user_email: str | None = None) -> None:
+    """Show list of available calendars with access roles and event counts."""
+    calendars = _get_calendars_list(cal, with_stats=True, user_email=user_email)
+    if not calendars:
+        return
+
+    click.echo("    Calendars:")
+    for c in calendars:
+        name = c["name"]
+        role = c["accessRole"]
+        upcoming = c.get("upcoming")
+        organized = c.get("organized")
+        invited = c.get("invited")
+
+        # Build the line
+        parts = [f"      {name}"]
+        if c["primary"]:
+            parts.append(click.style("(primary)", fg="cyan"))
+
+        # Show upcoming count with organized/invited breakdown if available
+        if upcoming is not None:
+            if upcoming > 0:
+                # Build stats string
+                if organized is not None and invited is not None:
+                    # Show breakdown: "24 upcoming: 15 yours, 5 invited"
+                    involved = organized + invited
+                    if involved > 0:
+                        stat_parts = []
+                        if organized > 0:
+                            stat_parts.append(f"{organized} yours")
+                        if invited > 0:
+                            stat_parts.append(f"{invited} invited")
+                        stats_str = f"({upcoming} upcoming: {', '.join(stat_parts)})"
+                        parts.append(click.style(stats_str, fg="green"))
+                    else:
+                        # No events user is involved in - dim to show it's just a "block" calendar
+                        parts.append(
+                            click.style(f"({upcoming} upcoming, 0 yours)", dim=True)
+                        )
+                else:
+                    parts.append(click.style(f"({upcoming} upcoming)", fg="green"))
+            else:
+                parts.append(click.style("(no upcoming)", dim=True))
+
+        parts.append(f"[{role}]")
+        click.echo(" ".join(parts))
 
 
 def _show_reminders_counts() -> None:

@@ -5,5 +5,6 @@ Usage: jean-claude gcal delete [OPTIONS] EVENT_ID
   EVENT_ID: The event ID (from list or search output)
 
 Options:
-  --notify  Send cancellation emails to attendees
-  --help    Show this message and exit.
+  --notify         Send cancellation emails to attendees
+  --calendar TEXT  Calendar ID, email, or name (default: primary)
+  --help           Show this message and exit.

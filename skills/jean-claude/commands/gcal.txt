@@ -6,6 +6,7 @@ Options:
   --help  Show this message and exit.
 
 Commands:
+  calendars    List available calendars.
   create       Create a calendar event.
   delete       Delete/cancel a calendar event.
   invitations  List pending calendar invitations.

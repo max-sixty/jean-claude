@@ -296,7 +296,8 @@ better — the 6th or 8th?"), check the calendar and include the answer:
 
 The user shouldn't have to ask "what's on my calendar those days?" as a
 follow-up. If someone's asking about dates, checking availability is the
-obvious next step — do it proactively.
+obvious next step — do it proactively. Check calendars where the user has
+events (see "Choosing the Right Calendar").
 
 ## Proactive Follow-Through
 
@@ -704,6 +705,101 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter create \
 ## Calendar
 
 All calendar commands return JSON.
+
+### Multiple Calendars
+
+By default, commands operate on the primary calendar. Use `--calendar` to work
+with other calendars.
+
+```bash
+# List available calendars
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal calendars
+```
+
+Returns:
+```json
+[
+  {"id": "user@gmail.com", "name": "Personal", "primary": true, "accessRole": "owner"},
+  {"id": "work@company.com", "name": "Work Calendar", "primary": false, "accessRole": "writer"},
+  {"id": "family@group.calendar.google.com", "name": "Family", "primary": false, "accessRole": "owner"}
+]
+```
+
+Use `--calendar` with any command to specify a different calendar:
+
+```bash
+# List events from a specific calendar
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --calendar work@company.com
+
+# Create event on another calendar
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Team Sync" \
+  --start "2025-01-15 14:00" --calendar work@company.com
+
+# Search by calendar name (case-insensitive substring match)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --calendar "Family"
+```
+
+The `--calendar` flag accepts:
+- Calendar ID (email or group calendar ID)
+- Calendar name (case-insensitive substring match)
+- `primary` (default)
+
+If a name matches multiple calendars, the command fails with a list of options.
+
+**Multiple calendars in one query:** The `list`, `search`, and `invitations`
+commands accept multiple `--calendar` flags to query across calendars:
+
+```bash
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --from 2025-01-15 --to 2025-01-15 \
+  --calendar "Personal" --calendar "Work"
+```
+
+Each event includes `calendar_id` and `calendar_name` in the output.
+
+### Choosing the Right Calendar
+
+The status command shows calendar participation metrics:
+
+```
+Max @ Personal (primary) (24 upcoming: 10 yours, 14 invited) [owner]
+ursgwynn@gmail.com (26 upcoming: 2 yours, 7 invited) [writer]
+Roos family (81 upcoming: 3 invited) [owner]
+Max @ TGS (44 upcoming, 0 yours) [freeBusyReader]
+team.interintellect@gmail.com (27 upcoming, 0 yours) [reader]
+```
+
+- **X yours** — Events where user is the organizer
+- **X invited** — Events where user is an attendee
+- **0 yours** — May indicate a "block" calendar (someone else's schedule)
+
+**Which calendars to check:**
+
+This is a judgment call. The metrics help but don't tell the whole story — a
+spouse's calendar might show "yours" counts because the user invited them to
+things, but that doesn't make it the user's availability.
+
+Check user preferences (personalization skills) for guidance on which calendars
+represent the user's own schedule vs calendars they just view. When in doubt,
+ask.
+
+**Checking availability:**
+
+Use multiple `--calendar` flags to query several calendars at once:
+
+```bash
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --from 2025-01-07 --to 2025-01-07 \
+  --calendar "Max @ Personal" --calendar "Roos family"
+```
+
+Each event includes `calendar_id` and `calendar_name` showing which calendar it
+came from.
+
+**Creating events:**
+
+Use the primary calendar unless:
+- User explicitly names a different calendar ("put it on the family calendar")
+- Context suggests a specific calendar (work event → work calendar)
+- User preferences specify defaults for certain event types
 
 ### Proactive Calendar Management
 

@@ -17,4 +17,5 @@ Options:
   --location TEXT     Event location
   --description TEXT  Event description
   --attendees TEXT    Comma-separated attendee emails
+  --calendar TEXT     Calendar ID, email, or name (default: primary)
   --help              Show this message and exit.

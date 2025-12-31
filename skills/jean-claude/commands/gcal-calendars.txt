@@ -1,0 +1,6 @@
+Usage: jean-claude gcal calendars [OPTIONS]
+
+  List available calendars. Returns JSON array.
+
+Options:
+  --help  Show this message and exit.

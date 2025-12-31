@@ -14,4 +14,5 @@ Options:
   --decline               Decline the invitation
   --tentative             Tentatively accept
   --notify / --no-notify  Notify organizer (default: notify)
+  --calendar TEXT         Calendar ID, email, or name (default: primary)
   --help                  Show this message and exit.

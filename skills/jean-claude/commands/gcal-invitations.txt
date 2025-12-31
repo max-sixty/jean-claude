@@ -8,6 +8,7 @@ Usage: jean-claude gcal invitations [OPTIONS]
   individual instances.
 
 Options:
-  --days INTEGER  Limit to events within N days (default: no limit)
-  --expand        Show all instances instead of collapsing recurring events
-  --help          Show this message and exit.
+  --days INTEGER   Limit to events within N days (default: no limit)
+  --expand         Show all instances instead of collapsing recurring events
+  --calendar TEXT  Calendar ID, email, or name (repeatable; default: primary)
+  --help           Show this message and exit.

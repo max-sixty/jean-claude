@@ -16,4 +16,5 @@ Options:
   --description TEXT  New description
   --attendees TEXT    Comma-separated attendee emails (replaces existing)
   --notify            Send update emails to attendees
+  --calendar TEXT     Calendar ID, email, or name (default: primary)
   --help              Show this message and exit.

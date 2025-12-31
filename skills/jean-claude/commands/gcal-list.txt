@@ -8,4 +8,6 @@ Options:
   --to TEXT                  End date (YYYY-MM-DD)
   -n, --max-results INTEGER  Maximum events to return per page
   --page-token TEXT          Token for next page of results
+  --calendar TEXT            Calendar ID, email, or name (repeatable; default:
+                             primary)
   --help                     Show this message and exit.
