@@ -264,6 +264,35 @@ Never show raw dates like "Dec 27" when "yesterday" or "2 days ago" conveys
 the same information more naturally. The user shouldn't have to calculate how
 long ago something was.
 
+### Availability Questions
+
+When a message asks about availability ("Are you free Tuesday?", "Which works
+better — the 6th or 8th?"), check the calendar and include the answer:
+
+<example>
+<bad>
+
+```
+1. Jeremy Bronfman (yesterday at 12:24 PM) — "Re: Dinner in Jan"
+   He's asking: Tuesday the 6th or Thursday the 8th?
+```
+
+</bad>
+<good>
+
+```
+1. Jeremy Bronfman (yesterday at 12:24 PM) — "Re: Dinner in Jan"
+   He's asking: Tuesday the 6th or Thursday the 8th?
+   → You're free both evenings. Thursday has a 3pm meeting that ends at 4.
+```
+
+</good>
+</example>
+
+The user shouldn't have to ask "what's on my calendar those days?" as a
+follow-up. If someone's asking about dates, checking availability is the
+obvious next step — do it proactively.
+
 ## Proactive Follow-Through
 
 When the user asks to read or review something, complete the task fully:
