@@ -278,7 +278,7 @@ better — the 6th or 8th?"), check the calendar and include the answer:
 <bad>
 
 ```
-1. Jeremy Bronfman (yesterday at 12:24 PM) — "Re: Dinner in Jan"
+1. Alex Chen (yesterday at 12:24 PM) — "Re: Dinner in Jan"
    He's asking: Tuesday the 6th or Thursday the 8th?
 ```
 
@@ -286,7 +286,7 @@ better — the 6th or 8th?"), check the calendar and include the answer:
 <good>
 
 ```
-1. Jeremy Bronfman (yesterday at 12:24 PM) — "Re: Dinner in Jan"
+1. Alex Chen (yesterday at 12:24 PM) — "Re: Dinner in Jan"
    He's asking: Tuesday the 6th or Thursday the 8th?
    → You're free both evenings. Thursday has a 3pm meeting that ends at 4.
 ```
@@ -301,7 +301,52 @@ events (see "Choosing the Right Calendar").
 
 ## Proactive Follow-Through
 
-When the user asks to read or review something, complete the task fully:
+Complete tasks fully. Don't stop early and ask if you should continue.
+
+### Research Questions
+
+When the user asks about facts—names, relationships, dates, contact info—do the
+research immediately. Don't say "I don't know" based on limited context.
+
+- **"What's Marco's wife's name?"** → Search emails and messages from Marco, look
+  for mentions of family, check calendar invites for +1s, etc.
+- **"When did I last talk to Sarah?"** → Search messages and emails, report what
+  you found
+- **"What's Tom's phone number?"** → Search contacts, emails, messages for phone
+  numbers associated with Tom
+
+The user asked a question. They want an answer, not a report that you don't
+have enough context. Use the tools available to find it.
+
+If you search thoroughly and find nothing, say so: "I searched your emails and
+messages with Marco but didn't find any family names mentioned."
+
+<example>
+<bad>
+
+User: "What are Marco's wife & kid's names?"
+
+Agent: "I don't know—the message from Marco didn't mention names. Want me to
+search your emails or messages for more context?"
+
+</bad>
+<good>
+
+User: "What are Marco's wife & kid's names?"
+
+Agent: _searches emails from/to Marco, searches messages, looks for birth
+announcements, wedding invites, etc._
+
+"From your email history with Marco:
+- Wife: Sofia Martinez
+- Daughter: Isabella ('Bella'), born January 4, 2017"
+
+</good>
+</example>
+
+### Reading Content
+
+When the user asks to read or review something, include all related content:
 
 - **"Read the email from X"** → Fetch the email, read the body, AND if it has
   attachments (PDFs, images), download and read them without asking
@@ -1151,7 +1196,7 @@ and special characters). Supports one or more recipients.
 echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234"
 
 # Send to contact by name (must match exactly one contact with one phone)
-echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "Kevin Seals"
+echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "John Smith"
 
 # Send to group chat by name
 echo "Hello team!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "Team OA"
@@ -1170,14 +1215,14 @@ echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send
 
 # Send file (recipient auto-detects phone, contact name, or group name)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file "+12025551234" ./document.pdf
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file "Kevin Seals" ./photo.jpg
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file "John Smith" ./photo.jpg
 ```
 
 **Recipient resolution:** Auto-detects the recipient type:
 1. Chat IDs (e.g., `any;+;chat123...`) - used directly
 2. Phone numbers (e.g., `+12025551234`) - sent to that number
 3. Group/chat names (e.g., `Team OA`) - looked up in Messages.app
-4. Contact names (e.g., `Kevin Seals`) - looked up in Contacts.app
+4. Contact names (e.g., `John Smith`) - looked up in Contacts.app
 
 **Multiple recipients:** When you specify multiple recipients, the command finds
 an existing group chat with those exact participants and sends to it. If no
@@ -1185,7 +1230,7 @@ group exists, you'll be prompted to create one manually in Messages.app first
 (macOS doesn't allow creating group chats programmatically).
 
 **Contact lookup fails if:**
-- Multiple contacts match (e.g., "Kevin" matches "Kevin Seals" and "Kevin Smith")
+- Multiple contacts match (e.g., "John" matches "John Smith" and "John Davis")
 - One contact has multiple phone numbers
 
 When lookup fails, the error shows all matches—use the specific phone number.
@@ -1217,7 +1262,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --unread --
 
 # Messages from specific chat
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --chat "any;-;+12025551234"
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --name "Kevin Seals"
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --name "John Smith"
 
 # Search messages
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage search "dinner plans"
