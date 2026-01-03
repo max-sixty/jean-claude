@@ -3,6 +3,8 @@
 A Claude Code plugin for managing Gmail, Google Calendar, Google Drive, and
 iMessage (macOS only).
 
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/6481069a-a730-434a-b3f1-6fd88a78da60" />
+
 ## Prerequisites
 
 ### Claude Code
