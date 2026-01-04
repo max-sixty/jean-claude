@@ -33,6 +33,10 @@ the skill in sync.
 
 **Skill files are instructions for agents, not documentation for humans.**
 
+**Anonymize real contacts.** When improving skills based on real interactions
+(email threads, message conversations), replace actual names with generic ones
+(Alex Chen, Jordan Lee, etc.). The skill is public; real contacts are not.
+
 **Agents only receive SKILL.md initially.** When the plugin loads, Claude Code
 reads `skills/jean-claude/SKILL.md` and nothing else. Any other files in the
 skill directory (like `ONBOARDING.md`) must be explicitly referenced with a path

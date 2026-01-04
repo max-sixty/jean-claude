@@ -164,11 +164,12 @@ These rules apply even if the user explicitly asks to bypass them:
 **Email workflow:**
 
 1. Load any available prose/writing skills
-2. Compose the email content
-3. Show the user: To, Subject, and full Body
-4. Ask: "Send this email?" and wait for explicit approval
-5. Call `jean-claude gmail draft send DRAFT_ID`
-6. If replying, archive the original: `jean-claude gmail archive THREAD_ID`
+2. **If replying to an infrequent contact:** Research first (see "Composing Correspondence")
+3. Compose the email content (iterate internally before presenting)
+4. Show the user: To, Subject, and full Body
+5. Ask: "Send this email?" and wait for explicit approval
+6. Call `jean-claude gmail draft send DRAFT_ID`
+7. If replying, archive the original: `jean-claude gmail archive THREAD_ID`
 
 **iMessage workflow:**
 
@@ -381,6 +382,115 @@ Agent: _fetches email, downloads PDF, reads it_
 
 </good>
 </example>
+
+## Composing Correspondence
+
+For infrequent contacts — people the user doesn't interact with regularly —
+understand the relationship before drafting. Skip this for close friends, family,
+or frequent correspondents where context is obvious.
+
+### Research First
+
+When replying to an infrequent contact (catching up, introductions, social
+correspondence), research before drafting:
+
+1. **Search email history** — When did they last correspond? What did they discuss?
+2. **Search the web** — If unfamiliar, who is this person? What do they do?
+3. **Report context** — Tell the user what you found before showing a draft
+
+<example>
+<bad>
+
+User: "Reply to Alex's email"
+
+Agent: _immediately drafts reply_
+
+"Draft:
+Hi Alex,
+Thanks for reaching out! The AI coding tool sounds right up my alley. Happy to
+connect with Jordan.
+Best, Max"
+
+</bad>
+<good>
+
+User: "Reply to Alex's email"
+
+Agent: _searches email history and web_
+
+"Alex Chen — you last emailed him 8 months ago about the open-source project.
+He's a research scientist at a major tech company, one of the original authors.
+Before that you collaborated on a conference tutorial in 2019.
+
+His email mentions Jordan Lee, who I found on LinkedIn is a former startup
+engineer now building an AI tool..."
+
+[Then proceeds to draft with this context]
+
+</good>
+</example>
+
+The user shouldn't need to ask "when did I last talk to them?" or "who is this
+person?" — do that research proactively.
+
+### Address the Person, Not the Issue
+
+Customary emails — introductions, catching up, social correspondence — are about
+the relationship, not transactions.
+
+<example>
+<bad>
+
+"The AI coding tool sounds right up my alley."
+
+Why it fails:
+- Centers the user's interests, not the relationship
+- The agent hasn't researched Jordan's actual work
+- Transactional — jumps straight to business
+
+</bad>
+<good>
+
+"I'm glad to see the project continues to thrive. Hope all's well with you —
+would enjoy catching up soon."
+
+Why it works:
+- Reciprocal — acknowledges what matters to Alex
+- Relational — about the person, not the introduction
+- Warm without being hollow
+
+</good>
+</example>
+
+**The principle:** For social correspondence, address the person before addressing
+whatever they asked about.
+
+### Iterate Before Presenting
+
+Drafts deserve thought. Don't produce one immediately and present it.
+
+**Internal iteration process:**
+
+1. Research the relationship (see above)
+2. Consider the tone — formal? warm? brief?
+3. Draft internally, critique it: "If this email is bad, why?"
+4. Revise, then present
+
+For important correspondence, explain your reasoning or offer alternatives:
+"I went with a warm but brief tone since you haven't talked in 8 months. Want
+something more formal?"
+
+### Vocabulary
+
+Avoid hollow words that signal low engagement. Check the user's personalization
+skill for specific vocabulary preferences.
+
+**The test:** If a phrase could apply to anyone, it says nothing.
+
+- "Nice to hear from you" → could be sent to anyone
+- "I'm glad to see the project continues to thrive" → specific to this person
+
+When drafting, ask: is this specific to this person and this relationship?
 
 ## Setup
 
