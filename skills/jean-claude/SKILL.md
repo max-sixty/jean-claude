@@ -685,9 +685,14 @@ Use this when you have a specific message ID and want to read its full content.
 
 All draft commands read body from stdin. Create uses flags for metadata.
 
+**IMPORTANT: Use heredocs, not echo.** Claude Code's Bash tool has a known bug
+that escapes exclamation marks (`!` becomes `\!`). Always use heredocs:
+
 ```bash
 # Create a new draft
-echo "Message body" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft create --to "recipient@example.com" --subject "Subject"
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft create --to "recipient@example.com" --subject "Subject"
+Message body here!
+EOF
 
 # Create with CC/BCC
 cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft create --to "recipient@example.com" --subject "Subject" --cc "cc@example.com"
@@ -695,7 +700,9 @@ Multi-line message body here.
 EOF
 
 # Reply to a message (body from stdin, preserves threading, includes quoted original)
-echo "Thanks for your email..." | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID
+Thanks for your email!
+EOF
 
 # Reply with custom CC
 cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID --cc "manager@example.com"
@@ -703,13 +710,17 @@ Thanks for the update!
 EOF
 
 # Forward a message (TO as argument, optional note from stdin)
-echo "FYI - see below" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft forward MESSAGE_ID someone@example.com
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft forward MESSAGE_ID someone@example.com
+FYI - see below!
+EOF
 
 # Forward without a note
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft forward MESSAGE_ID someone@example.com < /dev/null
 
 # Reply-all (includes all original recipients)
-echo "Thanks everyone!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply-all MESSAGE_ID
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply-all MESSAGE_ID
+Thanks everyone!
+EOF
 
 # List drafts
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list
@@ -737,11 +748,27 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft delete DRAFT_ID
 **Iterating on long emails:** For complex emails, use file editing to iterate
 with the user without rewriting the full email each time:
 
-1. Create initial draft: `echo "Initial body" | jean-claude gmail draft create --to "..." --subject "..."`
+1. Create initial draft using heredoc (see examples above)
 2. Get draft files: `jean-claude gmail draft get DRAFT_ID` (writes `.json` and `.txt`)
 3. Use Edit tool to modify `~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt`
 4. Update draft: `cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt | jean-claude gmail draft update DRAFT_ID`
 5. Show user, get feedback, repeat steps 3-4 until approved
+
+**Verifying important drafts:** For important emails, read the draft back after
+creating it to confirm formatting is correct:
+
+```bash
+# Create draft
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft create --to "..." --subject "..."
+Email body here!
+EOF
+
+# Verify the draft content (check for escaping issues like \!)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft get DRAFT_ID
+cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt
+```
+
+This catches any escaping bugs before sending.
 
 ### Manage Threads and Messages
 
@@ -1188,9 +1215,14 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs read DOCUMENT_ID --json
 
 ### Write Content
 
+**Use heredocs** for text content (Claude Code's Bash tool escapes `!` to `\!`
+when using echo).
+
 ```bash
-# Append text to end of document (plain text stdin)
-echo "New paragraph to add" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs append DOCUMENT_ID
+# Append text to end of document
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs append DOCUMENT_ID
+New paragraph to add!
+EOF
 
 # Find and replace text
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs replace DOCUMENT_ID --find "old text" --replace-with "new text"
@@ -1298,30 +1330,41 @@ chats use `any;+;chat123...`. Get these from `imessage chats`.
 
 ### Send Messages
 
-Message body is read from stdin (avoids shell escaping issues with apostrophes
-and special characters). Supports one or more recipients.
+Message body is read from stdin. **Always use heredocs** (Claude Code's Bash
+tool has a bug that escapes `!` to `\!` when using echo). Supports one or more
+recipients.
 
 ```bash
 # Send to phone number
-echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234"
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234"
+Hello!
+EOF
 
 # Send to contact by name (must match exactly one contact with one phone)
-echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "John Smith"
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "John Smith"
+Hello!
+EOF
 
 # Send to group chat by name
-echo "Hello team!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "Team OA"
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "Team OA"
+Hello team!
+EOF
 
-# Multiline message with heredoc
+# Message with apostrophe and multiple lines
 cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234"
 It's great to hear from you!
 Let me know when you're free.
 EOF
 
 # Send to group chat by ID
-echo "Hello group!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "any;+;chat123456789"
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "any;+;chat123456789"
+Hello group!
+EOF
 
 # Send to multiple recipients (uses existing group with those participants)
-echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234" "+16467194457"
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234" "+16467194457"
+Hello!
+EOF
 
 # Send file (recipient auto-detects phone, contact name, or group name)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file "+12025551234" ./document.pdf
@@ -1425,21 +1468,26 @@ chats that don't have them.
 
 ### Send Messages
 
-Message body is read from stdin (avoids shell escaping issues). Recipient is a
+Message body is read from stdin. **Always use heredocs** (Claude Code's Bash
+tool has a bug that escapes `!` to `\!` when using echo). Recipient is a
 positional argument.
 
 ```bash
 # Send to phone number (with country code)
-echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp send "+12025551234"
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp send "+12025551234"
+Hello!
+EOF
 
-# Multiline message with heredoc
+# Message with apostrophe and multiple lines
 cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp send "+12025551234"
 It's great to hear from you!
 Let me know when you're free.
 EOF
 
 # Reply to a specific message
-echo "Reply text" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp send "+12025551234" --reply-to MSG_ID
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp send "+12025551234" --reply-to MSG_ID
+Reply text!
+EOF
 ```
 
 ### List Chats
@@ -1618,16 +1666,22 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal chats -n 20
 
 ### Send Messages
 
-Message body is read from stdin. Recipient can be a UUID or contact name.
+Message body is read from stdin. **Always use heredocs** (Claude Code's Bash
+tool has a bug that escapes `!` to `\!` when using echo). Recipient can be a
+UUID or contact name.
 
 ```bash
 # Send by contact name
-echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal send "Alice Smith"
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal send "Alice Smith"
+Hello!
+EOF
 
 # Send by UUID (from chats command)
-echo "Hello!" | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal send "abc123-def456-..."
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal send "abc123-def456-..."
+Hello!
+EOF
 
-# Multiline message with heredoc
+# Message with multiple lines
 cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal send "Alice"
 Great to hear from you!
 Let me know when you're free.
