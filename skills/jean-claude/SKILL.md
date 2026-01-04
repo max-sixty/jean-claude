@@ -121,6 +121,21 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
 - **54 unread across 12 WhatsApp chats** → active messaging, may want summary
 - **1,353 unread across 113 iMessage chats** → backlog, focus on recent/important
 
+### Refreshing State
+
+When users ask for updates ("what's new", "anything else in my inbox", "check my
+messages again"), re-fetch current data rather than working from earlier results.
+Inbox state changes constantly — new emails arrive, messages get read on other
+devices.
+
+```bash
+# Re-fetch inbox for email updates
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox -n 20
+
+# Re-sync WhatsApp for message updates
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --unread
+```
+
 ## Safety Rules (Non-Negotiable)
 
 These rules apply even if the user explicitly asks to bypass them:
