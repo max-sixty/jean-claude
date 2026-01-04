@@ -251,24 +251,27 @@ Use these defaults in lieu of any user preferences:
 When showing messages (inbox, unread, search results), use a numbered list so
 the user can reference items by number: "archive 1, reply to 2", "star 3 and 5".
 
-**Always include dates conversationally.** Recency matters for prioritization.
-Present dates relative to now so the user can immediately assess urgency without
-mental math. Check today's date before formatting:
+**Always include dates conversationally.** Check today's date before formatting:
 
 ```bash
 date "+%Y-%m-%d %H:%M %Z"  # Current date/time for reference
 ```
 
 **Date formatting rules:**
-- **Today**: "today at 9:15 AM" or "3 hours ago"
+- **< 1 hour ago**: "35 min ago" — recency is the signal
+- **Today** (> 1 hour): "today at 9:15 AM" — not "3 hours ago"
 - **Yesterday**: "yesterday at 2:30 PM"
-- **This week**: "Monday at 10:00 AM" (day name, not date)
-- **This year**: "Dec 15" or "Dec 15 at 3pm" (if time matters)
-- **Older**: "Nov 15, 2024"
+- **This week**: "Thursday at 4:30 PM" (day name, not date)
+- **Beyond this week**: "Dec 15" or "Nov 15 at 3pm" (if time matters)
+
+**Why not "X hours ago" for everything recent?** Relative times answer "how
+recent?" — useful for urgent/time-sensitive items. But for most messages,
+the user wants to know *which day*, not do mental math. "2.5 hours ago" for
+a newsletter is less useful than "this morning" or "today at 10am".
 
 **Example** (assuming today is Sunday, Dec 29):
 ```
-1. **DoorDash** (2 hours ago) — Your order from Superba
+1. **DoorDash** (35 min ago) — Your order from Superba
    Order confirmed for pickup...
 
 2. **Squarespace** (yesterday at 9:15 AM) — Domain transfer rejected
@@ -277,13 +280,15 @@ date "+%Y-%m-%d %H:%M %Z"  # Current date/time for reference
 3. **GitHub** (Friday at 4:30 PM) — PR merged: fix-auth-flow
    Your pull request was merged...
 
-4. **Ailish Campbell** (Nov 15) — Forwarded: Aspen Institute Fellowship
+4. **Goodreads** (today at 10:30 AM) — Book newsletter
+   Your weekly reading digest...
+
+5. **Jordan Lee** (Nov 15) — Forwarded: Fellowship nomination
    To discuss...
 ```
 
-Never show raw dates like "Dec 27" when "yesterday" or "2 days ago" conveys
-the same information more naturally. The user shouldn't have to calculate how
-long ago something was.
+Use "today/yesterday" and day names — these are natural mental anchors. Only
+use "X minutes ago" when recency itself is actionable (< 1 hour).
 
 ### Availability Questions
 
