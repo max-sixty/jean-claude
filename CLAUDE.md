@@ -250,7 +250,11 @@ connection). Batch support reduces agent round-trips and keeps workflows simple.
 One canonical input method per command. No auto-detection between formats.
 
 **Message commands** use plain text stdin to avoid shell escaping issues (Claude
-Code's Bash tool can mangle `!` when combined with apostrophes):
+Code's Bash tool can mangle '!' when combined with apostrophes):
+
+<!-- Note: We use single quotes instead of backticks around '!' in this repo
+     because backticks trigger a Claude Code bug where skill markdown is parsed
+     as bash commands. See: https://github.com/anthropics/claude-code/issues/8197 -->
 
 ```bash
 echo "Hello!" | jean-claude imessage send "+1234567890"

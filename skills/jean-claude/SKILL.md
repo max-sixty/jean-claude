@@ -706,7 +706,7 @@ Use this when you have a specific message ID and want to read its full content.
 All draft commands read body from stdin. Create uses flags for metadata.
 
 **IMPORTANT: Use heredocs, not echo.** Claude Code's Bash tool has a known bug
-that escapes exclamation marks (! becomes \!). Always use heredocs:
+that escapes exclamation marks ('!' becomes '\!'). Always use heredocs:
 
 ```bash
 # Create a new draft
@@ -1235,7 +1235,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gdocs read DOCUMENT_ID --json
 
 ### Write Content
 
-**Use heredocs** for text content (Claude Code's Bash tool escapes ! to \!
+**Use heredocs** for text content (Claude Code's Bash tool escapes '!' to '\!'
 when using echo).
 
 ```bash
@@ -1351,7 +1351,7 @@ chats use `any;+;chat123...`. Get these from `imessage chats`.
 ### Send Messages
 
 Message body is read from stdin. **Always use heredocs** (Claude Code's Bash
-tool has a bug that escapes ! to \! when using echo). Supports one or more
+tool has a bug that escapes '!' to '\!' when using echo). Supports one or more
 recipients.
 
 ```bash
@@ -1489,7 +1489,7 @@ chats that don't have them.
 ### Send Messages
 
 Message body is read from stdin. **Always use heredocs** (Claude Code's Bash
-tool has a bug that escapes ! to \! when using echo). Recipient is a
+tool has a bug that escapes '!' to '\!' when using echo). Recipient is a
 positional argument.
 
 ```bash
@@ -1687,7 +1687,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal chats -n 20
 ### Send Messages
 
 Message body is read from stdin. **Always use heredocs** (Claude Code's Bash
-tool has a bug that escapes ! to \! when using echo). Recipient can be a
+tool has a bug that escapes '!' to '\!' when using echo). Recipient can be a
 UUID or contact name.
 
 ```bash
