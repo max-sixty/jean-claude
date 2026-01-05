@@ -784,6 +784,46 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft send DRAFT_ID
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft delete DRAFT_ID
 ```
 
+#### Attachments
+
+Draft creation commands (`create`, `reply`, `reply-all`, `forward`, `update`)
+support `--attach` for file attachments. Use multiple times for multiple files:
+
+```bash
+# Create draft with attachments
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft create --to "x@y.com" --subject "Report" --attach report.pdf --attach data.csv
+Please see the attached files.
+EOF
+
+# Reply with attachment
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID --attach response.pdf
+Here is my response with the requested document.
+EOF
+
+# Forward (original attachments included automatically)
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft forward MESSAGE_ID someone@example.com
+FYI - see below.
+EOF
+
+# Forward with additional attachment
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft forward MESSAGE_ID someone@example.com --attach notes.pdf
+FYI - I added my notes.
+EOF
+
+# Add attachment to existing draft (replaces any existing attachments)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft update DRAFT_ID --attach newfile.pdf < /dev/null
+
+# Remove all attachments from a draft
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft update DRAFT_ID --clear-attachments < /dev/null
+```
+
+**Viewing attachments:** Use `draft get` to see what files are attached:
+
+```bash
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft get DRAFT_ID
+# Output includes: {"attachments": [{"filename": "report.pdf", "mimeType": "application/pdf"}]}
+```
+
 **Iterating on long emails:** For complex emails, use file editing to iterate
 with the user without rewriting the full email each time:
 
@@ -807,7 +847,8 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft get DRAFT_ID
 cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt
 ```
 
-This catches any escaping bugs before sending.
+This catches any escaping bugs before sending. Also verify drafts with
+attachments — confirm the right files are attached before sending.
 
 ### Manage Threads and Messages
 

@@ -56,8 +56,11 @@ from __future__ import annotations
 import base64
 import html
 import json
+import mimetypes
 import re
 import time
+from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, getaddresses, parseaddr, parsedate_to_datetime
@@ -784,18 +787,32 @@ def draft():
 @click.option("--subject", required=True, help="Email subject line")
 @click.option("--cc", help="CC recipients (comma-separated)")
 @click.option("--bcc", help="BCC recipients (comma-separated)")
-def draft_create(to_addr: str, subject: str, cc: str | None, bcc: str | None):
+@click.option(
+    "--attach",
+    "attachments",
+    multiple=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="File to attach (can be repeated)",
+)
+def draft_create(
+    to_addr: str,
+    subject: str,
+    cc: str | None,
+    bcc: str | None,
+    attachments: tuple[Path, ...],
+):
     """Create a new email draft with body from stdin.
 
     \b
     Examples:
         echo "Hello!" | jean-claude gmail draft create --to "x@y.com" --subject "Hi!"
-        echo "Hi team" | jean-claude gmail draft create --to "a@x.com, b@y.com" --subject "Update"
+        echo "See attached" | jean-claude gmail draft create --to "x@y.com" --subject "Report" \\
+            --attach report.pdf --attach data.csv
     """
     body = read_body_stdin()
 
     service = get_gmail()
-    msg = MIMEText(body)
+    msg = _build_message_with_attachments(body, None, list(attachments))
     msg["from"] = get_my_from_address(service)
     msg["to"] = to_addr
     msg["subject"] = subject
@@ -972,7 +989,12 @@ Subject: {safe_subject}<br><br>
 
 
 def _create_reply_draft(
-    message_id: str, body: str, *, include_cc: bool, custom_cc: str | None = None
+    message_id: str,
+    body: str,
+    *,
+    include_cc: bool,
+    custom_cc: str | None = None,
+    attachments: list[Path] | None = None,
 ) -> tuple[str, str]:
     """Create a reply draft, returning (draft_id, draft_url).
 
@@ -981,6 +1003,7 @@ def _create_reply_draft(
         body: Reply body text
         include_cc: If True, include CC recipients (reply-all behavior)
         custom_cc: Optional user-specified CC addresses (overrides auto-CC)
+        attachments: Optional list of file paths to attach
     """
     service = get_gmail()
     # Use format="full" to get the message body for quoting
@@ -1065,8 +1088,15 @@ def _create_reply_draft(
         body, original_html, original_body, from_addr, date
     )
 
-    # Create multipart/alternative with both versions
-    msg = MIMEMultipart("alternative")
+    # Auto-include inline images from original (they're part of the quoted body)
+    inline_image_parts, _ = _fetch_inline_image_parts(
+        service, message_id, original["payload"], html_body
+    )
+
+    # Build message with attachments and inline images
+    msg = _build_message_with_attachments(
+        plain_body, html_body, attachments or [], inline_image_parts or None
+    )
     msg["from"] = my_from_addr
     msg["to"] = to_addr
     # Use custom CC if provided, otherwise use auto-detected CC for reply-all
@@ -1082,10 +1112,6 @@ def _create_reply_draft(
             f"{orig_refs} {message_id_header}" if orig_refs else message_id_header
         )
 
-    # Attach plain text first, then HTML (email clients prefer later parts)
-    msg.attach(MIMEText(plain_body, "plain"))
-    msg.attach(MIMEText(html_body, "html"))
-
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     result = (
         service.users()
@@ -1099,7 +1125,14 @@ def _create_reply_draft(
 @draft.command("reply")
 @click.argument("message_id")
 @click.option("--cc", help="Additional CC recipients (comma-separated)")
-def draft_reply(message_id: str, cc: str | None):
+@click.option(
+    "--attach",
+    "attachments",
+    multiple=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="File to attach (can be repeated)",
+)
+def draft_reply(message_id: str, cc: str | None, attachments: tuple[Path, ...]):
     """Create a reply draft with body from stdin.
 
     Preserves threading with the original message. Includes quoted original
@@ -1112,14 +1145,12 @@ def draft_reply(message_id: str, cc: str | None):
     \b
     Examples:
         echo "Thanks!" | jean-claude gmail draft reply MSG_ID
-        cat << 'EOF' | jean-claude gmail draft reply MSG_ID --cc "other@example.com"
-        Thanks for the update!
-        EOF
+        echo "See attached" | jean-claude gmail draft reply MSG_ID --attach response.pdf
     """
     body = read_body_stdin()
 
     draft_id, url = _create_reply_draft(
-        message_id, body, include_cc=False, custom_cc=cc
+        message_id, body, include_cc=False, custom_cc=cc, attachments=list(attachments)
     )
     logger.info(f"Reply draft created: {draft_id}", url=url)
     click.echo(json.dumps({"id": draft_id, "url": url}, indent=2))
@@ -1128,7 +1159,14 @@ def draft_reply(message_id: str, cc: str | None):
 @draft.command("reply-all")
 @click.argument("message_id")
 @click.option("--cc", help="Override CC recipients (comma-separated)")
-def draft_reply_all(message_id: str, cc: str | None):
+@click.option(
+    "--attach",
+    "attachments",
+    multiple=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="File to attach (can be repeated)",
+)
+def draft_reply_all(message_id: str, cc: str | None, attachments: tuple[Path, ...]):
     """Create a reply-all draft with body from stdin.
 
     Preserves threading and includes all original recipients. Includes quoted
@@ -1141,13 +1179,13 @@ def draft_reply_all(message_id: str, cc: str | None):
     \b
     Examples:
         echo "Thanks everyone!" | jean-claude gmail draft reply-all MSG_ID
-        cat << 'EOF' | jean-claude gmail draft reply-all MSG_ID
-        Thanks for the update!
-        EOF
+        echo "See attached" | jean-claude gmail draft reply-all MSG_ID --attach notes.pdf
     """
     body = read_body_stdin()
 
-    draft_id, url = _create_reply_draft(message_id, body, include_cc=True, custom_cc=cc)
+    draft_id, url = _create_reply_draft(
+        message_id, body, include_cc=True, custom_cc=cc, attachments=list(attachments)
+    )
     logger.info(f"Reply-all draft created: {draft_id}", url=url)
     click.echo(json.dumps({"id": draft_id, "url": url}, indent=2))
 
@@ -1155,20 +1193,30 @@ def draft_reply_all(message_id: str, cc: str | None):
 @draft.command("forward")
 @click.argument("message_id")
 @click.argument("to")
-def draft_forward(message_id: str, to: str):
+@click.option(
+    "--attach",
+    "attachments",
+    multiple=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="File to attach (can be repeated)",
+)
+def draft_forward(
+    message_id: str,
+    to: str,
+    attachments: tuple[Path, ...],
+):
     """Create a forward draft with body from stdin.
 
     MESSAGE_ID: The message to forward.
     TO: Recipient email address.
 
     Body is read from stdin (can be empty for forwarding without adding text).
+    Original attachments are included automatically (can be removed via draft update).
 
     \b
     Examples:
         echo "FYI" | jean-claude gmail draft forward MSG_ID someone@example.com
-        cat << 'EOF' | jean-claude gmail draft forward MSG_ID someone@example.com
-        Please see the message below.
-        EOF
+        echo "FYI" | jean-claude gmail draft forward MSG_ID x@y.com --attach extra.pdf
         # Forward without adding text
         jean-claude gmail draft forward MSG_ID someone@example.com < /dev/null
     """
@@ -1202,15 +1250,75 @@ def draft_forward(message_id: str, to: str):
         body, original_html, original_text, from_addr, date, orig_subject
     )
 
-    # Create multipart/alternative with both versions
-    msg = MIMEMultipart("alternative")
+    # Auto-include inline images (they're part of the message body display)
+    inline_image_parts, inline_attachment_ids = _fetch_inline_image_parts(
+        service, message_id, original["payload"], html_body
+    )
+
+    # Collect regular attachments (new files + original if requested)
+    all_attachment_parts: list[MIMEBase] = []
+
+    # Add new file attachments
+    for file_path in attachments:
+        all_attachment_parts.append(_create_attachment_part(file_path))
+
+    # Add original attachments (skip those already included as inline images)
+    orig_attachments = extract_attachments_from_payload(original["payload"])
+    for att in orig_attachments:
+        if att["attachmentId"] in inline_attachment_ids:
+            continue
+        data = (
+            service.users()
+            .messages()
+            .attachments()
+            .get(userId="me", messageId=message_id, id=att["attachmentId"])
+            .execute()
+        )
+        decoded_data = base64.urlsafe_b64decode(data["data"])
+
+        mime_type = att.get("mimeType", "application/octet-stream")
+        if "/" in mime_type:
+            main_type, sub_type = mime_type.split("/", 1)
+        else:
+            main_type, sub_type = "application", "octet-stream"
+        part = MIMEBase(main_type, sub_type)
+        part.set_payload(decoded_data)
+        encoders.encode_base64(part)
+        part.add_header(
+            "Content-Disposition",
+            "attachment",
+            filename=att["filename"],
+        )
+        all_attachment_parts.append(part)
+
+    # Build message structure
+    if html_body:
+        alt_part = MIMEMultipart("alternative")
+        alt_part.attach(MIMEText(plain_body, "plain"))
+        alt_part.attach(MIMEText(html_body, "html"))
+        body_part = alt_part
+    else:
+        body_part = MIMEText(plain_body, "plain")
+
+    # Wrap in multipart/related if we have inline images
+    if inline_image_parts:
+        related_part = MIMEMultipart("related")
+        related_part.attach(body_part)
+        for img_part in inline_image_parts:
+            related_part.attach(img_part)
+        body_part = related_part
+
+    if all_attachment_parts:
+        msg = MIMEMultipart("mixed")
+        msg.attach(body_part)
+        for part in all_attachment_parts:
+            msg.attach(part)
+    else:
+        msg = body_part
+
     msg["from"] = get_my_from_address(service)
     msg["to"] = to
     msg["subject"] = subject
-
-    # Attach plain text first, then HTML (email clients prefer later parts)
-    msg.attach(MIMEText(plain_body, "plain"))
-    msg.attach(MIMEText(html_body, "html"))
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     result = (
@@ -1275,7 +1383,7 @@ def draft_get(draft_id: str):
     """Get a draft, written to separate metadata and body files.
 
     Creates two files in ~/.cache/jean-claude/drafts/:
-    - draft-{id}.json: Metadata (to, cc, subject, etc.)
+    - draft-{id}.json: Metadata (to, cc, subject, attachments, etc.)
     - draft-{id}.txt: Body text (editable with any text editor)
 
     \b
@@ -1319,6 +1427,14 @@ def draft_get(draft_id: str):
     if bcc := headers.get("bcc"):
         draft_data["bcc"] = bcc
 
+    # Include attachments list
+    attachments = extract_attachments_from_payload(msg["payload"])
+    if attachments:
+        draft_data["attachments"] = [
+            {"filename": att["filename"], "mimeType": att["mimeType"]}
+            for att in attachments
+        ]
+
     json_path = DRAFT_CACHE_DIR / f"draft-{safe_id}.json"
     json_path.write_text(json.dumps(draft_data, indent=2), encoding="utf-8")
 
@@ -1331,12 +1447,26 @@ def draft_get(draft_id: str):
 @click.option("--cc", help="Update CC recipients (comma-separated)")
 @click.option("--bcc", help="Update BCC recipients (comma-separated)")
 @click.option("--subject", help="Update subject line")
+@click.option(
+    "--attach",
+    "attachments",
+    multiple=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="File to attach (can be repeated, replaces existing attachments)",
+)
+@click.option(
+    "--clear-attachments",
+    is_flag=True,
+    help="Remove all attachments from the draft",
+)
 def draft_update(
     draft_id: str,
     to_addr: str | None,
     cc: str | None,
     bcc: str | None,
     subject: str | None,
+    attachments: tuple[Path, ...],
+    clear_attachments: bool,
 ):
     """Update an existing draft.
 
@@ -1344,6 +1474,8 @@ def draft_update(
     Only provided fields are updated; others remain unchanged.
 
     Preserves threading headers (In-Reply-To, References) from the original draft.
+    When --attach is used, new attachments replace any existing attachments.
+    Use --clear-attachments to remove all attachments.
 
     \b
     Workflow for editing drafts:
@@ -1361,16 +1493,25 @@ def draft_update(
         # Update metadata only (no stdin)
         jean-claude gmail draft update DRAFT_ID --subject "New subject"
 
-        # Update both
-        cat body.txt | jean-claude gmail draft update DRAFT_ID --cc "new@example.com"
+        # Add attachments to draft
+        jean-claude gmail draft update DRAFT_ID --attach report.pdf < /dev/null
+
+        # Remove all attachments
+        jean-claude gmail draft update DRAFT_ID --clear-attachments < /dev/null
     """
     # Read body from stdin if provided
     new_body = read_stdin_optional()
 
+    # Validate options
+    if clear_attachments and attachments:
+        raise click.UsageError("Cannot use --attach with --clear-attachments")
+
     # Check that at least one update is provided
-    if new_body is None and not any((to_addr, cc, bcc, subject)):
+    if new_body is None and not any(
+        (to_addr, cc, bcc, subject, attachments, clear_attachments)
+    ):
         raise click.UsageError(
-            "Nothing to update. Provide body on stdin or use --to/--cc/--bcc/--subject"
+            "Nothing to update. Provide body on stdin or use --to/--cc/--bcc/--subject/--attach/--clear-attachments"
         )
 
     service = get_gmail()
@@ -1399,8 +1540,59 @@ def draft_update(
     # Use new body if provided, otherwise keep existing
     final_body = new_body if new_body is not None else existing_body
 
-    # Build new message
-    msg = MIMEText(final_body)
+    # Handle attachments:
+    # --clear-attachments: remove all attachments
+    # --attach: use new attachments (replaces existing)
+    # neither: preserve existing attachments
+    attachment_parts: list[MIMEBase] = []
+    if clear_attachments:
+        # User wants to remove all attachments - leave attachment_parts empty
+        pass
+    elif attachments:
+        # User provided new attachments - use those (replaces existing)
+        for file_path in attachments:
+            attachment_parts.append(_create_attachment_part(file_path))
+    else:
+        # No --attach provided - preserve existing attachments from draft
+        existing_attachments = extract_attachments_from_payload(existing_msg["payload"])
+        for att in existing_attachments:
+            data = (
+                service.users()
+                .messages()
+                .attachments()
+                .get(
+                    userId="me",
+                    messageId=existing_msg["id"],
+                    id=att["attachmentId"],
+                )
+                .execute()
+            )
+            decoded_data = base64.urlsafe_b64decode(data["data"])
+
+            mime_type = att.get("mimeType", "application/octet-stream")
+            if "/" in mime_type:
+                main_type, sub_type = mime_type.split("/", 1)
+            else:
+                main_type, sub_type = "application", "octet-stream"
+            part = MIMEBase(main_type, sub_type)
+            part.set_payload(decoded_data)
+            encoders.encode_base64(part)
+            part.add_header(
+                "Content-Disposition",
+                "attachment",
+                filename=att["filename"],
+            )
+            attachment_parts.append(part)
+
+    # Build message structure
+    body_part = MIMEText(final_body, "plain")
+    if attachment_parts:
+        msg = MIMEMultipart("mixed")
+        msg.attach(body_part)
+        for part in attachment_parts:
+            msg.attach(part)
+    else:
+        msg = body_part
     # Preserve original From header
     msg["from"] = headers.get("from") or get_my_from_address(service)
     for field in ["to", "cc", "bcc", "subject"]:
@@ -1605,6 +1797,207 @@ def extract_attachments_from_payload(payload: dict) -> list[dict]:
         _extract_attachments([payload], attachments)
 
     return attachments
+
+
+def _get_part_header(part: dict, name: str) -> str | None:
+    """Get a header value from a MIME part (case-insensitive)."""
+    headers = part.get("headers", [])
+    name_lower = name.lower()
+    for h in headers:
+        if h["name"].lower() == name_lower:
+            return h["value"]
+    return None
+
+
+def _extract_inline_images(parts: list, inline_images: list) -> None:
+    """Recursively extract inline image info from message parts.
+
+    Inline images have a Content-ID header and are referenced in HTML via cid: URLs.
+    """
+    for part in parts:
+        content_id = _get_part_header(part, "Content-ID")
+        body = part.get("body", {})
+        attachment_id = body.get("attachmentId")
+
+        # Inline images have Content-ID and attachmentId (for fetching data)
+        if content_id and attachment_id:
+            inline_images.append(
+                {
+                    "contentId": content_id,
+                    "mimeType": part.get("mimeType", "application/octet-stream"),
+                    "attachmentId": attachment_id,
+                }
+            )
+
+        # Recurse into nested parts
+        if "parts" in part:
+            _extract_inline_images(part["parts"], inline_images)
+
+
+def extract_inline_images_from_payload(payload: dict) -> list[dict]:
+    """Extract inline images from a message payload.
+
+    Inline images are parts with Content-ID headers, referenced in HTML via cid: URLs.
+    These should be included automatically when forwarding/replying to preserve
+    the message's visual appearance.
+
+    Handles both multipart and single-part payloads (mirrors extract_attachments_from_payload).
+    """
+    inline_images: list[dict] = []
+
+    if "parts" in payload:
+        _extract_inline_images(payload["parts"], inline_images)
+    else:
+        # Check if payload itself is an inline image (single-part message)
+        _extract_inline_images([payload], inline_images)
+
+    return inline_images
+
+
+def _fetch_inline_image_parts(
+    service, message_id: str, payload: dict, html_body: str | None = None
+) -> tuple[list[MIMEBase], set[str]]:
+    """Fetch and build MIME parts for inline images from a message payload.
+
+    Extracts inline images (parts with Content-ID headers) and fetches their data
+    from the Gmail API. Returns MIMEBase parts with Content-ID preserved for use
+    in multipart/related messages.
+
+    If html_body is provided, only fetches images that are actually referenced
+    via cid: URLs in the HTML. This avoids unnecessary API calls for unused images.
+
+    Returns:
+        A tuple of (inline_image_parts, fetched_attachment_ids) where:
+        - inline_image_parts: List of MIMEBase parts for inline images
+        - fetched_attachment_ids: Set of attachment IDs that were fetched as inline
+          (used to avoid double-fetching original attachments in draft forward)
+    """
+    # Short-circuit if HTML doesn't contain any cid: references
+    if html_body is not None and "cid:" not in html_body:
+        return [], set()
+
+    inline_image_parts: list[MIMEBase] = []
+    fetched_attachment_ids: set[str] = set()
+    inline_images = extract_inline_images_from_payload(payload)
+
+    for img in inline_images:
+        try:
+            attachment_id = img["attachmentId"]
+            data = (
+                service.users()
+                .messages()
+                .attachments()
+                .get(userId="me", messageId=message_id, id=attachment_id)
+                .execute()
+            )
+            decoded_data = base64.urlsafe_b64decode(data["data"])
+
+            mime_type = img.get("mimeType", "application/octet-stream")
+            if "/" in mime_type:
+                main_type, sub_type = mime_type.split("/", 1)
+            else:
+                main_type, sub_type = "application", "octet-stream"
+            part = MIMEBase(main_type, sub_type)
+            part.set_payload(decoded_data)
+            encoders.encode_base64(part)
+            # Preserve Content-ID for cid: URL references in HTML
+            part.add_header("Content-ID", img["contentId"])
+            part.add_header("Content-Disposition", "inline")
+            inline_image_parts.append(part)
+            fetched_attachment_ids.add(attachment_id)
+        except Exception as e:
+            # Log and skip failed inline images rather than breaking the draft
+            logger.warning(
+                "Failed to fetch inline image",
+                content_id=img.get("contentId"),
+                attachment_id=attachment_id,
+                error=str(e),
+            )
+
+    return inline_image_parts, fetched_attachment_ids
+
+
+def _create_attachment_part(file_path: Path) -> MIMEBase:
+    """Create a MIME attachment part from a file path."""
+    mime_type, _ = mimetypes.guess_type(str(file_path))
+    if mime_type is None:
+        mime_type = "application/octet-stream"
+
+    main_type, sub_type = mime_type.split("/", 1)
+    with file_path.open("rb") as f:
+        part = MIMEBase(main_type, sub_type)
+        part.set_payload(f.read())
+
+    encoders.encode_base64(part)
+    part.add_header(
+        "Content-Disposition",
+        "attachment",
+        filename=file_path.name,
+    )
+    return part
+
+
+def _build_message_with_attachments(
+    text_body: str,
+    html_body: str | None,
+    attachments: list[Path],
+    inline_images: list[MIMEBase] | None = None,
+) -> MIMEMultipart | MIMEText:
+    """Build a multipart email message with optional attachments and inline images.
+
+    Structure with inline images and attachments:
+        multipart/mixed
+        ├── multipart/related
+        │   ├── multipart/alternative
+        │   │   ├── text/plain
+        │   │   └── text/html (with cid: references)
+        │   ├── image/png (Content-ID: <image001>)
+        │   └── image/jpeg (Content-ID: <image002>)
+        └── attachment.pdf
+
+    Structure with only attachments (no inline images):
+        multipart/mixed
+        ├── multipart/alternative (or text/plain if no html)
+        │   ├── text/plain
+        │   └── text/html
+        └── attachment1
+        └── ...
+
+    Structure with no attachments or inline images:
+        multipart/alternative (or text/plain if no html)
+    """
+    inline_images = inline_images or []
+
+    if html_body:
+        # Create alternative part with both text and html
+        alt_part = MIMEMultipart("alternative")
+        alt_part.attach(MIMEText(text_body, "plain"))
+        alt_part.attach(MIMEText(html_body, "html"))
+        body_part = alt_part
+    else:
+        body_part = MIMEText(text_body, "plain")
+
+    # If we have inline images, wrap body in multipart/related
+    if inline_images:
+        related_part = MIMEMultipart("related")
+        related_part.attach(body_part)
+        for img in inline_images:
+            related_part.attach(img)
+        body_part = related_part
+
+    if attachments:
+        # Wrap in mixed for attachments
+        msg = MIMEMultipart("mixed")
+        msg.attach(body_part)
+        for file_path in attachments:
+            msg.attach(_create_attachment_part(file_path))
+        return msg
+    elif inline_images:
+        # Return related part (contains body + inline images)
+        return body_part
+    else:
+        # Return the body part directly (alternative for html, text for plain)
+        return body_part
 
 
 # Filter command group

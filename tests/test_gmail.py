@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
 from jean_claude.gmail import (
     GmailErrorHandlingGroup,
+    _build_message_with_attachments,
+    _create_attachment_part,
     _extract_attachments,
+    _extract_inline_images,
+    _get_part_header,
     _strip_html,
     decode_body,
     extract_attachments_from_payload,
+    extract_inline_images_from_payload,
 )
 
 
@@ -356,3 +366,302 @@ class TestGmailErrorHandling:
 
         msg = handler._http_error_message(error)
         assert msg == "Not found: Not Found"
+
+
+class TestCreateAttachmentPart:
+    """Tests for _create_attachment_part."""
+
+    def test_creates_valid_mime_part(self, tmp_path: Path):
+        """Test that attachment part has correct structure."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Hello, World!")
+
+        part = _create_attachment_part(test_file)
+
+        assert part.get_content_type() == "text/plain"
+        assert part.get_filename() == "test.txt"
+        assert "attachment" in part["Content-Disposition"]
+
+    def test_pdf_mime_type(self, tmp_path: Path):
+        """Test PDF files get correct MIME type."""
+        test_file = tmp_path / "document.pdf"
+        test_file.write_bytes(b"%PDF-1.4 fake pdf content")
+
+        part = _create_attachment_part(test_file)
+
+        assert part.get_content_type() == "application/pdf"
+        assert part.get_filename() == "document.pdf"
+
+    def test_unknown_extension_uses_octet_stream(self, tmp_path: Path):
+        """Test unknown extensions fall back to application/octet-stream."""
+        test_file = tmp_path / "mystery.xyz123"
+        test_file.write_bytes(b"binary data")
+
+        part = _create_attachment_part(test_file)
+
+        assert part.get_content_type() == "application/octet-stream"
+
+    def test_binary_content_preserved(self, tmp_path: Path):
+        """Test that binary content is correctly encoded."""
+        test_file = tmp_path / "binary.bin"
+        binary_content = bytes(range(256))  # All possible byte values
+        test_file.write_bytes(binary_content)
+
+        part = _create_attachment_part(test_file)
+
+        # Use get_payload(decode=True) to decode base64 content
+        decoded = part.get_payload(decode=True)
+        assert decoded == binary_content
+
+
+class TestBuildMessageWithAttachments:
+    """Tests for _build_message_with_attachments."""
+
+    def test_plain_text_only_returns_mimetext(self):
+        """Test plain text without attachments returns MIMEText."""
+        msg = _build_message_with_attachments("Hello", None, [])
+
+        assert isinstance(msg, MIMEText)
+        assert msg.get_content_type() == "text/plain"
+
+    def test_html_returns_multipart_alternative(self):
+        """Test text+html without attachments returns multipart/alternative."""
+        msg = _build_message_with_attachments("Plain", "<p>HTML</p>", [])
+
+        assert isinstance(msg, MIMEMultipart)
+        assert msg.get_content_type() == "multipart/alternative"
+        parts = msg.get_payload()
+        assert len(parts) == 2
+        assert parts[0].get_content_type() == "text/plain"  # type: ignore[union-attr]
+        assert parts[1].get_content_type() == "text/html"  # type: ignore[union-attr]
+
+    def test_with_attachments_returns_multipart_mixed(self, tmp_path: Path):
+        """Test message with attachments returns multipart/mixed."""
+        test_file = tmp_path / "attach.txt"
+        test_file.write_text("attachment content")
+
+        msg = _build_message_with_attachments("Body text", None, [test_file])
+
+        assert isinstance(msg, MIMEMultipart)
+        assert msg.get_content_type() == "multipart/mixed"
+        parts = msg.get_payload()
+        assert len(parts) == 2
+        # First part is body
+        assert parts[0].get_content_type() == "text/plain"  # type: ignore[union-attr]
+        # Second part is attachment
+        assert parts[1].get_filename() == "attach.txt"  # type: ignore[union-attr]
+
+    def test_html_with_attachments_has_nested_alternative(self, tmp_path: Path):
+        """Test HTML message with attachments has nested multipart/alternative."""
+        test_file = tmp_path / "doc.pdf"
+        test_file.write_bytes(b"%PDF-1.4")
+
+        msg = _build_message_with_attachments("Plain", "<p>HTML</p>", [test_file])
+
+        assert msg.get_content_type() == "multipart/mixed"
+        parts = msg.get_payload()
+        assert len(parts) == 2
+
+        # First part should be multipart/alternative with text and html
+        body_part = parts[0]  # type: ignore[index]
+        assert body_part.get_content_type() == "multipart/alternative"  # type: ignore[union-attr]
+        body_parts = body_part.get_payload()  # type: ignore[union-attr]
+        assert body_parts[0].get_content_type() == "text/plain"  # type: ignore[union-attr]
+        assert body_parts[1].get_content_type() == "text/html"  # type: ignore[union-attr]
+
+        # Second part is attachment
+        assert parts[1].get_filename() == "doc.pdf"  # type: ignore[union-attr]
+
+    def test_multiple_attachments(self, tmp_path: Path):
+        """Test message with multiple attachments."""
+        file1 = tmp_path / "one.txt"
+        file2 = tmp_path / "two.pdf"
+        file1.write_text("first")
+        file2.write_bytes(b"%PDF")
+
+        msg = _build_message_with_attachments("Body", None, [file1, file2])
+
+        parts = msg.get_payload()
+        assert len(parts) == 3  # body + 2 attachments
+        assert parts[1].get_filename() == "one.txt"  # type: ignore[union-attr]
+        assert parts[2].get_filename() == "two.pdf"  # type: ignore[union-attr]
+
+    def test_message_can_be_serialized(self, tmp_path: Path):
+        """Test that the message can be converted to bytes for sending."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("content")
+
+        msg = _build_message_with_attachments("Body", "<p>HTML</p>", [test_file])
+        msg["from"] = "sender@example.com"
+        msg["to"] = "recipient@example.com"
+        msg["subject"] = "Test"
+
+        # Should not raise
+        raw_bytes = msg.as_bytes()
+        assert b"sender@example.com" in raw_bytes
+        assert b"recipient@example.com" in raw_bytes
+        assert b"Test" in raw_bytes
+
+    def test_with_inline_images_returns_multipart_related(self):
+        """Test message with inline images uses multipart/related."""
+        # Create a mock inline image part
+        inline_img = MIMEBase("image", "png")
+        inline_img.set_payload(b"fake png data")
+        encoders.encode_base64(inline_img)
+        inline_img.add_header("Content-ID", "<image001>")
+        inline_img.add_header("Content-Disposition", "inline")
+
+        msg = _build_message_with_attachments(
+            "Plain", "<p><img src='cid:image001'></p>", [], [inline_img]
+        )
+
+        # Should be multipart/related containing alternative + inline image
+        assert msg.get_content_type() == "multipart/related"
+        parts = msg.get_payload()
+        assert len(parts) == 2
+        # First is the alternative body
+        assert parts[0].get_content_type() == "multipart/alternative"  # type: ignore[union-attr]
+        # Second is the inline image
+        assert parts[1].get_content_type() == "image/png"  # type: ignore[union-attr]
+        assert parts[1]["Content-ID"] == "<image001>"  # type: ignore[index]
+
+    def test_inline_images_with_attachments(self, tmp_path: Path):
+        """Test message with both inline images and attachments."""
+        # Create inline image
+        inline_img = MIMEBase("image", "jpeg")
+        inline_img.set_payload(b"fake jpeg")
+        encoders.encode_base64(inline_img)
+        inline_img.add_header("Content-ID", "<logo>")
+        inline_img.add_header("Content-Disposition", "inline")
+
+        # Create attachment file
+        attach_file = tmp_path / "doc.pdf"
+        attach_file.write_bytes(b"%PDF-1.4")
+
+        msg = _build_message_with_attachments(
+            "Plain",
+            "<p><img src='cid:logo'></p>",
+            [attach_file],
+            [inline_img],
+        )
+
+        # Structure: multipart/mixed containing related + attachment
+        assert msg.get_content_type() == "multipart/mixed"
+        parts = msg.get_payload()
+        assert len(parts) == 2
+
+        # First part is multipart/related (body + inline images)
+        related = parts[0]  # type: ignore[index]
+        assert related.get_content_type() == "multipart/related"  # type: ignore[union-attr]
+        related_parts = related.get_payload()  # type: ignore[union-attr]
+        assert related_parts[0].get_content_type() == "multipart/alternative"  # type: ignore[union-attr]
+        assert related_parts[1]["Content-ID"] == "<logo>"  # type: ignore[index]
+
+        # Second part is the attachment
+        assert parts[1].get_filename() == "doc.pdf"  # type: ignore[union-attr]
+
+
+class TestExtractInlineImages:
+    """Tests for inline image extraction."""
+
+    def test_extracts_parts_with_content_id(self):
+        """Test that parts with Content-ID are identified as inline images."""
+        parts = [
+            {
+                "mimeType": "image/png",
+                "headers": [{"name": "Content-ID", "value": "<image001>"}],
+                "body": {"attachmentId": "attach123"},
+            }
+        ]
+        inline_images: list = []
+        _extract_inline_images(parts, inline_images)
+
+        assert len(inline_images) == 1
+        assert inline_images[0]["contentId"] == "<image001>"
+        assert inline_images[0]["attachmentId"] == "attach123"
+        assert inline_images[0]["mimeType"] == "image/png"
+
+    def test_ignores_parts_without_content_id(self):
+        """Test that parts without Content-ID are not inline images."""
+        parts = [
+            {
+                "mimeType": "image/jpeg",
+                "filename": "photo.jpg",
+                "headers": [],
+                "body": {"attachmentId": "attach456"},
+            }
+        ]
+        inline_images: list = []
+        _extract_inline_images(parts, inline_images)
+
+        assert len(inline_images) == 0
+
+    def test_extracts_nested_inline_images(self):
+        """Test extraction from nested multipart structure."""
+        parts = [
+            {
+                "mimeType": "multipart/related",
+                "parts": [
+                    {"mimeType": "text/html", "body": {"data": "aGVsbG8="}},
+                    {
+                        "mimeType": "image/gif",
+                        "headers": [{"name": "Content-ID", "value": "<logo>"}],
+                        "body": {"attachmentId": "gif123"},
+                    },
+                ],
+            }
+        ]
+        inline_images: list = []
+        _extract_inline_images(parts, inline_images)
+
+        assert len(inline_images) == 1
+        assert inline_images[0]["contentId"] == "<logo>"
+
+    def test_extract_inline_images_from_payload(self):
+        """Test the top-level extraction function."""
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {
+                    "mimeType": "image/png",
+                    "headers": [{"name": "Content-ID", "value": "<img1>"}],
+                    "body": {"attachmentId": "a1"},
+                },
+                {
+                    "mimeType": "image/jpeg",
+                    "headers": [{"name": "Content-ID", "value": "<img2>"}],
+                    "body": {"attachmentId": "a2"},
+                },
+            ],
+        }
+        inline_images = extract_inline_images_from_payload(payload)
+
+        assert len(inline_images) == 2
+        assert inline_images[0]["contentId"] == "<img1>"
+        assert inline_images[1]["contentId"] == "<img2>"
+
+
+class TestGetPartHeader:
+    """Tests for _get_part_header helper."""
+
+    def test_finds_header_case_insensitive(self):
+        """Test header lookup is case-insensitive."""
+        part = {"headers": [{"name": "Content-ID", "value": "<test>"}]}
+        assert _get_part_header(part, "content-id") == "<test>"
+        assert _get_part_header(part, "Content-ID") == "<test>"
+        assert _get_part_header(part, "CONTENT-ID") == "<test>"
+
+    def test_returns_none_for_missing_header(self):
+        """Test returns None when header not found."""
+        part = {"headers": [{"name": "Content-Type", "value": "text/plain"}]}
+        assert _get_part_header(part, "Content-ID") is None
+
+    def test_handles_empty_headers(self):
+        """Test handles part with no headers."""
+        part = {"headers": []}
+        assert _get_part_header(part, "Content-ID") is None
+
+    def test_handles_missing_headers_key(self):
+        """Test handles part without headers key."""
+        part = {"mimeType": "text/plain"}
+        assert _get_part_header(part, "Content-ID") is None
