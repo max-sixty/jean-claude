@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
+import pytest
+
 from jean_claude.gmail import (
+    GmailErrorHandlingGroup,
     _extract_attachments,
     _strip_html,
     decode_body,
@@ -252,3 +257,102 @@ class TestExtractAttachmentsFromPayload:
         }
         attachments = extract_attachments_from_payload(payload)
         assert attachments == []
+
+
+class TestGmailErrorHandling:
+    """Tests for Gmail-specific HTTP error handling."""
+
+    @pytest.fixture
+    def handler(self):
+        """Create a GmailErrorHandlingGroup instance for testing."""
+        return GmailErrorHandlingGroup()
+
+    def test_message_not_found(self, handler):
+        """404 for message shows message ID and tip."""
+        error = MagicMock()
+        error.resp.status = 404
+        error._get_reason.return_value = "Not Found"
+        error.uri = "https://gmail.googleapis.com/gmail/v1/users/me/messages/19abc123"
+
+        msg = handler._http_error_message(error)
+        assert "Message not found: 19abc123" in msg
+        assert "jean-claude gmail search" in msg
+
+    def test_thread_not_found(self, handler):
+        """404 for thread shows thread ID and tip."""
+        error = MagicMock()
+        error.resp.status = 404
+        error._get_reason.return_value = "Not Found"
+        error.uri = "https://gmail.googleapis.com/gmail/v1/users/me/threads/19xyz789"
+
+        msg = handler._http_error_message(error)
+        assert "Thread not found: 19xyz789" in msg
+        assert "jean-claude gmail inbox" in msg
+
+    def test_draft_not_found(self, handler):
+        """404 for draft shows draft ID and tip."""
+        error = MagicMock()
+        error.resp.status = 404
+        error._get_reason.return_value = "Not Found"
+        error.uri = "https://gmail.googleapis.com/gmail/v1/users/me/drafts/r-123456"
+
+        msg = handler._http_error_message(error)
+        assert "Draft not found: r-123456" in msg
+        assert "jean-claude gmail draft list" in msg
+
+    def test_filter_not_found(self, handler):
+        """404 for filter shows filter ID and tip."""
+        error = MagicMock()
+        error.resp.status = 404
+        error._get_reason.return_value = "Not Found"
+        error.uri = (
+            "https://gmail.googleapis.com/gmail/v1/users/me/settings/filters/ANe1BmjXYZ"
+        )
+
+        msg = handler._http_error_message(error)
+        assert "Filter not found: ANe1BmjXYZ" in msg
+        assert "jean-claude gmail filter list" in msg
+
+    def test_attachment_not_found(self, handler):
+        """404 for attachment shows attachment ID, message ID, and tip."""
+        error = MagicMock()
+        error.resp.status = 404
+        error._get_reason.return_value = "Not Found"
+        error.uri = "https://gmail.googleapis.com/gmail/v1/users/me/messages/19abc123/attachments/ANGjdJ8xyz"
+
+        msg = handler._http_error_message(error)
+        assert "Attachment not found: ANGjdJ8xyz" in msg
+        assert "Message: 19abc123" in msg
+        assert "jean-claude gmail attachments 19abc123" in msg
+
+    def test_label_not_found(self, handler):
+        """404 for label shows label ID and tip."""
+        error = MagicMock()
+        error.resp.status = 404
+        error._get_reason.return_value = "Not Found"
+        error.uri = "https://gmail.googleapis.com/gmail/v1/users/me/labels/Label_123"
+
+        msg = handler._http_error_message(error)
+        assert "Label not found: Label_123" in msg
+        assert "jean-claude gmail labels" in msg
+
+    def test_non_404_falls_through(self, handler):
+        """Non-404 errors use base class handling."""
+        error = MagicMock()
+        error.resp.status = 403
+        error._get_reason.return_value = "Forbidden"
+        error.__str__ = lambda self: "403 Forbidden"
+        error.uri = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
+
+        msg = handler._http_error_message(error)
+        assert "Permission denied" in msg
+
+    def test_404_without_uri_falls_through(self, handler):
+        """404 without URI uses base class handling."""
+        error = MagicMock()
+        error.resp.status = 404
+        error._get_reason.return_value = "Not Found"
+        del error.uri
+
+        msg = handler._http_error_message(error)
+        assert msg == "Not found: Not Found"

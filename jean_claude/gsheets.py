@@ -5,13 +5,34 @@ from __future__ import annotations
 import json
 import re
 import sys
+from urllib.parse import unquote
 
 import click
+from googleapiclient.errors import HttpError
 
 from .auth import build_service
+from .errors import ErrorHandlingGroup
 from .logging import JeanClaudeError, get_logger
 
 logger = get_logger(__name__)
+
+
+class SheetsErrorHandlingGroup(ErrorHandlingGroup):
+    """Error handling with Sheets-specific context for 404s."""
+
+    def _http_error_message(self, e: HttpError) -> str:
+        """Add Sheets-specific context to 404 errors."""
+        if e.resp.status == 404:
+            url = e.uri if hasattr(e, "uri") else ""
+            if url:
+                # Spreadsheet: /v4/spreadsheets/{spreadsheetId}
+                if match := re.search(r"/v4/spreadsheets/([^/?:]+)", url):
+                    spreadsheet_id = unquote(match.group(1))
+                    return (
+                        f"Spreadsheet not found: {spreadsheet_id}\n"
+                        f"  Tip: Use 'jean-claude gdrive search' to find spreadsheet IDs"
+                    )
+        return super()._http_error_message(e)
 
 
 def get_sheets():
@@ -42,7 +63,7 @@ def _get_sheet_id(service, spreadsheet_id: str, sheet_name: str) -> int:
     raise JeanClaudeError(f"Sheet not found: {sheet_name}")
 
 
-@click.group()
+@click.group(cls=SheetsErrorHandlingGroup)
 def cli():
     """Google Sheets CLI - read and write spreadsheet data."""
     pass

@@ -4,19 +4,41 @@ from __future__ import annotations
 
 import io
 import json
+import re
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import unquote
 
 import click
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
 from .auth import build_service
+from .errors import ErrorHandlingGroup
 from .logging import get_logger
 from .pagination import paginated_output
 from .paths import DRIVE_CACHE_DIR
 from .timezone import LOCAL_TZ
 
 logger = get_logger(__name__)
+
+
+class DriveErrorHandlingGroup(ErrorHandlingGroup):
+    """Error handling with Drive-specific context for 404s."""
+
+    def _http_error_message(self, e: HttpError) -> str:
+        """Add Drive-specific context to 404 errors."""
+        if e.resp.status == 404:
+            url = e.uri if hasattr(e, "uri") else ""
+            if url:
+                # File: /drive/v3/files/{fileId}
+                if match := re.search(r"/drive/v3/files/([^/?]+)", url):
+                    file_id = unquote(match.group(1))
+                    return (
+                        f"File not found: {file_id}\n"
+                        f"  Tip: Use 'jean-claude gdrive search' to find valid file IDs"
+                    )
+        return super()._http_error_message(e)
 
 
 def _convert_times_to_local(file: dict) -> dict:
@@ -32,7 +54,7 @@ def get_drive():
     return build_service("drive", "v3")
 
 
-@click.group()
+@click.group(cls=DriveErrorHandlingGroup)
 def cli():
     """Google Drive CLI - list, search, and manage files."""
     pass

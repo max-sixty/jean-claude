@@ -3,14 +3,36 @@
 from __future__ import annotations
 
 import json
+import re
+from urllib.parse import unquote
 
 import click
+from googleapiclient.errors import HttpError
 
 from .auth import build_service
+from .errors import ErrorHandlingGroup
 from .input import read_body_stdin
 from .logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class DocsErrorHandlingGroup(ErrorHandlingGroup):
+    """Error handling with Docs-specific context for 404s."""
+
+    def _http_error_message(self, e: HttpError) -> str:
+        """Add Docs-specific context to 404 errors."""
+        if e.resp.status == 404:
+            url = e.uri if hasattr(e, "uri") else ""
+            if url:
+                # Document: /v1/documents/{documentId}
+                if match := re.search(r"/v1/documents/([^/?:]+)", url):
+                    doc_id = unquote(match.group(1))
+                    return (
+                        f"Document not found: {doc_id}\n"
+                        f"  Tip: Use 'jean-claude gdrive search' to find document IDs"
+                    )
+        return super()._http_error_message(e)
 
 
 def get_docs():
@@ -29,7 +51,7 @@ def _get_end_index(doc: dict) -> int:
     return 1
 
 
-@click.group()
+@click.group(cls=DocsErrorHandlingGroup)
 def cli():
     """Google Docs CLI - read and write document content."""
     pass

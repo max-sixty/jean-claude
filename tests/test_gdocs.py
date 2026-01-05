@@ -1,6 +1,10 @@
 """Tests for gdocs module."""
 
-from jean_claude.gdocs import _get_end_index
+from unittest.mock import MagicMock
+
+import pytest
+
+from jean_claude.gdocs import DocsErrorHandlingGroup, _get_end_index
 
 
 class TestGetEndIndex:
@@ -61,3 +65,44 @@ class TestGetEndIndex:
             }
         }
         assert _get_end_index(doc) == 1
+
+
+class TestDocsErrorHandling:
+    """Tests for Docs-specific HTTP error handling."""
+
+    @pytest.fixture
+    def handler(self):
+        """Create a DocsErrorHandlingGroup instance for testing."""
+        return DocsErrorHandlingGroup()
+
+    def test_document_not_found(self, handler):
+        """404 for document shows document ID and tip."""
+        error = MagicMock()
+        error.resp.status = 404
+        error._get_reason.return_value = "Not Found"
+        error.uri = "https://docs.googleapis.com/v1/documents/1abc123xyz"
+
+        msg = handler._http_error_message(error)
+        assert "Document not found: 1abc123xyz" in msg
+        assert "jean-claude gdrive search" in msg
+
+    def test_non_404_falls_through(self, handler):
+        """Non-404 errors use base class handling."""
+        error = MagicMock()
+        error.resp.status = 403
+        error._get_reason.return_value = "Forbidden"
+        error.__str__ = lambda self: "403 Forbidden"
+        error.uri = "https://docs.googleapis.com/v1/documents"
+
+        msg = handler._http_error_message(error)
+        assert "Permission denied" in msg
+
+    def test_404_without_uri_falls_through(self, handler):
+        """404 without URI uses base class handling."""
+        error = MagicMock()
+        error.resp.status = 404
+        error._get_reason.return_value = "Not Found"
+        del error.uri
+
+        msg = handler._http_error_message(error)
+        assert msg == "Not found: Not Found"

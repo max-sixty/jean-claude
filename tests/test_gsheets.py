@@ -3,10 +3,12 @@
 import io
 import json
 import sys
+from unittest.mock import MagicMock
 
 import pytest
 
 from jean_claude.gsheets import (
+    SheetsErrorHandlingGroup,
     _column_to_index,
     _normalize_range,
     _read_rows_from_stdin,
@@ -129,3 +131,56 @@ class TestColumnToIndex:
         """Special characters raise JeanClaudeError."""
         with pytest.raises(JeanClaudeError, match="must be letters only"):
             _column_to_index("!@#")
+
+
+class TestSheetsErrorHandling:
+    """Tests for Sheets-specific HTTP error handling."""
+
+    @pytest.fixture
+    def handler(self):
+        """Create a SheetsErrorHandlingGroup instance for testing."""
+        return SheetsErrorHandlingGroup()
+
+    def test_spreadsheet_not_found(self, handler):
+        """404 for spreadsheet shows spreadsheet ID and tip."""
+        error = MagicMock()
+        error.resp.status = 404
+        error._get_reason.return_value = "Not Found"
+        error.uri = "https://sheets.googleapis.com/v4/spreadsheets/1abc123xyz"
+
+        msg = handler._http_error_message(error)
+        assert "Spreadsheet not found: 1abc123xyz" in msg
+        assert "jean-claude gdrive search" in msg
+
+    def test_spreadsheet_not_found_with_range(self, handler):
+        """404 for spreadsheet values shows spreadsheet ID."""
+        error = MagicMock()
+        error.resp.status = 404
+        error._get_reason.return_value = "Not Found"
+        error.uri = (
+            "https://sheets.googleapis.com/v4/spreadsheets/1abc123xyz:batchUpdate"
+        )
+
+        msg = handler._http_error_message(error)
+        assert "Spreadsheet not found: 1abc123xyz" in msg
+
+    def test_non_404_falls_through(self, handler):
+        """Non-404 errors use base class handling."""
+        error = MagicMock()
+        error.resp.status = 403
+        error._get_reason.return_value = "Forbidden"
+        error.__str__ = lambda self: "403 Forbidden"
+        error.uri = "https://sheets.googleapis.com/v4/spreadsheets"
+
+        msg = handler._http_error_message(error)
+        assert "Permission denied" in msg
+
+    def test_404_without_uri_falls_through(self, handler):
+        """404 without URI uses base class handling."""
+        error = MagicMock()
+        error.resp.status = 404
+        error._get_reason.return_value = "Not Found"
+        del error.uri
+
+        msg = handler._http_error_message(error)
+        assert msg == "Not found: Not Found"

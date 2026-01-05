@@ -56,17 +56,20 @@ from __future__ import annotations
 import base64
 import html
 import json
+import re
 import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, getaddresses, parseaddr, parsedate_to_datetime
 from pathlib import Path
 from typing import NoReturn
+from urllib.parse import unquote
 
 import click
 from googleapiclient.errors import HttpError
 
 from .auth import build_service
+from .errors import ErrorHandlingGroup
 from .input import read_body_stdin, read_stdin_optional
 from .logging import JeanClaudeError, get_logger
 from .pagination import paginated_output
@@ -74,6 +77,63 @@ from .paths import ATTACHMENT_CACHE_DIR, DRAFT_CACHE_DIR, EMAIL_CACHE_DIR
 from .timezone import LOCAL_TZ
 
 logger = get_logger(__name__)
+
+
+class GmailErrorHandlingGroup(ErrorHandlingGroup):
+    """Error handling with Gmail-specific context for 404s."""
+
+    def _http_error_message(self, e: HttpError) -> str:
+        """Add Gmail-specific context to 404 errors."""
+        if e.resp.status == 404:
+            url = e.uri if hasattr(e, "uri") else ""
+            if url:
+                # Attachment: /users/me/messages/{messageId}/attachments/{attachmentId}
+                if match := re.search(
+                    r"/users/me/messages/([^/]+)/attachments/([^/?]+)", url
+                ):
+                    msg_id = unquote(match.group(1))
+                    attach_id = unquote(match.group(2))
+                    return (
+                        f"Attachment not found: {attach_id}\n"
+                        f"  Message: {msg_id}\n"
+                        f"  Tip: Use 'jean-claude gmail attachments {msg_id}' to list attachments"
+                    )
+                # Message: /users/me/messages/{messageId}
+                if match := re.search(r"/users/me/messages/([^/?]+)", url):
+                    msg_id = unquote(match.group(1))
+                    return (
+                        f"Message not found: {msg_id}\n"
+                        f"  Tip: Use 'jean-claude gmail search' to find valid message IDs"
+                    )
+                # Thread: /users/me/threads/{threadId}
+                if match := re.search(r"/users/me/threads/([^/?]+)", url):
+                    thread_id = unquote(match.group(1))
+                    return (
+                        f"Thread not found: {thread_id}\n"
+                        f"  Tip: Use 'jean-claude gmail inbox' to find valid thread IDs"
+                    )
+                # Draft: /users/me/drafts/{draftId}
+                if match := re.search(r"/users/me/drafts/([^/?]+)", url):
+                    draft_id = unquote(match.group(1))
+                    return (
+                        f"Draft not found: {draft_id}\n"
+                        f"  Tip: Use 'jean-claude gmail draft list' to see available drafts"
+                    )
+                # Filter: /users/me/settings/filters/{filterId}
+                if match := re.search(r"/users/me/settings/filters/([^/?]+)", url):
+                    filter_id = unquote(match.group(1))
+                    return (
+                        f"Filter not found: {filter_id}\n"
+                        f"  Tip: Use 'jean-claude gmail filter list' to see available filters"
+                    )
+                # Label: /users/me/labels/{labelId}
+                if match := re.search(r"/users/me/labels/([^/?]+)", url):
+                    label_id = unquote(match.group(1))
+                    return (
+                        f"Label not found: {label_id}\n"
+                        f"  Tip: Use 'jean-claude gmail labels' to see available labels"
+                    )
+        return super()._http_error_message(e)
 
 
 def _convert_to_local_time(date_str: str) -> str:
@@ -573,7 +633,7 @@ def draft_url(draft_result: dict) -> str:
     return f"https://mail.google.com/mail/u/0/#drafts/{draft_result['message']['id']}"
 
 
-@click.group()
+@click.group(cls=GmailErrorHandlingGroup)
 def cli():
     """Gmail CLI - search, draft, and send emails."""
 
