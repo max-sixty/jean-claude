@@ -290,6 +290,25 @@ a newsletter is less useful than "this morning" or "today at 10am".
 Use "today/yesterday" and day names — these are natural mental anchors. Only
 use "X minutes ago" when recency itself is actionable (< 1 hour).
 
+### Marking Messages as Read
+
+When you show the full body of a message to the user — not just the snippet
+from a list — mark it as read. The user has effectively read it.
+
+**Mark as read when:**
+- Reading the full email body (via `gmail get` or reading the cached body file)
+- Creating a reply or forward (you read the original to compose the response)
+- The user explicitly asks to read a specific message
+
+**Don't mark as read when:**
+- Showing inbox/search results (snippets only)
+- Listing messages without showing full content
+
+This applies across messaging services:
+- Gmail: `jean-claude gmail mark-read THREAD_ID`
+- iMessage: `jean-claude imessage mark-read CHAT_ID`
+- WhatsApp: `jean-claude whatsapp mark-read CHAT_ID`
+
 ### Availability Questions
 
 When a message asks about availability ("Are you free Tuesday?", "Which works
