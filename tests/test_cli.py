@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
+import pytest
 from click.testing import CliRunner
 
 from jean_claude.cli import cli
+from jean_claude.errors import ErrorHandlingGroup
 
 
 def test_help():
@@ -215,3 +219,41 @@ def test_command_reference_up_to_date(tmp_path):
             f"Diffs:\n{diff_msg}\n\n"
             "Run: uv run python scripts/generate-command-reference.py"
         )
+
+
+class TestErrorHandling:
+    """Tests for base HTTP error message handling."""
+
+    @pytest.fixture
+    def handler(self):
+        """Create an ErrorHandlingGroup instance for testing."""
+        return ErrorHandlingGroup()
+
+    def test_generic_404(self, handler):
+        """Base handler returns generic 404 message."""
+        error = MagicMock()
+        error.resp.status = 404
+        error._get_reason.return_value = "Not Found"
+
+        msg = handler._http_error_message(error)
+        assert msg == "Not found: Not Found"
+
+    def test_403_permission_denied(self, handler):
+        """403 shows permission denied."""
+        error = MagicMock()
+        error.resp.status = 403
+        error._get_reason.return_value = "Forbidden"
+        error.__str__ = lambda self: "403 Forbidden"
+
+        msg = handler._http_error_message(error)
+        assert "Permission denied" in msg
+
+    def test_401_auth_failed(self, handler):
+        """401 suggests re-authentication."""
+        error = MagicMock()
+        error.resp.status = 401
+        error._get_reason.return_value = "Unauthorized"
+
+        msg = handler._http_error_message(error)
+        assert "Authentication failed" in msg
+        assert "jean-claude auth" in msg

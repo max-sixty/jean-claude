@@ -3,16 +3,47 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta
+from urllib.parse import unquote
 
 import click
+from googleapiclient.errors import HttpError
 
 from .auth import build_service
+from .errors import ErrorHandlingGroup
 from .logging import JeanClaudeError, get_logger
 from .pagination import paginated_output
 from .timezone import LOCAL_TZ, TIMEZONE
 
 logger = get_logger(__name__)
+
+
+class CalendarErrorHandlingGroup(ErrorHandlingGroup):
+    """Error handling with calendar-specific context for 404s."""
+
+    def _http_error_message(self, e: HttpError) -> str:
+        """Add calendar-specific context to 404 errors."""
+        if e.resp.status == 404:
+            url = e.uri if hasattr(e, "uri") else ""
+            if url:
+                # Calendar events: /calendars/CAL_ID/events/EVENT_ID
+                if match := re.search(r"/calendars/([^/]+)/events/([^/?]+)", url):
+                    cal_id = unquote(match.group(1))
+                    event_id = unquote(match.group(2))
+                    return (
+                        f"Event not found: {event_id}\n"
+                        f"  Calendar: {cal_id}\n"
+                        f"  Tip: Use 'jean-claude gcal list' or 'jean-claude gcal search' to find valid event IDs"
+                    )
+                # Calendar events list: /calendars/CAL_ID/events (no specific event)
+                if match := re.search(r"/calendars/([^/]+)/events", url):
+                    cal_id = unquote(match.group(1))
+                    return (
+                        f"Calendar not found: {cal_id}\n"
+                        f"  Tip: Use 'jean-claude gcal calendars' to list available calendars"
+                    )
+        return super()._http_error_message(e)
 
 
 def get_calendar():
@@ -72,11 +103,10 @@ def resolve_calendar_ids(
                 resolved.append(("primary", "primary"))
             continue
 
-        # If it looks like an email/ID, use directly
-        if "@" in calendar:
-            cal = cal_by_id.get(calendar)
-            name = cal.get("summary", calendar) if cal else calendar
-            resolved.append((calendar, name))
+        # If it's an exact match for a calendar ID, use directly
+        if calendar in cal_by_id:
+            cal = cal_by_id[calendar]
+            resolved.append((calendar, cal.get("summary", calendar)))
             continue
 
         # Search by name substring
@@ -87,7 +117,14 @@ def resolve_calendar_ids(
                 matches.append(cal)
 
         if not matches:
-            raise JeanClaudeError(f"No calendar found matching '{calendar}'")
+            available = [
+                f"  - {c.get('summary', '(unnamed)')} ({c['id']})"
+                for c in all_calendars
+            ]
+            raise JeanClaudeError(
+                f"No calendar found matching '{calendar}'. Available calendars:\n"
+                + "\n".join(available)
+            )
 
         if len(matches) > 1:
             names = [f"  - {c.get('summary', c['id'])} ({c['id']})" for c in matches]
@@ -136,7 +173,7 @@ def calculate_all_day_dates(
     return start_date, end_date
 
 
-@click.group()
+@click.group(cls=CalendarErrorHandlingGroup)
 def cli():
     """Google Calendar CLI - list, create, and search events."""
     pass

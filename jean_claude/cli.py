@@ -18,6 +18,7 @@ from .config import (
     is_whatsapp_enabled,
     set_config_value,
 )
+from .errors import ErrorHandlingGroup
 from .gcal import cli as gcal_cli
 from .gdocs import cli as gdocs_cli
 from .gdrive import cli as gdrive_cli
@@ -30,47 +31,6 @@ from .logging import JeanClaudeError, configure_logging, get_logger
 from .whatsapp import cli as whatsapp_cli
 
 logger = get_logger(__name__)
-
-
-class ErrorHandlingGroup(click.Group):
-    """Click group that handles errors with clean output."""
-
-    def invoke(self, ctx: click.Context):
-        try:
-            return super().invoke(ctx)
-        except HttpError as e:
-            self._handle_error(self._http_error_message(e))
-        except JeanClaudeError as e:
-            self._handle_error(str(e))
-
-    def _handle_error(self, message: str) -> None:
-        """Log error and exit cleanly."""
-        logger.error(message)
-        sys.exit(1)
-
-    def _http_error_message(self, e: HttpError) -> str:
-        """Convert HttpError to user-friendly message."""
-        status = e.resp.status
-        reason = e._get_reason()
-
-        if status == 404:
-            return f"Not found: {reason}"
-        if status == 403:
-            # Check for specific API-not-enabled error
-            error_str = str(e)
-            if (
-                "not been used" in error_str.lower()
-                or "not enabled" in error_str.lower()
-            ):
-                return f"API not enabled: {reason}. Enable at https://console.cloud.google.com/apis/library"
-            return f"Permission denied: {reason}"
-        if status == 400:
-            return f"Invalid request: {reason}"
-        if status == 401:
-            return f"Authentication failed: {reason}. Try 'jean-claude auth' to re-authenticate."
-        if status == 429:
-            return f"Rate limit exceeded: {reason}. Wait a moment and try again."
-        return f"API error ({status}): {reason}"
 
 
 @click.group(cls=ErrorHandlingGroup)
