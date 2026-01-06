@@ -40,6 +40,7 @@ SCOPES_FULL = [
     "https://www.googleapis.com/auth/documents",
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/contacts",
 ]
 
 SCOPES_READONLY = [
@@ -49,6 +50,7 @@ SCOPES_READONLY = [
     "https://www.googleapis.com/auth/documents.readonly",
     "https://www.googleapis.com/auth/spreadsheets.readonly",
     "https://www.googleapis.com/auth/userinfo.profile",  # For display name in From header
+    "https://www.googleapis.com/auth/contacts.readonly",  # For recipient display names
 ]
 
 

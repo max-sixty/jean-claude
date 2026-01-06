@@ -54,6 +54,7 @@ https://developers.google.com/workspace/gmail/api/reference/quota
 from __future__ import annotations
 
 import base64
+import functools
 import html
 import json
 import mimetypes
@@ -188,25 +189,113 @@ def get_my_from_address(service=None) -> str:
 
     # Fallback: try Google Account profile name via People API
     # This mirrors Gmail's behavior when send-as displayName is empty
+    display_name = _get_profile_display_name()
+    if display_name:
+        return formataddr((display_name, email))
+    return email
+
+
+_scope_warnings_shown: set[str] = set()
+
+
+def _warn_scope_error(e: HttpError, scope: str, feature: str) -> None:
+    """Warn once per scope about missing permissions."""
+    if scope in _scope_warnings_shown:
+        return
+    if e.resp.status == 403:
+        _scope_warnings_shown.add(scope)
+        logger.warning(
+            "Missing scope for feature",
+            feature=feature,
+            scope=scope,
+            hint="Run 'jean-claude auth' to re-authenticate",
+        )
+    else:
+        logger.warning("Failed to look up feature", feature=feature, error=str(e))
+
+
+def _get_profile_display_name() -> str | None:
+    """Get display name from Google Account profile. Returns None on any failure."""
     try:
-        people = get_people()
         profile = (
-            people.people()
+            get_people()
+            .people()
             .get(resourceName="people/me", personFields="names")
             .execute()
         )
-        names = profile.get("names", [])
-        for name in names:
-            if name.get("metadata", {}).get("primary", False):
-                if display_name := name.get("displayName"):
-                    return formataddr((display_name, email))
-        if names and (display_name := names[0].get("displayName")):
-            return formataddr((display_name, email))
-    except Exception as e:
-        # People API requires userinfo.profile scope - user may need to re-auth
-        logger.debug("Could not retrieve display name from People API", error=str(e))
+    except HttpError as e:
+        _warn_scope_error(e, "userinfo.profile", "your display name")
+        return None
 
-    return email
+    names = profile.get("names", [])
+    for name in names:
+        if name.get("metadata", {}).get("primary", False):
+            if display_name := name.get("displayName"):
+                return display_name
+    if names:
+        return names[0].get("displayName")
+    return None
+
+
+@functools.cache
+def _lookup_contact_name(email: str) -> str | None:
+    """Look up display name for an email address from Google Contacts.
+
+    Uses searchContacts API for efficient per-email lookup. Results are cached
+    for the CLI session to avoid duplicate lookups.
+
+    Requires contacts scope. Shows warning if scope not granted.
+    """
+    email = email.lower()
+
+    try:
+        result = (
+            get_people()
+            .people()
+            .searchContacts(query=email, readMask="names,emailAddresses")
+            .execute()
+        )
+    except HttpError as e:
+        _warn_scope_error(e, "contacts", "recipient names")
+        return None
+
+    # Find exact email match (searchContacts does prefix matching)
+    for person in result.get("results", []):
+        person_data = person.get("person", {})
+        for email_addr in person_data.get("emailAddresses", []):
+            if email_addr.get("value", "").lower() == email:
+                names = person_data.get("names", [])
+                if names:
+                    return names[0].get("displayName")
+
+    return None
+
+
+def _format_recipients(addresses: str) -> str:
+    """Format email addresses with display names from Google Contacts.
+
+    Parses a comma-separated list of email addresses, looks up each in contacts,
+    and returns addresses formatted as "Display Name <email>" where available.
+
+    Addresses that already have a display name are kept as-is.
+    """
+    if not addresses:
+        return addresses
+
+    parsed = getaddresses([addresses])
+    formatted = []
+    for name, email in parsed:
+        if name:
+            # Already has a name, keep it
+            formatted.append(formataddr((name, email)))
+        else:
+            # Look up display name from contacts
+            contact_name = _lookup_contact_name(email)
+            if contact_name:
+                formatted.append(formataddr((contact_name, email)))
+            else:
+                formatted.append(email)
+    return ", ".join(formatted)
 
 
 def _wrap_batch_error(request_id: str, exception: Exception) -> NoReturn:
@@ -814,12 +903,12 @@ def draft_create(
     service = get_gmail()
     msg = _build_message_with_attachments(body, None, list(attachments))
     msg["from"] = get_my_from_address(service)
-    msg["to"] = to_addr
+    msg["to"] = _format_recipients(to_addr)
     msg["subject"] = subject
     if cc:
-        msg["cc"] = cc
+        msg["cc"] = _format_recipients(cc)
     if bcc:
-        msg["bcc"] = bcc
+        msg["bcc"] = _format_recipients(bcc)
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     result = (
@@ -1101,7 +1190,7 @@ def _create_reply_draft(
     msg["to"] = to_addr
     # Use custom CC if provided, otherwise use auto-detected CC for reply-all
     if custom_cc:
-        msg["cc"] = custom_cc
+        msg["cc"] = _format_recipients(custom_cc)
     elif include_cc and cc_addr:
         msg["cc"] = cc_addr
     msg["subject"] = subject
@@ -1317,7 +1406,7 @@ def draft_forward(
         msg = body_part
 
     msg["from"] = get_my_from_address(service)
-    msg["to"] = to
+    msg["to"] = _format_recipients(to)
     msg["subject"] = subject
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
@@ -1529,11 +1618,11 @@ def draft_update(
 
     # Apply updates (only for provided values)
     if to_addr is not None:
-        headers["to"] = to_addr
+        headers["to"] = _format_recipients(to_addr)
     if cc is not None:
-        headers["cc"] = cc
+        headers["cc"] = _format_recipients(cc)
     if bcc is not None:
-        headers["bcc"] = bcc
+        headers["bcc"] = _format_recipients(bcc)
     if subject is not None:
         headers["subject"] = subject
 

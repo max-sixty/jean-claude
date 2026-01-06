@@ -141,17 +141,33 @@ def _status_human():
             scopes = None
 
         if scopes is not None:
-            # Determine scope level
+            # Determine scope level and missing scopes
+            missing_scopes = set(SCOPES_FULL) - scopes
             if scopes == set(SCOPES_FULL):
                 scope_level = "full access"
             elif scopes == set(SCOPES_READONLY):
                 scope_level = "read-only"
+            elif missing_scopes:
+                scope_level = "missing scopes"
             else:
-                scope_level = "custom"
+                scope_level = "full access"  # Has all required + extras
 
-            click.echo(
-                "Google: " + click.style(f"Authenticated ({scope_level})", fg="green")
-            )
+            if missing_scopes:
+                click.echo(
+                    "Google: "
+                    + click.style(f"Authenticated ({scope_level})", fg="yellow")
+                )
+                click.echo(
+                    "  Run 'jean-claude auth' to re-authenticate with full access."
+                )
+                click.echo("  Missing scopes:")
+                for scope in sorted(missing_scopes):
+                    click.echo(f"    - {scope}")
+            else:
+                click.echo(
+                    "Google: "
+                    + click.style(f"Authenticated ({scope_level})", fg="green")
+                )
 
             # Check API availability
             try:
@@ -191,19 +207,24 @@ def _get_google_status() -> dict:
             "error": "Token file corrupted",
         }
 
-    # Determine scope level
+    # Determine scope level and missing scopes
+    missing_scopes = set(SCOPES_FULL) - scopes
     if scopes == set(SCOPES_FULL):
         scope_level = "full"
     elif scopes == set(SCOPES_READONLY):
         scope_level = "readonly"
+    elif missing_scopes:
+        scope_level = "missing_scopes"
     else:
-        scope_level = "custom"
+        scope_level = "full"  # Has all required + extras
 
     result = {
         "enabled": True,
         "authenticated": True,
         "scopes": scope_level,
     }
+    if missing_scopes:
+        result["missing_scopes"] = sorted(missing_scopes)
 
     # Try to get user email
     user_email = None
