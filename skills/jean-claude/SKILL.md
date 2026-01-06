@@ -538,6 +538,30 @@ For important correspondence, explain your reasoning or offer alternatives:
 "I went with a warm but brief tone since you haven't talked in 8 months. Want
 something more formal?"
 
+### Iterating with the User
+
+**Always create actual drafts when iterating with the user.** Don't just write
+the email text in the conversation — create a real Gmail draft so:
+
+- The user can see it in their Drafts folder
+- They can edit it directly in Gmail if they prefer
+- The draft persists if the conversation ends
+- You can use file-based editing for revisions
+
+**Workflow for user iteration:**
+
+1. Create the draft: `jean-claude gmail draft create` (or `reply`/`forward`)
+2. Show the user what you created (recipient, subject, key points)
+3. If they request changes, edit the draft file and update:
+   - `cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt` to see current
+   - Edit the file with the changes
+   - `cat ... | jean-claude gmail draft update DRAFT_ID` to save
+4. Repeat until approved, then send
+
+**Why not just write in the conversation?** Text in chat is ephemeral — if the
+user closes the window or the session times out, the draft is lost. A real
+Gmail draft persists and can be sent from any device.
+
 ### Vocabulary
 
 Avoid hollow words that signal low engagement. Check the user's personalization
