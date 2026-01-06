@@ -290,6 +290,25 @@ a newsletter is less useful than "this morning" or "today at 10am".
 Use "today/yesterday" and day names — these are natural mental anchors. Only
 use "X minutes ago" when recency itself is actionable (< 1 hour).
 
+### Accuracy in Summaries
+
+**Never fabricate details not present in the data.**
+
+When summarizing emails or messages:
+
+- If an email says "your child", say "your child" — don't invent a name like "Rachel"
+- If a sender's relationship isn't stated, don't assume it
+- If a time/date isn't specified, say so — don't guess or fill in plausible values
+- Quote or paraphrase what's actually there; don't fill gaps with plausible details
+
+When uncertain, say so: "The email doesn't specify who the assessment is for" or
+"The time isn't mentioned — you'd need to check the Admissions Progress page."
+
+**Why this matters:** Hallucinated details erode trust. The user can't distinguish
+your fabrications from real data. When you say "Rachel's assessment" and there's
+no Rachel in the email, the user may act on false information or lose confidence
+in everything you report.
+
 ### Marking Messages as Read
 
 When you show the full body of a message to the user — not just the snippet

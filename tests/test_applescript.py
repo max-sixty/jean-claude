@@ -1,7 +1,5 @@
 """Tests for applescript module."""
 
-import pytest
-
 from jean_claude.applescript import _parse_applescript_error
 
 
@@ -46,14 +44,14 @@ class TestParseApplescriptError:
 
     def test_permission_not_allowed(self):
         """Permission 'not allowed' error shows guidance."""
-        stderr = 'execution error: Messages got an error: Messages is not allowed assistive access. (-1719)'
+        stderr = "execution error: Messages got an error: Messages is not allowed assistive access. (-1719)"
         msg = _parse_applescript_error(stderr)
         assert "Automation permission required" in msg
         assert "System Preferences" in msg
 
     def test_permission_assistive_in_message(self):
         """Permission keywords in error message trigger guidance."""
-        stderr = 'execution error: System Events got an error: osascript is not allowed to send keystrokes. (-1743)'
+        stderr = "execution error: System Events got an error: osascript is not allowed to send keystrokes. (-1743)"
         msg = _parse_applescript_error(stderr)
         # "not allowed" is in the message, so it triggers permission guidance
         assert "Automation permission required" in msg
@@ -89,12 +87,16 @@ class TestParseApplescriptError:
 
     def test_error_with_trailing_period(self):
         """Error message with trailing period is handled."""
-        stderr = 'execution error: Reminders got an error: Can\'t get list "Work". (-1728)'
+        stderr = (
+            'execution error: Reminders got an error: Can\'t get list "Work". (-1728)'
+        )
         msg = _parse_applescript_error(stderr)
         assert msg == "Reminders: List not found: Work"
 
     def test_error_without_trailing_period(self):
         """Error message without trailing period is handled."""
-        stderr = 'execution error: Reminders got an error: Can\'t get list "Home" (-1728)'
+        stderr = (
+            'execution error: Reminders got an error: Can\'t get list "Home" (-1728)'
+        )
         msg = _parse_applescript_error(stderr)
         assert msg == "Reminders: List not found: Home"
