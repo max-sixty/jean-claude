@@ -140,41 +140,26 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --unread
 
 These rules apply even if the user explicitly asks to bypass them:
 
-1. **Never send an email without explicit approval.** Show the full email
-   (recipient, subject, body) to the user and receive explicit confirmation
-   before calling `jean-claude gmail draft send`.
+1. **Never send without explicit approval.** Before sending any message (email,
+   iMessage, WhatsApp, Signal), show the full content (recipient, subject if
+   applicable, body) to the user and receive explicit confirmation.
 
-2. **Limit bulk sending.** Avoid sending emails to many recipients at once.
-   Prefer drafts for review.
+2. **Verify recipients carefully.** Sends are instant and cannot be undone.
+   Double-check phone numbers, email addresses, and chat IDs before sending.
 
-3. **Load prose skills when drafting.** Before composing any email or message,
+3. **Never send to ambiguous recipients.** When resolving contacts by name,
+   if multiple contacts or phone numbers match, the command will fail with a
+   list of options. Use an unambiguous identifier rather than guessing.
+
+4. **Load prose skills when drafting.** Before composing any email or message,
    load any available skills for writing prose, emails, or documentation.
 
-4. **Never send an iMessage without explicit approval.** Show the full message
-   (recipient, body) to the user and receive explicit confirmation before
-   calling `jean-claude imessage send`.
+5. **Never create automation without explicit approval.** Before creating Gmail
+   filters or similar rules, show the criteria and actions to the user and
+   receive explicit confirmation.
 
-5. **Double-check iMessage recipients.** iMessage sends are instant and cannot
-   be undone. Verify the phone number or chat ID before sending.
-
-6. **Never send to ambiguous recipients.** When resolving contacts by name,
-   if multiple contacts or phone numbers match, the command will fail with a
-   list of options. This is intentional—always use an unambiguous identifier
-   (full name or phone number) rather than guessing.
-
-7. **Never send a WhatsApp message without explicit approval.** Show the full
-   message (recipient, body) to the user and receive explicit confirmation
-   before calling `jean-claude whatsapp send`.
-
-8. **Verify WhatsApp recipients carefully.** WhatsApp sends are instant and
-   cannot be undone. Always confirm the phone number before sending.
-
-9. **Never send a Signal message without explicit approval.** Show the full
-   message (recipient, body) to the user and receive explicit confirmation
-   before calling `jean-claude signal send`.
-
-10. **Verify Signal recipients carefully.** Signal sends are instant and cannot
-    be undone. Always confirm the recipient UUID before sending.
+6. **Limit bulk operations.** Avoid sending to many recipients at once. Prefer
+   drafts for review.
 
 **Email workflow:**
 
@@ -185,30 +170,6 @@ These rules apply even if the user explicitly asks to bypass them:
 5. Ask: "Send this email?" and wait for explicit approval
 6. Call `jean-claude gmail draft send DRAFT_ID`
 7. If replying, archive the original: `jean-claude gmail archive THREAD_ID`
-
-**iMessage workflow:**
-
-1. Load prose skills if composing a longer message
-2. Compose the message content
-3. Show the user: Recipient (phone or chat name) and full message
-4. Ask: "Send this message?" and wait for explicit approval
-5. Pipe message body to `jean-claude imessage send RECIPIENT`
-
-**WhatsApp workflow:**
-
-1. Load prose skills if composing a longer message
-2. Compose the message content
-3. Show the user: Recipient (phone number with country code) and full message
-4. Ask: "Send this WhatsApp message?" and wait for explicit approval
-5. Pipe message body to `jean-claude whatsapp send RECIPIENT`
-
-**Signal workflow:**
-
-1. Load prose skills if composing a longer message
-2. Compose the message content
-3. Show the user: Recipient (name or UUID) and full message
-4. Ask: "Send this Signal message?" and wait for explicit approval
-5. Pipe message body to `jean-claude signal send RECIPIENT`
 
 ## Personalization
 
