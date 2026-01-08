@@ -72,9 +72,12 @@ When lookup fails, the error shows all matches—use the specific phone number.
 ## List Chats
 
 ```bash
-# List chats (shows name and chat ID)
+# List chats (shows name, chat ID, unread count)
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage chats
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage chats -n 10
+
+# Show only chats with unread messages
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage chats --unread
 
 # Get participants
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage participants "any;+;chat123456789"

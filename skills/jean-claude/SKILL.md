@@ -127,6 +127,26 @@ request.
 4. **Proceed with the user's request** — Execute whatever task prompted loading
    this skill (check inbox, send message, etc.).
 
+### Before Using Messaging (iMessage/WhatsApp/Signal)
+
+**Load the platform guide before using any messaging commands.** Each platform
+has different commands and options. Gmail is documented in this file, but
+messaging platforms have separate guides:
+
+```bash
+# Load before using iMessage
+cat ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/platforms/imessage.md
+
+# Load before using WhatsApp
+cat ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/platforms/whatsapp.md
+
+# Load before using Signal
+cat ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/platforms/signal.md
+```
+
+Don't guess command syntax — each platform is different. iMessage and WhatsApp
+have different flags and subcommands despite similar functionality.
+
 ### Understanding the Status
 
 For users with setup complete, interpret the status output to understand their
@@ -162,6 +182,9 @@ devices.
 ```bash
 # Re-fetch inbox for email updates
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox -n 20
+
+# Re-fetch iMessage (see platforms/imessage.md for full docs)
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --unread
 
 # Re-sync WhatsApp for message updates
 uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --unread

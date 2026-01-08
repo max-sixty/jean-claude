@@ -537,7 +537,12 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
             params.extend([identifier, identifier])
 
     if query.unread_only:
-        where_clauses.append("m.is_read = 0 AND m.is_from_me = 0")
+        # Match Apple's unread criteria from their database index:
+        # is_read=0, is_from_me=0, item_type=0, is_finished=1, is_system_message=0
+        where_clauses.append(
+            "m.is_read = 0 AND m.is_from_me = 0 "
+            "AND m.is_finished = 1 AND m.is_system_message = 0 AND m.item_type = 0"
+        )
 
     if query.search_text:
         where_clauses.append("m.text LIKE ?")
@@ -834,14 +839,17 @@ return jsonString as text"""
 
 @cli.command()
 @click.option("-n", "--max-results", default=50, help="Maximum chats to list")
-def chats(max_results: int):
+@click.option("--unread", is_flag=True, help="Show only chats with unread messages")
+def chats(max_results: int, unread: bool):
     """List available iMessage chats.
 
     Shows chat name, ID, group status, and message timestamps.
-    Use chat ID or name to send to groups.
+    Use chat ID or name to send to groups. Use --unread to show only
+    chats with unread messages.
 
-    Example:
+    Examples:
         jean-claude imessage chats
+        jean-claude imessage chats --unread
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -861,7 +869,11 @@ def chats(max_results: int):
             (SELECT COUNT(*) FROM message m
              JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
              WHERE cmj.chat_id = c.ROWID
-               AND m.is_read = 0 AND m.is_from_me = 0) as unread_count
+               AND m.is_read = 0
+               AND m.is_from_me = 0
+               AND m.is_finished = 1
+               AND m.is_system_message = 0
+               AND m.item_type = 0) as unread_count
         FROM chat c
         ORDER BY last_message_date DESC
         LIMIT ?
@@ -916,6 +928,10 @@ def chats(max_results: int):
                 "unread_count": unread_count or 0,
             }
         )
+
+    # Filter to unread only if requested
+    if unread:
+        chats_list = [c for c in chats_list if c["unread_count"] > 0]
 
     click.echo(json.dumps(chats_list, indent=2))
 

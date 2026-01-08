@@ -667,16 +667,15 @@ def _show_gmail_counts(gmail) -> None:
 def _show_imessage_counts(conn) -> None:
     """Show iMessage unread counts.
 
-    Filters to:
-    - item_type = 0 (regular messages, not system events like joins/leaves)
-    - Has content (text or attachments, not ghost records)
+    Uses Apple's unread criteria from their database index:
+    is_read=0, is_from_me=0, item_type=0, is_finished=1, is_system_message=0
     """
     cursor = conn.execute("""
         SELECT COUNT(*), COUNT(DISTINCT cmj.chat_id)
         FROM message m
         JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
         WHERE m.is_read = 0 AND m.is_from_me = 0 AND m.item_type = 0
-          AND (m.text IS NOT NULL AND m.text != '' OR m.cache_has_attachments = 1)
+          AND m.is_finished = 1 AND m.is_system_message = 0
     """)
     total_unread, chats_with_unread = cursor.fetchone()
 

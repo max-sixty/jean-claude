@@ -3,10 +3,13 @@ Usage: jean-claude imessage chats [OPTIONS]
   List available iMessage chats.
 
   Shows chat name, ID, group status, and message timestamps. Use chat ID or
-  name to send to groups.
+  name to send to groups. Use --unread to show only chats with unread
+  messages.
 
-  Example:     jean-claude imessage chats
+  Examples:     jean-claude imessage chats     jean-claude imessage chats
+  --unread
 
 Options:
   -n, --max-results INTEGER  Maximum chats to list
+  --unread                   Show only chats with unread messages
   --help                     Show this message and exit.
