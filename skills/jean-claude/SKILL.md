@@ -215,6 +215,22 @@ exists, use these behaviors:
 When showing messages (inbox, unread, search results), use a numbered list so
 the user can reference items by number: "archive 1, reply to 2", "star 3 and 5".
 
+**Use manual numbering, not markdown lists.** Markdown numbered lists auto-correct
+to be sequential — if you write "3. 4. 5. 7. 15. 16." the renderer displays
+"3. 4. 5. 6. 7. 8." causing a mismatch between what you wrote and what the user
+sees. Instead, format as `**N:**` on each line:
+
+```
+**1:** DoorDash (35 min ago) — Your order...
+**2:** Squarespace (yesterday) — Domain transfer...
+```
+
+This prevents the renderer from "fixing" your numbering.
+
+**Preserve original numbers through the session.** After archiving items 1 and 3
+from a list of 1-5, show items 2, 4, 5 with their original numbers — don't
+renumber to 1, 2, 3. This gives items stable identifiers across operations.
+
 **Always include dates conversationally.** Check today's date before formatting:
 
 ```bash
@@ -230,20 +246,11 @@ date "+%Y-%m-%d %H:%M %Z"  # Current date/time for reference
 
 **Example** (assuming today is Sunday, Dec 29):
 ```
-1. **DoorDash** (35 min ago) — Your order from Superba
-   Order confirmed for pickup...
-
-2. **Squarespace** (yesterday at 9:15 AM) — Domain transfer rejected
-   The transfer for fitzalanhoward.uk was rejected...
-
-3. **GitHub** (Friday at 4:30 PM) — PR merged: fix-auth-flow
-   Your pull request was merged...
-
-4. **Goodreads** (today at 10:30 AM) — Book newsletter
-   Your weekly reading digest...
-
-5. **Jordan Lee** (Nov 15) — Forwarded: Fellowship nomination
-   To discuss...
+**1:** DoorDash (35 min ago) — Your order from Superba
+**2:** Squarespace (yesterday at 9:15 AM) — Domain transfer rejected
+**3:** GitHub (Friday at 4:30 PM) — PR merged: fix-auth-flow
+**4:** Goodreads (today at 10:30 AM) — Book newsletter
+**5:** Jordan Lee (Nov 15) — Forwarded: Fellowship nomination
 ```
 
 ### Accuracy in Summaries
