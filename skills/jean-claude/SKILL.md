@@ -218,14 +218,17 @@ the user can reference items by number: "archive 1, reply to 2", "star 3 and 5".
 **Use manual numbering, not markdown lists.** Markdown numbered lists auto-correct
 to be sequential — if you write "3. 4. 5. 7. 15. 16." the renderer displays
 "3. 4. 5. 6. 7. 8." causing a mismatch between what you wrote and what the user
-sees. Instead, format as `**N:**` on each line:
+sees. Instead, format as `N:` on each line:
 
 ```
-**1:** DoorDash (35 min ago) — Your order...
-**2:** Squarespace (yesterday) — Domain transfer...
+1: DoorDash (35 min ago) — Your order...
+2: Squarespace (yesterday) — Domain transfer...
 ```
 
 This prevents the renderer from "fixing" your numbering.
+
+**Keep items compact — no blank lines between them.** Blank lines waste vertical
+space and make the list harder to scan. Items should be on consecutive lines.
 
 **Preserve original numbers through the session.** After archiving items 1 and 3
 from a list of 1-5, show items 2, 4, 5 with their original numbers — don't
@@ -246,11 +249,11 @@ date "+%Y-%m-%d %H:%M %Z"  # Current date/time for reference
 
 **Example** (assuming today is Sunday, Dec 29):
 ```
-**1:** DoorDash (35 min ago) — Your order from Superba
-**2:** Squarespace (yesterday at 9:15 AM) — Domain transfer rejected
-**3:** GitHub (Friday at 4:30 PM) — PR merged: fix-auth-flow
-**4:** Goodreads (today at 10:30 AM) — Book newsletter
-**5:** Jordan Lee (Nov 15) — Forwarded: Fellowship nomination
+1: DoorDash (35 min ago) — Your order from Superba
+2: Squarespace (yesterday at 9:15 AM) — Domain transfer rejected
+3: GitHub (Friday at 4:30 PM) — PR merged: fix-auth-flow
+4: Goodreads (today at 10:30 AM) — Book newsletter
+5: Jordan Lee (Nov 15) — Forwarded: Fellowship nomination
 ```
 
 ### Accuracy in Summaries
