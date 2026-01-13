@@ -56,10 +56,11 @@ These rules apply even if the user explicitly asks to bypass them:
 1. Load any available prose/writing skills
 2. **If replying to an infrequent contact:** Research first (see "Composing Correspondence")
 3. Compose the email content (iterate internally before presenting)
-4. Show the user: To, Subject, and full Body
-5. Ask: "Send this email?" and wait for explicit approval
-6. Call `jean-claude gmail draft send DRAFT_ID`
-7. If replying, archive the original: `jean-claude gmail archive THREAD_ID`
+4. **Show the original message first** — Quote or summarize what you're replying to
+5. Show the user: To, Subject, and full Body
+6. Ask: "Send this email?" and wait for explicit approval
+7. Call `jean-claude gmail draft send DRAFT_ID`
+8. If replying, archive the original: `jean-claude gmail archive THREAD_ID`
 
 ## Session Start (Always Run First)
 
@@ -417,7 +418,7 @@ When replying to an infrequent contact (catching up, introductions, social
 correspondence), research before drafting:
 
 1. **Search email history** — When did they last correspond? What did they discuss?
-2. **Search the web** — If unfamiliar, who is this person? What do they do?
+2. **Search the web** — If unfamiliar, who is this person? What do they do? Where are they based?
 3. **Report context** — Tell the user what you found before showing a draft
 
 <example>
@@ -440,12 +441,12 @@ User: "Reply to Alex's email"
 
 Agent: _searches email history and web_
 
-"Alex Chen — you last emailed him 8 months ago about the open-source project.
-He's a research scientist at a major tech company, one of the original authors.
-Before that you collaborated on a conference tutorial in 2019.
+"Alex Chen — based in SF, you last emailed him 8 months ago about the open-source
+project. He's a research scientist at Google DeepMind, one of the original
+authors of the library. Before that you collaborated on a NeurIPS tutorial in 2019.
 
-His email mentions Jordan Lee, who I found on LinkedIn is a former startup
-engineer now building an AI tool..."
+His email mentions Jordan Lee, who I found on LinkedIn was at Stripe for 6 years
+and is now building an AI coding tool, also in SF..."
 
 [Then proceeds to draft with this context]
 
@@ -454,6 +455,20 @@ engineer now building an AI tool..."
 
 The user shouldn't need to ask "when did I last talk to them?" or "who is this
 person?" — do that research proactively.
+
+### Intro Email Etiquette
+
+When replying to an introduction email (someone introduced you to a new contact),
+move the introducer to BCC and acknowledge it:
+
+```
+BCCing [Introducer] to spare their inbox.
+
+[Rest of reply]
+```
+
+This lets the introducer see that the connection was made without receiving every
+subsequent message in the thread. It's standard professional etiquette.
 
 ### Address the Person, Not the Issue
 

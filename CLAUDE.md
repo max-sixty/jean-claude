@@ -34,8 +34,12 @@ the skill in sync.
 **Skill files are instructions for agents, not documentation for humans.**
 
 **Anonymize real contacts.** When improving skills based on real interactions
-(email threads, message conversations), replace actual names with generic ones
-(Alex Chen, Jordan Lee, etc.). The skill is public; real contacts are not.
+(email threads, message conversations), replace actual names and companies with
+fictitious ones. The skill is public; real contacts are not.
+
+Examples should remain **specific and concrete** — use "Google Research" not
+"a major tech company", use "SF" not "a city". Vague placeholders make poor
+examples. The goal is privacy, not genericness.
 
 **Agents only receive SKILL.md initially.** When the plugin loads, Claude Code
 reads `skills/jean-claude/SKILL.md` and nothing else. Any other files in the
