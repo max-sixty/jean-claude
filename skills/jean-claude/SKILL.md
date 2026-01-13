@@ -1155,6 +1155,20 @@ When creating events, add useful information proactively:
 
 A calendar invite should have everything attendees need to show up prepared.
 
+### Check for Conflicts
+
+Always check the calendar before creating events.
+
+```bash
+jean-claude gcal list --from 2025-01-21 --to 2025-01-21
+```
+
+If there's a conflict the user may not be aware of, confirm before creating:
+
+- "You have a dentist appointment at 11am. Want me to schedule this for a
+  different time?"
+- "You already have 'NYU Meeting' at 11am. Want me to update it instead?"
+
 ### Calendar Safety (Non-Negotiable)
 
 1. **Never guess dates.** When the user says "Sunday" or "next week", calculate:
