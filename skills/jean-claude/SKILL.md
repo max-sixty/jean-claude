@@ -7,7 +7,7 @@ description: "This skill should be used when the user asks to search/send/draft 
 
 Gmail, Calendar, Drive, Docs, Sheets, iMessage, WhatsApp, Signal, and Reminders.
 
-**Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude `
+**Command prefix:** `jean-claude `
 
 ## First-Time Users
 
@@ -67,7 +67,7 @@ These rules apply even if the user explicitly asks to bypass them:
 **Every time this skill loads, run status with JSON output first:**
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status --json
+jean-claude status --json
 ```
 
 ### If Status Command Fails
@@ -102,7 +102,7 @@ cat ${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/ONBOARDING.md
 Follow the onboarding guide to help set up services. After setup completes:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set setup_completed true
+jean-claude config set setup_completed true
 ```
 
 Then **re-run status** and continue to the `setup_completed: true` branch below.
@@ -154,7 +154,7 @@ For users with setup complete, interpret the status output to understand their
 workflow. Run human-readable status if needed for counts:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
+jean-claude status
 ```
 
 **Gmail:**
@@ -182,13 +182,13 @@ devices.
 
 ```bash
 # Re-fetch inbox for email updates
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox -n 20
+jean-claude gmail inbox -n 20
 
 # Re-fetch iMessage (see platforms/imessage.md for full docs)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --unread
+jean-claude imessage messages --unread
 
 # Re-sync WhatsApp for message updates
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --unread
+jean-claude whatsapp messages --unread
 ```
 
 ## Defaults
@@ -329,7 +329,7 @@ When you show the full body of a message to the user — not just the snippet
 from a list — mark it as read. The user has effectively read it.
 
 **Mark as read when:**
-- Reading the full email body (via `gmail get` or reading the cached body file)
+- Reading the full email body (via `jean-claude gmail get` or reading the cached body file)
 - Creating a reply or forward (you read the original to compose the response)
 - The user explicitly asks to read a specific message
 
@@ -537,12 +537,12 @@ the loop while directing the reply to the right person.
 
 ```bash
 # Step 1: Create reply (preserves threading, quotes original)
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID
+cat << 'EOF' | jean-claude gmail draft reply MESSAGE_ID
 Your message here.
 EOF
 
 # Step 2: Update recipients
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft update DRAFT_ID \
+jean-claude gmail draft update DRAFT_ID \
   --to "new_recipient@example.com" --cc "original_sender@example.com" < /dev/null
 ```
 
@@ -558,10 +558,10 @@ User says: "Reply to Dana that I can't make it, CC Alex"
 </scenario>
 <workflow>
 
-1. `gmail draft reply MESSAGE_ID` with the body
-2. `gmail draft update DRAFT_ID --to "dana@sequoiacap.com" --cc "alex@sequoiacap.com"`
-3. `gmail draft get DRAFT_ID` to verify recipients, show to user
-4. `gmail draft send DRAFT_ID` after approval
+1. `jean-claude gmail draft reply MESSAGE_ID` with the body
+2. `jean-claude gmail draft update DRAFT_ID --to "dana@sequoiacap.com" --cc "alex@sequoiacap.com"`
+3. `jean-claude gmail draft get DRAFT_ID` to verify recipients, show to user
+4. `jean-claude gmail draft send DRAFT_ID` after approval
 
 </workflow>
 </example>
@@ -646,16 +646,16 @@ Credentials stored in `~/.config/jean-claude/`. First-time setup:
 
 ```bash
 # Full access (read, send, modify)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth
+jean-claude auth
 
 # Or read-only access (no send/modify capabilities)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth --readonly
+jean-claude auth --readonly
 
 # Check authentication status and API availability
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
+jean-claude status
 
 # Log out (remove stored credentials)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth --logout
+jean-claude auth --logout
 ```
 
 This opens a browser for OAuth consent. Credentials persist until revoked.
@@ -684,8 +684,8 @@ jean-claude to work smoothly for Gmail/Calendar users without those toolchains.
 Enable explicitly if you need messaging:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set enable_whatsapp true
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set enable_signal true
+jean-claude config set enable_whatsapp true
+jean-claude config set enable_signal true
 ```
 
 The `status` command shows whether each service is enabled or disabled.
@@ -700,10 +700,10 @@ authentication. First-time setup:
 cd ${CLAUDE_PLUGIN_ROOT}/whatsapp && go build -o whatsapp-cli .
 
 # Authenticate with WhatsApp (scan QR code with your phone)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp auth
+jean-claude whatsapp auth
 
 # Check authentication status
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
+jean-claude status
 ```
 
 The QR code will be displayed in the terminal and saved as a PNG file. Scan it
@@ -712,7 +712,7 @@ with WhatsApp: Settings > Linked Devices > Link a Device.
 Credentials are stored in `~/.config/jean-claude/whatsapp/`. To log out:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp logout
+jean-claude whatsapp logout
 ```
 
 ### Signal
@@ -725,10 +725,10 @@ First-time setup:
 cd ${CLAUDE_PLUGIN_ROOT}/signal && cargo build --release
 
 # Link as a secondary device (scan QR code with your phone)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal link
+jean-claude signal link
 
 # Check authentication status
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
+jean-claude status
 ```
 
 The QR code will be displayed in the terminal. Scan it with Signal on your
@@ -779,10 +779,10 @@ The `nextPageToken` field is only present when more results are available. Use
 
 ```bash
 # First page
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "is:unread" -n 50
+jean-claude gmail search "is:unread" -n 50
 
 # If nextPageToken is in the response, fetch next page
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "is:unread" -n 50 \
+jean-claude gmail search "is:unread" -n 50 \
   --page-token "TOKEN_FROM_PREVIOUS_RESPONSE"
 ```
 
@@ -790,21 +790,21 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "is:unread" -n 5
 
 ```bash
 # Inbox emails from a sender
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:inbox from:someone@example.com"
+jean-claude gmail search "in:inbox from:someone@example.com"
 
 # Limit results with -n
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "from:newsletter@example.com" -n 10
+jean-claude gmail search "from:newsletter@example.com" -n 10
 
 # Unread inbox emails
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:inbox is:unread"
+jean-claude gmail search "in:inbox is:unread"
 
 # Shortcut for inbox
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox --unread
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox -n 5
+jean-claude gmail inbox
+jean-claude gmail inbox --unread
+jean-claude gmail inbox -n 5
 
 # Inbox also supports pagination
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail inbox --unread -n 50 --page-token "TOKEN"
+jean-claude gmail inbox --unread -n 50 --page-token "TOKEN"
 ```
 
 Common Gmail search operators: `in:inbox`, `is:unread`, `is:starred`, `from:`,
@@ -814,7 +814,7 @@ Common Gmail search operators: `in:inbox`, `is:unread`, `is:starred`, `from:`,
 
 ```bash
 # Get message by ID (writes full body to ~/.cache/jean-claude/emails/)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail get MESSAGE_ID
+jean-claude gmail get MESSAGE_ID
 ```
 
 Use this when you have a specific message ID and want to read its full content.
@@ -828,59 +828,59 @@ that escapes exclamation marks ('!' becomes '\!'). Always use heredocs:
 
 ```bash
 # Create a new draft
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft create --to "recipient@example.com" --subject "Subject"
+cat << 'EOF' | jean-claude gmail draft create --to "recipient@example.com" --subject "Subject"
 Message body here!
 EOF
 
 # Create with CC/BCC
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft create --to "recipient@example.com" --subject "Subject" --cc "cc@example.com"
+cat << 'EOF' | jean-claude gmail draft create --to "recipient@example.com" --subject "Subject" --cc "cc@example.com"
 Multi-line message body here.
 EOF
 
 # Reply to a message (body from stdin, preserves threading, includes quoted original)
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID
+cat << 'EOF' | jean-claude gmail draft reply MESSAGE_ID
 Thanks for your email!
 EOF
 
 # Reply with custom CC
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID --cc "manager@example.com"
+cat << 'EOF' | jean-claude gmail draft reply MESSAGE_ID --cc "manager@example.com"
 Thanks for the update!
 EOF
 
 # Forward a message (TO as argument, optional note from stdin)
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft forward MESSAGE_ID someone@example.com
+cat << 'EOF' | jean-claude gmail draft forward MESSAGE_ID someone@example.com
 FYI - see below!
 EOF
 
 # Forward without a note
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft forward MESSAGE_ID someone@example.com < /dev/null
+jean-claude gmail draft forward MESSAGE_ID someone@example.com < /dev/null
 
 # Reply-all (includes all original recipients)
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply-all MESSAGE_ID
+cat << 'EOF' | jean-claude gmail draft reply-all MESSAGE_ID
 Thanks everyone!
 EOF
 
 # List drafts
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft list -n 5
+jean-claude gmail draft list
+jean-claude gmail draft list -n 5
 
 # Get draft (writes metadata to .json and body to .txt)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft get DRAFT_ID
+jean-claude gmail draft get DRAFT_ID
 
 # Update draft body (from stdin)
-cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft update DRAFT_ID
+cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt | jean-claude gmail draft update DRAFT_ID
 
 # Update metadata only
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft update DRAFT_ID --subject "New subject" --cc "added@example.com"
+jean-claude gmail draft update DRAFT_ID --subject "New subject" --cc "added@example.com"
 
 # Update both body and metadata
-cat body.txt | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft update DRAFT_ID --subject "Updated"
+cat body.txt | jean-claude gmail draft update DRAFT_ID --subject "Updated"
 
 # Send a draft (after approval)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft send DRAFT_ID
+jean-claude gmail draft send DRAFT_ID
 
 # Delete a draft
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft delete DRAFT_ID
+jean-claude gmail draft delete DRAFT_ID
 ```
 
 #### Attachments
@@ -890,36 +890,36 @@ support `--attach` for file attachments. Use multiple times for multiple files:
 
 ```bash
 # Create draft with attachments
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft create --to "x@y.com" --subject "Report" --attach report.pdf --attach data.csv
+cat << 'EOF' | jean-claude gmail draft create --to "x@y.com" --subject "Report" --attach report.pdf --attach data.csv
 Please see the attached files.
 EOF
 
 # Reply with attachment
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID --attach response.pdf
+cat << 'EOF' | jean-claude gmail draft reply MESSAGE_ID --attach response.pdf
 Here is my response with the requested document.
 EOF
 
 # Forward (original attachments included automatically)
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft forward MESSAGE_ID someone@example.com
+cat << 'EOF' | jean-claude gmail draft forward MESSAGE_ID someone@example.com
 FYI - see below.
 EOF
 
 # Forward with additional attachment
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft forward MESSAGE_ID someone@example.com --attach notes.pdf
+cat << 'EOF' | jean-claude gmail draft forward MESSAGE_ID someone@example.com --attach notes.pdf
 FYI - I added my notes.
 EOF
 
 # Add attachment to existing draft (replaces any existing attachments)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft update DRAFT_ID --attach newfile.pdf < /dev/null
+jean-claude gmail draft update DRAFT_ID --attach newfile.pdf < /dev/null
 
 # Remove all attachments from a draft
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft update DRAFT_ID --clear-attachments < /dev/null
+jean-claude gmail draft update DRAFT_ID --clear-attachments < /dev/null
 ```
 
 **Viewing attachments:** Use `draft get` to see what files are attached:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft get DRAFT_ID
+jean-claude gmail draft get DRAFT_ID
 # Output includes: {"attachments": [{"filename": "report.pdf", "mimeType": "application/pdf"}]}
 ```
 
@@ -937,12 +937,12 @@ creating it to confirm formatting is correct:
 
 ```bash
 # Create draft
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft create --to "..." --subject "..."
+cat << 'EOF' | jean-claude gmail draft create --to "..." --subject "..."
 Email body here!
 EOF
 
 # Verify the draft content (check for escaping issues like \!)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft get DRAFT_ID
+jean-claude gmail draft get DRAFT_ID
 cat ~/.cache/jean-claude/drafts/draft-DRAFT_ID.txt
 ```
 
@@ -956,20 +956,20 @@ inbox/search output. Star/unstar operate on individual messages (use `latestMess
 
 ```bash
 # Star/unstar (message-level - use latestMessageId)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail star MSG_ID1 MSG_ID2 MSG_ID3
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unstar MSG_ID1 MSG_ID2
+jean-claude gmail star MSG_ID1 MSG_ID2 MSG_ID3
+jean-claude gmail unstar MSG_ID1 MSG_ID2
 
 # Archive/unarchive (thread-level - use threadId)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive THREAD_ID1 THREAD_ID2 THREAD_ID3
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail archive --query "from:newsletter@example.com" -n 50
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail unarchive THREAD_ID1 THREAD_ID2 THREAD_ID3
+jean-claude gmail archive THREAD_ID1 THREAD_ID2 THREAD_ID3
+jean-claude gmail archive --query "from:newsletter@example.com" -n 50
+jean-claude gmail unarchive THREAD_ID1 THREAD_ID2 THREAD_ID3
 
 # Mark read/unread (thread-level - use threadId)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-read THREAD_ID1 THREAD_ID2
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail mark-unread THREAD_ID1 THREAD_ID2
+jean-claude gmail mark-read THREAD_ID1 THREAD_ID2
+jean-claude gmail mark-unread THREAD_ID1 THREAD_ID2
 
 # Trash (thread-level - use threadId)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail trash THREAD_ID1 THREAD_ID2 THREAD_ID3
+jean-claude gmail trash THREAD_ID1 THREAD_ID2 THREAD_ID3
 ```
 
 **Which ID to use:**
@@ -981,13 +981,13 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail trash THREAD_ID1 THREAD
 
 ```bash
 # List attachments for a message
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail attachments MESSAGE_ID
+jean-claude gmail attachments MESSAGE_ID
 
 # Download an attachment (saved to ~/.cache/jean-claude/attachments/)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail attachment-download MESSAGE_ID ATTACHMENT_ID filename.pdf
+jean-claude gmail attachment-download MESSAGE_ID ATTACHMENT_ID filename.pdf
 
 # Download to specific directory
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail attachment-download MESSAGE_ID ATTACHMENT_ID filename.pdf --output ./
+jean-claude gmail attachment-download MESSAGE_ID ATTACHMENT_ID filename.pdf --output ./
 ```
 
 ### Unsubscribing from Newsletters
@@ -1018,7 +1018,7 @@ print(urllib.parse.unquote(encoded_url))
 List all Gmail labels to get label IDs for filtering:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail labels
+jean-claude gmail labels
 ```
 
 Returns system labels (INBOX, SENT, TRASH, etc.) and custom labels (Label_123...).
@@ -1029,39 +1029,39 @@ Filters automatically process incoming mail based on criteria.
 
 ```bash
 # List all filters
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter list
+jean-claude gmail filter list
 
 # Get a specific filter
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter get FILTER_ID
+jean-claude gmail filter get FILTER_ID
 
 # Delete a filter
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter delete FILTER_ID
+jean-claude gmail filter delete FILTER_ID
 ```
 
 **Creating filters** — query + label operations:
 
 ```bash
 # Archive (remove INBOX label)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter create \
+jean-claude gmail filter create \
     "to:reports@company.com" -r INBOX
 
 # Star and mark important
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter create \
+jean-claude gmail filter create \
     "from:boss@company.com" -a STARRED -a IMPORTANT
 
 # Mark as read (remove UNREAD label)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter create \
+jean-claude gmail filter create \
     "from:alerts@service.com" -r UNREAD
 
 # Forward
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail filter create \
+jean-claude gmail filter create \
     "from:vip@example.com" -f backup@example.com
 ```
 
 **Common labels:** `INBOX`, `UNREAD`, `STARRED`, `IMPORTANT`, `TRASH`, `SPAM`,
 `CATEGORY_PROMOTIONS`, `CATEGORY_SOCIAL`, `CATEGORY_UPDATES`
 
-**Custom labels:** Use `gmail labels` to get IDs like `Label_123456`.
+**Custom labels:** Use `jean-claude gmail labels` to get IDs like `Label_123456`.
 
 ## Calendar
 
@@ -1074,7 +1074,7 @@ with other calendars.
 
 ```bash
 # List available calendars
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal calendars
+jean-claude gcal calendars
 ```
 
 Returns:
@@ -1090,14 +1090,14 @@ Use `--calendar` with any command to specify a different calendar:
 
 ```bash
 # List events from a specific calendar
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --calendar work@company.com
+jean-claude gcal list --calendar work@company.com
 
 # Create event on another calendar
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Team Sync" \
+jean-claude gcal create "Team Sync" \
   --start "2025-01-15 14:00" --calendar work@company.com
 
 # Search by calendar name (case-insensitive substring match)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --calendar "Family"
+jean-claude gcal list --calendar "Family"
 ```
 
 The `--calendar` flag accepts:
@@ -1111,7 +1111,7 @@ If a name matches multiple calendars, the command fails with a list of options.
 commands accept multiple `--calendar` flags to query across calendars:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --from 2025-01-15 --to 2025-01-15 \
+jean-claude gcal list --from 2025-01-15 --to 2025-01-15 \
   --calendar "Personal" --calendar "Work"
 ```
 
@@ -1137,7 +1137,7 @@ calendars they just view. When in doubt, ask.
 **Checking availability:** Query multiple calendars at once:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --from 2025-01-07 --to 2025-01-07 \
+jean-claude gcal list --from 2025-01-07 --to 2025-01-07 \
   --calendar "Max @ Personal" --calendar "Roos family"
 ```
 
@@ -1166,10 +1166,10 @@ A calendar invite should have everything attendees need to show up prepared.
 2. **Never hallucinate emails.** If the user says "add Ursula", look up her
    email or ask. Never invent addresses.
 
-3. **Verify after creating.** Run `gcal list` for that date to confirm. If
+3. **Verify after creating.** Run `jean-claude gcal list` for that date to confirm. If
    wrong, delete and recreate before confirming to the user.
 
-4. **Show what you're creating.** Before `gcal create`, state: title, date/time
+4. **Show what you're creating.** Before `jean-claude gcal create`, state: title, date/time
    (with day of week), attendees (with emails), location (with address).
 
 5. **Confirm ambiguous locations.** "SVB" could mean West Hollywood or Santa
@@ -1183,42 +1183,42 @@ User: "Add a meeting with Alice for next Tuesday at 2pm"
 2. Calculate: next Tuesday = 2025-12-30
 3. Look up Alice's email
 4. State: "Creating for Tuesday 2025-12-30 at 2pm, inviting alice@example.com"
-5. Create, then verify with gcal list
+5. Create, then verify with `jean-claude gcal list`
 ```
 
 ### List Events
 
 ```bash
 # Today's events
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list
+jean-claude gcal list
 
 # Next 7 days
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --days 7
+jean-claude gcal list --days 7
 
 # Date range
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal list --from 2025-01-15 --to 2025-01-20
+jean-claude gcal list --from 2025-01-15 --to 2025-01-20
 ```
 
 ### Create Events
 
 ```bash
 # Simple event
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Team Meeting" \
+jean-claude gcal create "Team Meeting" \
   --start "2025-01-15 14:00" --end "2025-01-15 15:00"
 
 # With attendees, location, and description
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "1:1 with Alice" \
+jean-claude gcal create "1:1 with Alice" \
   --start "2025-01-15 10:00" --duration 30 \
   --attendees alice@example.com \
   --location "Conference Room A" \
   --description "Weekly sync"
 
 # All-day event (single day)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Holiday" \
+jean-claude gcal create "Holiday" \
   --start 2025-01-15 --all-day
 
 # Multi-day all-day event
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Vacation" \
+jean-claude gcal create "Vacation" \
   --start 2025-01-15 --end 2025-01-20 --all-day
 ```
 
@@ -1226,14 +1226,14 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal create "Vacation" \
 
 ```bash
 # Search (default: 30 days ahead)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal search "standup"
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal search "standup" --days 90
+jean-claude gcal search "standup"
+jean-claude gcal search "standup" --days 90
 
 # Update
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal update EVENT_ID --start "2025-01-16 14:00"
+jean-claude gcal update EVENT_ID --start "2025-01-16 14:00"
 
 # Delete
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal delete EVENT_ID --notify
+jean-claude gcal delete EVENT_ID --notify
 ```
 
 ### Invitations
@@ -1251,25 +1251,25 @@ Responding to an instance ID (if you have one) affects only that instance.
 
 ```bash
 # List all pending invitations (no time limit by default)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal invitations
+jean-claude gcal invitations
 
 # Limit to next 7 days
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal invitations --days 7
+jean-claude gcal invitations --days 7
 
 # Show all individual instances (don't collapse recurring events)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal invitations --expand
+jean-claude gcal invitations --expand
 
 # Accept an invitation (or all instances if recurring)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal respond EVENT_ID --accept
+jean-claude gcal respond EVENT_ID --accept
 
 # Decline an invitation
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal respond EVENT_ID --decline
+jean-claude gcal respond EVENT_ID --decline
 
 # Tentatively accept
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal respond EVENT_ID --tentative
+jean-claude gcal respond EVENT_ID --tentative
 
 # Respond without notifying organizer
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gcal respond EVENT_ID --accept --no-notify
+jean-claude gcal respond EVENT_ID --accept --no-notify
 ```
 
 ## Other Platforms

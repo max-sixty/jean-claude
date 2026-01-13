@@ -67,11 +67,11 @@ Get a high-level view of message volume and categories before diving deep.
 
 ```bash
 # Recent emails - current style
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent" -n 100
+jean-claude gmail search "in:sent" -n 100
 
 # Older emails - check for consistency
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent older_than:3m" -n 50
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent older_than:6m" -n 50
+jean-claude gmail search "in:sent older_than:3m" -n 50
+jean-claude gmail search "in:sent older_than:6m" -n 50
 ```
 
 From snippets alone, note:
@@ -83,8 +83,8 @@ From snippets alone, note:
 
 ```bash
 # Get all chats sorted by activity
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage chats -n 50
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp chats -n 50
+jean-claude imessage chats -n 50
+jean-claude whatsapp chats -n 50
 ```
 
 Note the top 5-10 most active chats — these are the key relationships.
@@ -99,10 +99,10 @@ Sign-offs are the most actionable preference. Search for common patterns:
 
 ```bash
 # Search for emails with common sign-offs
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent Thanks," -n 30
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent Best," -n 30
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent Cheers," -n 30
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent Regards," -n 30
+jean-claude gmail search "in:sent Thanks," -n 30
+jean-claude gmail search "in:sent Best," -n 30
+jean-claude gmail search "in:sent Cheers," -n 30
+jean-claude gmail search "in:sent Regards," -n 30
 ```
 
 **Important:** Gmail search matches anywhere in the message, including quoted
@@ -118,7 +118,7 @@ For each search that returns results, read a few full bodies to see:
 
 ```bash
 # Find emails CC'd to spouse - often use joint sign-off
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent cc:spouse@email.com" -n 20
+jean-claude gmail search "in:sent cc:spouse@email.com" -n 20
 ```
 
 Look for patterns like "Max & Sarah", "Best, The Smiths", etc. in family/social
@@ -134,9 +134,9 @@ Different contexts reveal different styles. Sample strategically:
 
 ```bash
 # Support and vendor communications
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent to:support@" -n 20
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent to:help@" -n 20
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent to:info@" -n 20
+jean-claude gmail search "in:sent to:support@" -n 20
+jean-claude gmail search "in:sent to:help@" -n 20
+jean-claude gmail search "in:sent to:info@" -n 20
 ```
 
 Read 5-10 of these to understand professional tone.
@@ -145,7 +145,7 @@ Read 5-10 of these to understand professional tone.
 
 ```bash
 # Personal domains often indicate informal correspondence
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent to:gmail.com" -n 20
+jean-claude gmail search "in:sent to:gmail.com" -n 20
 ```
 
 Compare tone and formality to professional emails.
@@ -154,7 +154,7 @@ Compare tone and formality to professional emails.
 
 ```bash
 # Forwards and FYIs to spouse reveal communication patterns
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent to:spouse@email.com" -n 30
+jean-claude gmail search "in:sent to:spouse@email.com" -n 30
 ```
 
 Look for how they introduce forwarded content ("FYI", "thoughts?", "reminder!").
@@ -163,10 +163,10 @@ Look for how they introduce forwarded content ("FYI", "thoughts?", "reminder!").
 
 ```bash
 # Replies (may be more casual, shorter)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent subject:Re:" -n 30
+jean-claude gmail search "in:sent subject:Re:" -n 30
 
 # New threads (may have fuller greetings)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail search "in:sent -subject:Re:" -n 30
+jean-claude gmail search "in:sent -subject:Re:" -n 30
 ```
 
 **Repeated recipients** (reveals relationship patterns):
@@ -184,11 +184,11 @@ multiple people's messages. Use groups to identify relationships, but read
 
 ```bash
 # Messages from specific chats (use chat ID from chats command)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --chat "CHAT_ID" -n 50
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --chat "JID" -n 50
+jean-claude imessage messages --chat "CHAT_ID" -n 50
+jean-claude whatsapp messages --chat "JID" -n 50
 
 # Or filter by contact name (iMessage only)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --name "Contact Name" -n 50
+jean-claude imessage messages --name "Contact Name" -n 50
 ```
 
 **Focus on outgoing messages** — filter to `is_from_me: true` when analyzing

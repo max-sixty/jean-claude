@@ -4,7 +4,7 @@ Instructions for guiding a new user through jean-claude setup.
 
 **Command prefix:** All commands in this guide use the full prefix:
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude ...
+jean-claude ...
 ```
 
 ## When to Load This Guide
@@ -63,8 +63,8 @@ access.
 Run the appropriate command:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth           # Full access
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude auth --readonly  # Read-only
+jean-claude auth           # Full access
+jean-claude auth --readonly  # Read-only
 ```
 
 This opens their browser. Tell the user:
@@ -83,7 +83,7 @@ then grant the permissions. The "unsafe" label just means unverified.
 After user confirms, run:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status --json
+jean-claude status --json
 ```
 
 Check `services.google.authenticated`. If true, confirm success and mention
@@ -121,7 +121,7 @@ Tell the user:
 Run a read-only command to trigger the Automation permission prompt:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage chats -n 1
+jean-claude imessage chats -n 1
 ```
 
 If this returns a permission error, guide the user:
@@ -159,7 +159,7 @@ Reminders only needs Automation permission, granted automatically on first use.
 Run:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude reminders list
+jean-claude reminders list
 ```
 
 If permission prompt appears, tell user to allow it. If denied, same Automation
@@ -179,7 +179,7 @@ Only proceed if user explicitly wants WhatsApp. It's not part of default setup.
 Run:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set enable_whatsapp true
+jean-claude config set enable_whatsapp true
 ```
 
 ### Step 3: Authenticate
@@ -187,7 +187,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set enable_whatsapp tr
 Run:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp auth
+jean-claude whatsapp auth
 ```
 
 This displays a QR code in the terminal. Tell the user:
@@ -201,7 +201,7 @@ This displays a QR code in the terminal. Tell the user:
 After user confirms, run:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp chats -n 5
+jean-claude whatsapp chats -n 5
 ```
 
 If successful, summarize: "WhatsApp is connected. I can see your recent chats."
@@ -217,7 +217,7 @@ need it to scan the QR code.
 ### Step 1: Enable in config
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set enable_signal true
+jean-claude config set enable_signal true
 ```
 
 ### Step 2: Link device
@@ -225,7 +225,7 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set enable_signal true
 Run:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal link --device-name "jean-claude"
+jean-claude signal link --device-name "jean-claude"
 ```
 
 Tell the user:
@@ -238,7 +238,7 @@ Tell the user:
 After user confirms:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal chats -n 5
+jean-claude signal chats -n 5
 ```
 
 ## Setup Completion
@@ -246,13 +246,13 @@ uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal chats -n 5
 After all desired services are configured, mark setup complete:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude config set setup_completed true
+jean-claude config set setup_completed true
 ```
 
 Run final status check:
 
 ```bash
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude status
+jean-claude status
 ```
 
 Summarize what's configured in natural language:

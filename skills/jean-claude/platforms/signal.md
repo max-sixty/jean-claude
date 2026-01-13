@@ -3,14 +3,14 @@
 Send and receive Signal messages via end-to-end encrypted protocol. Requires
 Rust binary to be built and QR code linking (see Setup section in SKILL.md).
 
-**Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude `
+**Command prefix:** `jean-claude `
 
 ## List Chats
 
 ```bash
 # List contacts and groups
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal chats
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal chats -n 20
+jean-claude signal chats
+jean-claude signal chats -n 20
 ```
 
 **Output schema:**
@@ -39,17 +39,17 @@ UUID or contact name.
 
 ```bash
 # Send by contact name
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal send "Alice Smith"
+cat << 'EOF' | jean-claude signal send "Alice Smith"
 Hello!
 EOF
 
 # Send by UUID (from chats command)
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal send "abc123-def456-..."
+cat << 'EOF' | jean-claude signal send "abc123-def456-..."
 Hello!
 EOF
 
 # Message with multiple lines
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal send "Alice"
+cat << 'EOF' | jean-claude signal send "Alice"
 Great to hear from you!
 Let me know when you're free.
 EOF
@@ -63,7 +63,7 @@ options—use a more specific name or the UUID.
 
 ```bash
 # Receive pending messages from Signal
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal receive
+jean-claude signal receive
 ```
 
 This fetches any pending messages and stores them locally. Messages are returned
@@ -73,10 +73,10 @@ as JSON.
 
 ```bash
 # Read messages from a specific chat (use ID from chats command)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal messages "abc123-def456-..."
+jean-claude signal messages "abc123-def456-..."
 
 # Limit results
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal messages "abc123-def456-..." -n 20
+jean-claude signal messages "abc123-def456-..." -n 20
 ```
 
 Messages are stored locally after `receive`. Use the chat ID (UUID for contacts,
@@ -102,8 +102,8 @@ hex for groups) from the `chats` command.
 
 ```bash
 # Show account information
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal whoami
+jean-claude signal whoami
 
 # Check connection status
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude signal status
+jean-claude signal status
 ```

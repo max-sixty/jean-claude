@@ -4,7 +4,7 @@ Send via AppleScript. On first use, macOS will prompt for Automation permission.
 Reading history requires Full Disk Access. See "Personalization" section in
 SKILL.md for default behaviors.
 
-**Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude `
+**Command prefix:** `jean-claude `
 
 **Chat IDs:** Individual chats use `any;-;+1234567890` (phone number), group
 chats use `any;+;chat123...`. Get these from `imessage chats`.
@@ -17,39 +17,39 @@ recipients.
 
 ```bash
 # Send to phone number
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234"
+cat << 'EOF' | jean-claude imessage send "+12025551234"
 Hello!
 EOF
 
 # Send to contact by name (must match exactly one contact with one phone)
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "John Smith"
+cat << 'EOF' | jean-claude imessage send "John Smith"
 Hello!
 EOF
 
 # Send to group chat by name
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "Team OA"
+cat << 'EOF' | jean-claude imessage send "Team OA"
 Hello team!
 EOF
 
 # Message with apostrophe and multiple lines
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234"
+cat << 'EOF' | jean-claude imessage send "+12025551234"
 It's great to hear from you!
 Let me know when you're free.
 EOF
 
 # Send to group chat by ID
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "any;+;chat123456789"
+cat << 'EOF' | jean-claude imessage send "any;+;chat123456789"
 Hello group!
 EOF
 
 # Send to multiple recipients (uses existing group with those participants)
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send "+12025551234" "+16467194457"
+cat << 'EOF' | jean-claude imessage send "+12025551234" "+16467194457"
 Hello!
 EOF
 
 # Send file (recipient auto-detects phone, contact name, or group name)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file "+12025551234" ./document.pdf
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage send-file "John Smith" ./photo.jpg
+jean-claude imessage send-file "+12025551234" ./document.pdf
+jean-claude imessage send-file "John Smith" ./photo.jpg
 ```
 
 **Recipient resolution:** Auto-detects the recipient type:
@@ -73,14 +73,14 @@ When lookup fails, the error shows all matches—use the specific phone number.
 
 ```bash
 # List chats (shows name, chat ID, unread count)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage chats
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage chats -n 10
+jean-claude imessage chats
+jean-claude imessage chats -n 10
 
 # Show only chats with unread messages
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage chats --unread
+jean-claude imessage chats --unread
 
 # Get participants
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage participants "any;+;chat123456789"
+jean-claude imessage participants "any;+;chat123456789"
 ```
 
 Other: `imessage open CHAT_ID` opens a chat in Messages.app (brings app to focus).
@@ -89,20 +89,20 @@ Other: `imessage open CHAT_ID` opens a chat in Messages.app (brings app to focus
 
 ```bash
 # Recent messages
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages -n 20
+jean-claude imessage messages -n 20
 
 # Unread messages only (excludes spam-filtered by default)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --unread
+jean-claude imessage messages --unread
 
 # Include spam-filtered messages
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --unread --include-spam
+jean-claude imessage messages --unread --include-spam
 
 # Messages from specific chat
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --chat "any;-;+12025551234"
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage messages --name "John Smith"
+jean-claude imessage messages --chat "any;-;+12025551234"
+jean-claude imessage messages --name "John Smith"
 
 # Search messages
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude imessage search "dinner plans"
+jean-claude imessage search "dinner plans"
 ```
 
 To enable reading: System Preferences > Privacy & Security > Full Disk Access >

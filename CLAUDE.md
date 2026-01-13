@@ -91,6 +91,11 @@ This tells the agent what to do and how to communicate with the user.
 4. **Conversational tone** — The skill describes how the agent should talk to
    the user, not command syntax.
 
+### Command Format in Skills
+
+Use the short form `jean-claude ...` in skill files. The skill defines the
+command prefix once at the top — agents prepend it automatically.
+
 ## Testing Is Real
 
 **Every command you run sends real messages to real people.**

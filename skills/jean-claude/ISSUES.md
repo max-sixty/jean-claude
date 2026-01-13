@@ -9,7 +9,7 @@ Collect before drafting the issue:
 - Command that failed
 - Error message or unexpected behavior
 - Expected behavior
-- Jean-claude version: `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude --version`
+- Jean-claude version: `jean-claude --version`
 - Python version: `python3 --version`
 - OS: `uname -s` (or check platform from status)
 

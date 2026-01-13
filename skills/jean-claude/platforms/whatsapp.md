@@ -3,7 +3,7 @@
 Send and receive WhatsApp messages. Requires Go binary to be built and QR code
 authentication (see Setup section in SKILL.md).
 
-**Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude `
+**Command prefix:** `jean-claude `
 
 ## Sync Messages
 
@@ -12,7 +12,7 @@ command auto-syncs, so explicit sync is only needed for other queries:
 
 ```bash
 # Sync messages (also fetches chat names)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp sync
+jean-claude whatsapp sync
 ```
 
 The sync command downloads new messages and automatically fetches names for
@@ -26,18 +26,18 @@ positional argument.
 
 ```bash
 # Send to phone number (with country code)
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp send "+12025551234"
+cat << 'EOF' | jean-claude whatsapp send "+12025551234"
 Hello!
 EOF
 
 # Message with apostrophe and multiple lines
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp send "+12025551234"
+cat << 'EOF' | jean-claude whatsapp send "+12025551234"
 It's great to hear from you!
 Let me know when you're free.
 EOF
 
 # Reply to a specific message
-cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp send "+12025551234" --reply-to MSG_ID
+cat << 'EOF' | jean-claude whatsapp send "+12025551234" --reply-to MSG_ID
 Reply text!
 EOF
 ```
@@ -46,26 +46,26 @@ EOF
 
 ```bash
 # List recent chats
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp chats
+jean-claude whatsapp chats
 
 # Limit results
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp chats -n 10
+jean-claude whatsapp chats -n 10
 ```
 
 ## Read Messages
 
 ```bash
 # Recent messages (from local database)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages -n 20
+jean-claude whatsapp messages -n 20
 
 # Unread messages (auto-syncs and downloads all media)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --unread
+jean-claude whatsapp messages --unread
 
 # Messages from specific chat (use ID from chats command)
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --chat "120363277025153496@g.us"
+jean-claude whatsapp messages --chat "120363277025153496@g.us"
 
 # Explicitly download media for non-unread queries
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp messages --chat "..." --with-media
+jean-claude whatsapp messages --chat "..." --with-media
 ```
 
 **Output includes:**
@@ -102,10 +102,10 @@ Use `download` to fetch media from specific messages:
 
 ```bash
 # Download media from a specific message
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp download MESSAGE_ID
+jean-claude whatsapp download MESSAGE_ID
 
 # Download to custom path
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp download MESSAGE_ID --output ./photo.jpg
+jean-claude whatsapp download MESSAGE_ID --output ./photo.jpg
 ```
 
 Files are stored with content-hash filenames for deduplication (same image sent
@@ -115,8 +115,8 @@ twice → downloaded once).
 
 ```bash
 # List contacts
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp contacts
+jean-claude whatsapp contacts
 
 # Check status
-uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude whatsapp status
+jean-claude whatsapp status
 ```
