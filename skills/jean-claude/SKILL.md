@@ -522,6 +522,50 @@ BCCing [Introducer] to spare their inbox.
 This lets the introducer see that the connection was made without receiving every
 subsequent message in the thread. It's standard professional etiquette.
 
+### Redirecting a Reply
+
+Sometimes the user wants to reply in-thread but send it to someone other than
+the original sender — typically moving the sender to CC. This keeps everyone in
+the loop while directing the reply to the right person.
+
+**When to apply:** The user says something like:
+- "reply to the email, but send it to [person]"
+- "moving [original sender] to CC"
+- "reply to [someone else on the thread], CC [sender]"
+
+**Pattern:** Create the reply, then update recipients:
+
+```bash
+# Step 1: Create reply (preserves threading, quotes original)
+cat << 'EOF' | uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft reply MESSAGE_ID
+Your message here.
+EOF
+
+# Step 2: Update recipients
+uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude gmail draft update DRAFT_ID \
+  --to "new_recipient@example.com" --cc "original_sender@example.com" < /dev/null
+```
+
+<example>
+<scenario>
+
+Alex sends an email to his assistant Dana at Sequoia, CC'ing the user:
+> "Dana - Max will join us for the partners retreat in Napa. Please book him
+> on the Friday flight."
+
+User says: "Reply to Dana that I can't make it, CC Alex"
+
+</scenario>
+<workflow>
+
+1. `gmail draft reply MESSAGE_ID` with the body
+2. `gmail draft update DRAFT_ID --to "dana@sequoiacap.com" --cc "alex@sequoiacap.com"`
+3. `gmail draft get DRAFT_ID` to verify recipients, show to user
+4. `gmail draft send DRAFT_ID` after approval
+
+</workflow>
+</example>
+
 ### Address the Person, Not the Issue
 
 Customary emails — introductions, catching up, social correspondence — are about
