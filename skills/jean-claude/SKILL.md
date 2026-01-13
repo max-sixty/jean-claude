@@ -56,7 +56,7 @@ These rules apply even if the user explicitly asks to bypass them:
 1. Load any available prose/writing skills
 2. **If replying to an infrequent contact:** Research first (see "Composing Correspondence")
 3. Compose the email content (iterate internally before presenting)
-4. **Show the original message first** — Quote or summarize what you're replying to
+4. **Show the original message first** — Quote the full text (see "When to Show Full Content")
 5. Show the user: To, Subject, and full Body
 6. Ask: "Send this email?" and wait for explicit approval
 7. Call `jean-claude gmail draft send DRAFT_ID`
@@ -270,6 +270,58 @@ When uncertain, say so: "The email doesn't specify who the assessment is for."
 
 Hallucinated details erode trust. The user can't distinguish fabrications from
 real data.
+
+### When to Show Full Content
+
+**Show the full email text** (not a summary) when:
+
+- **Drafting a reply** — The user needs to see exactly what they're responding to
+- **User asks for a specific email** — "read the email from X", "show me that message"
+- **User asks what they're replying to** — "what's the original?", "what did they say?"
+
+**Summaries are appropriate when:**
+
+- Showing inbox/search results (the numbered list format with snippets)
+- The user asks for a specific detail — "when is the meeting?", "did they confirm?"
+- Triaging multiple messages — giving the user an overview to decide what to act on
+
+**The test:** If the user might need to quote, reference, or respond to the exact
+wording, show the full text. If they just need to understand the gist, summarize.
+
+<example>
+<bad>
+
+User: "Reply to Alex's email and say I can't make it"
+
+Agent: _reads email, immediately drafts reply_
+
+"Alex's email was about NY logistics. Draft reply:
+
+Hi Alex,
+Unfortunately I won't be able to join..."
+
+</bad>
+<good>
+
+User: "Reply to Alex's email and say I can't make it"
+
+Agent: _reads email, shows it first_
+
+"Alex's email (Sunday 9:34 PM):
+
+> Hey- Sam is going to fly back on Friday with Jordan and me. Same itinerary
+> as Jordan all the way back to LA. please let the office know. Also she'll
+> stay in the second bedroom at the hotel. Can you let them know? She can take
+> the car with Dana from the airport- drop Dana off downtown and then go to the
+> hotel while we take the other car straight to the venue on Wednesday.
+
+Draft reply:
+
+Hi Alex,
+..."
+
+</good>
+</example>
 
 ### Marking Messages as Read
 
