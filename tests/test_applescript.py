@@ -47,7 +47,7 @@ class TestParseApplescriptError:
         stderr = "execution error: Messages got an error: Messages is not allowed assistive access. (-1719)"
         msg = _parse_applescript_error(stderr)
         assert "Automation permission required" in msg
-        assert "System Preferences" in msg
+        assert "System Settings" in msg
 
     def test_permission_assistive_in_message(self):
         """Permission keywords in error message trigger guidance."""
@@ -55,7 +55,7 @@ class TestParseApplescriptError:
         msg = _parse_applescript_error(stderr)
         # "not allowed" is in the message, so it triggers permission guidance
         assert "Automation permission required" in msg
-        assert "System Preferences" in msg
+        assert "System Settings" in msg
 
     def test_general_app_error(self):
         """General app error is cleaned up."""

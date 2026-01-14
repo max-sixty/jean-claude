@@ -111,21 +111,28 @@ request.
 
 **If `setup_completed: true`** — Check for partial setup and load personalization:
 
-1. **Check for missing services** — Look at `services.<name>` in the JSON. If
-   the user asks for a service that shows `authenticated: false` or
-   `enabled: false`, guide them through just that service's setup from
-   ONBOARDING.md. After partial setup completes, continue to step 2.
+1. **Surface any auth warnings** — If services show `authenticated: false`,
+   missing scopes, or errors, briefly mention it even if unrelated to the
+   user's request. Don't derail—just note the issue and offer to fix later:
 
-2. **Load personalization skills** — Check if user skills like `managing-messages`
+   > "By the way, your Google Contacts permission is missing — I can't show
+   > contact names in emails. Want me to help fix that after your request?"
+
+2. **Check for missing services** — If the user asks for a service that shows
+   `authenticated: false` or `enabled: false`, guide them through just that
+   service's setup from ONBOARDING.md. After partial setup completes, continue
+   to step 3.
+
+3. **Load personalization skills** — Check if user skills like `managing-messages`
    exist (look at available skills for anything mentioning inbox, email, message,
    or communication). If found, load them—user preferences override defaults.
 
-3. **Offer to create preferences** — If no personalization skill was found in
-   step 2, offer to create one after completing the user's immediate request.
+4. **Offer to create preferences** — If no personalization skill was found in
+   step 3, offer to create one after completing the user's immediate request.
    See [PREFERENCES.md](PREFERENCES.md) for the creation flow. Don't interrupt
    the user's task—help them first, then offer.
 
-4. **Proceed with the user's request** — Execute whatever task prompted loading
+5. **Proceed with the user's request** — Execute whatever task prompted loading
    this skill (check inbox, send message, etc.).
 
 ### Before Using Messaging (iMessage/WhatsApp/Signal)
@@ -172,6 +179,17 @@ jean-claude status
 **Messaging:**
 - **54 unread across 12 WhatsApp chats** → active messaging, may want summary
 - **1,353 unread across 113 iMessage chats** → backlog, focus on recent/important
+
+**Apple services (Contacts, iMessage, Reminders):** These are disabled by default.
+If `enabled: false` in status, enable with:
+```bash
+jean-claude config set enable_contacts true   # For iMessage name lookup
+jean-claude config set enable_imessage true
+jean-claude config set enable_reminders true
+```
+Once enabled, status checks full permissions (may trigger macOS permission
+dialogs on first run). If permission is missing, guide the user through
+System Settings > Privacy & Security > Automation.
 
 ### Refreshing State
 

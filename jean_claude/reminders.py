@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime
 
 import click
 
 from .applescript import run_applescript
+from .config import is_reminders_enabled
 from .logging import JeanClaudeError, get_logger
 
 logger = get_logger(__name__)
@@ -56,6 +58,12 @@ def cli():
     Uses AppleScript to interact with Reminders.app. Reminders sync across
     all your Apple devices via iCloud.
     """
+    if "--help" not in sys.argv and "-h" not in sys.argv:
+        if not is_reminders_enabled():
+            raise JeanClaudeError(
+                "Reminders is disabled. Enable via:\n"
+                "  jean-claude config set enable_reminders true"
+            )
 
 
 @cli.command()

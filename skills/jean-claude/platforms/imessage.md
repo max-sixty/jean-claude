@@ -105,7 +105,7 @@ jean-claude imessage messages --name "John Smith"
 jean-claude imessage search "dinner plans"
 ```
 
-To enable reading: System Preferences > Privacy & Security > Full Disk Access >
+To enable reading: System Settings > Privacy & Security > Full Disk Access >
 add your terminal app.
 
 ## Image Attachments

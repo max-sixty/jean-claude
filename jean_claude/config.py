@@ -1,22 +1,21 @@
-"""Configuration and feature flags for jean-claude.
-
-Feature flags control which messaging services are enabled. Services are
-disabled by default for safety - enable explicitly via config file or CLI.
-
-Use `jean-claude config set <key> <value>` to configure, or edit
-~/.config/jean-claude/config.json directly.
-"""
+"""Configuration and feature flags for jean-claude."""
 
 from __future__ import annotations
 
 import json
+import tempfile
+from pathlib import Path
 
+from .logging import get_logger
 from .paths import CONFIG_DIR
 
+logger = get_logger(__name__)
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
-# Default configuration values
 DEFAULT_CONFIG = {
+    "enable_contacts": False,
+    "enable_imessage": False,
+    "enable_reminders": False,
     "enable_whatsapp": False,
     "enable_signal": False,
     "setup_completed": False,
@@ -24,63 +23,64 @@ DEFAULT_CONFIG = {
 
 
 def _load_config() -> dict:
-    """Load configuration from config file."""
+    """Load config from file, returning empty dict on any error."""
     if not CONFIG_FILE.exists():
         return {}
     try:
         return json.loads(CONFIG_FILE.read_text())
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("Config file unreadable, using defaults", error=str(e))
         return {}
 
 
-def is_whatsapp_enabled() -> bool:
-    """Check if WhatsApp messaging is enabled.
+def is_contacts_enabled() -> bool:
+    return _load_config().get("enable_contacts", False)
 
-    Enable via: jean-claude config set enable_whatsapp true
-    """
-    config = _load_config()
-    return bool(config.get("enable_whatsapp", False))
+
+def is_imessage_enabled() -> bool:
+    return _load_config().get("enable_imessage", False)
+
+
+def is_reminders_enabled() -> bool:
+    return _load_config().get("enable_reminders", False)
+
+
+def is_whatsapp_enabled() -> bool:
+    return _load_config().get("enable_whatsapp", False)
 
 
 def is_signal_enabled() -> bool:
-    """Check if Signal messaging is enabled.
-
-    Enable via: jean-claude config set enable_signal true
-    """
-    config = _load_config()
-    return bool(config.get("enable_signal", False))
+    return _load_config().get("enable_signal", False)
 
 
 def is_setup_completed() -> bool:
-    """Check if first-run setup has been completed."""
-    config = _load_config()
-    return bool(config.get("setup_completed", False))
+    return _load_config().get("setup_completed", False)
 
 
 def get_config() -> dict:
-    """Get the full configuration with defaults applied.
-
-    Returns a dict with all config keys, using file values where present
-    and defaults otherwise.
-    """
-    config = _load_config()
-    return {**DEFAULT_CONFIG, **config}
+    """Get full config with defaults applied."""
+    return {**DEFAULT_CONFIG, **_load_config()}
 
 
 def set_config_value(key: str, value: bool | str) -> None:
-    """Set a configuration value and persist to file.
+    """Set a config value and persist to file."""
+    from .logging import JeanClaudeError
 
-    Args:
-        key: Configuration key (e.g., "enable_whatsapp", "setup_completed")
-        value: Value to set (bool or str)
-    """
-    # Load existing config
+    if key in DEFAULT_CONFIG and isinstance(DEFAULT_CONFIG[key], bool):
+        if not isinstance(value, bool):
+            raise JeanClaudeError(f"'{key}' requires bool, got {type(value).__name__}")
+
     config = _load_config()
-
-    # Update the value
     config[key] = value
 
-    # Ensure config directory exists
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-
-    CONFIG_FILE.write_text(json.dumps(config, indent=2) + "\n")
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="w", dir=CONFIG_DIR, prefix=".config_", suffix=".tmp", delete=False
+        ) as f:
+            json.dump(config, f, indent=2)
+            f.write("\n")
+            tmp_path = Path(f.name)
+        tmp_path.replace(CONFIG_FILE)
+    except OSError as e:
+        raise JeanClaudeError(f"Cannot write config: {e}")

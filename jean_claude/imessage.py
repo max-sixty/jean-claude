@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import click
 
 from .applescript import run_applescript
+from .config import is_imessage_enabled
 from .input import read_body_stdin
 from .logging import JeanClaudeError, get_logger
 from .messaging import (
@@ -19,6 +21,7 @@ from .messaging import (
 from .phone import normalize_phone
 
 logger = get_logger(__name__)
+
 
 DB_PATH = Path.home() / "Library" / "Messages" / "chat.db"
 # Apple's Cocoa epoch (2001-01-01) offset from Unix epoch (1970-01-01)
@@ -36,7 +39,7 @@ def get_db_connection() -> sqlite3.Connection:
         if "unable to open" in str(e):
             raise JeanClaudeError(
                 "Cannot access Messages database. Grant Full Disk Access to your terminal:\n"
-                "  System Preferences > Privacy & Security > Full Disk Access\n"
+                "  System Settings > Privacy & Security > Full Disk Access\n"
                 "  Then add and enable your terminal app (Terminal, iTerm2, Ghostty, etc.)"
             )
         raise
@@ -345,12 +348,22 @@ set jsonString to current application's NSString's alloc()'s initWithData:jsonDa
 return jsonString as text
 end run"""
 
-    output = run_applescript(script, name)
+    try:
+        output = run_applescript(script, name)
+    except JeanClaudeError:
+        # Let permission errors propagate with clear message, but log for debugging
+        logger.debug("Contacts.app lookup failed", name=name)
+        raise
+
     if not output:
         return []
 
-    contacts_data = json.loads(output)
-    return [(c["name"], c["phones"]) for c in contacts_data]
+    try:
+        contacts_data = json.loads(output)
+        return [(c["name"], c["phones"]) for c in contacts_data]
+    except (json.JSONDecodeError, KeyError):
+        logger.debug("Failed to parse Contacts.app response")
+        return []
 
 
 def find_chats_by_name(name: str) -> list[tuple[str, str]]:
@@ -387,6 +400,7 @@ end run"""
         matches = json.loads(output)
         return [(m["id"], m["name"]) for m in matches]
     except (json.JSONDecodeError, KeyError):
+        logger.debug("Failed to parse chat list from Messages.app")
         return []
 
 
@@ -666,6 +680,12 @@ def cli():
     Send via AppleScript (always works). Reading message history requires
     Full Disk Access for the terminal app to query ~/Library/Messages/chat.db.
     """
+    if "--help" not in sys.argv and "-h" not in sys.argv:
+        if not is_imessage_enabled():
+            raise JeanClaudeError(
+                "iMessage is disabled. Enable via:\n"
+                "  jean-claude config set enable_imessage true"
+            )
 
 
 @cli.command()
@@ -1132,7 +1152,7 @@ def search(query: str | None, max_results: int):
     """Search message history (requires Full Disk Access).
 
     Searches the local Messages database. Your terminal app must have
-    Full Disk Access in System Preferences > Privacy & Security.
+    Full Disk Access in System Settings > Privacy & Security.
 
     QUERY: Search term (searches message text)
 

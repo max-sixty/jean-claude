@@ -114,7 +114,7 @@ Tell the user:
 
 > iMessage needs two permissions: one for sending messages, one for reading your
 > message history. macOS will prompt for the first one automatically. The second
-> requires a trip to System Preferences.
+> requires a trip to System Settings.
 
 ### Step 2: Test send permission
 
@@ -127,7 +127,7 @@ jean-claude imessage chats -n 1
 If this returns a permission error, guide the user:
 
 > macOS should have shown a permission prompt. If you denied it or it didn't
-> appear, go to **System Preferences → Security & Privacy → Privacy →
+> appear, go to **System Settings → Privacy & Security → Privacy →
 > Automation** and enable the checkbox for your terminal app under "System
 > Events".
 
@@ -138,7 +138,7 @@ error, guide the user:
 
 > To read your message history, you need to grant Full Disk Access:
 >
-> 1. Open **System Preferences → Security & Privacy → Privacy → Full Disk Access**
+> 1. Open **System Settings → Privacy & Security → Privacy → Full Disk Access**
 > 2. Click the lock icon to make changes
 > 3. Click the + button and add your terminal app (Terminal, iTerm2, VS Code, Cursor, etc.)
 > 4. Restart your terminal completely (quit and reopen)
@@ -315,8 +315,8 @@ If user wants to add services later or change access level:
 
 ### iMessage permission issues
 
-- Automation denied: System Preferences → Automation → enable terminal app
-- Full Disk Access: System Preferences → Full Disk Access → add terminal app
+- Automation denied: System Settings → Automation → enable terminal app
+- Full Disk Access: System Settings → Full Disk Access → add terminal app
 - Still failing: Quit and reopen the terminal app after granting permissions
 - **Which terminal app?** Use the app where Claude Code is running (Terminal,
   iTerm2, VS Code, Cursor, etc.)

@@ -3,7 +3,7 @@ Usage: jean-claude imessage search [OPTIONS] [QUERY]
   Search message history (requires Full Disk Access).
 
   Searches the local Messages database. Your terminal app must have Full Disk
-  Access in System Preferences > Privacy & Security.
+  Access in System Settings > Privacy & Security.
 
   QUERY: Search term (searches message text)
 

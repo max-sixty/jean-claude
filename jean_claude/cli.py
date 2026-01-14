@@ -14,6 +14,9 @@ from .auth import SCOPES_FULL, SCOPES_READONLY, TOKEN_FILE, run_auth
 from .config import (
     CONFIG_FILE,
     get_config,
+    is_contacts_enabled,
+    is_imessage_enabled,
+    is_reminders_enabled,
     is_setup_completed,
     is_signal_enabled,
     is_whatsapp_enabled,
@@ -104,8 +107,10 @@ def _status_json():
     # Google status
     services["google"] = _get_google_status()
 
-    # iMessage status (macOS only)
+    # Apple services (macOS only)
+    # When enabled, checks Automation permissions (may trigger dialogs on first run)
     if sys.platform == "darwin":
+        services["contacts"] = _get_contacts_status()
         services["imessage"] = _get_imessage_status()
         services["reminders"] = _get_reminders_status()
 
@@ -178,6 +183,10 @@ def _status_human():
                 _check_google_apis()
             except Exception as e:
                 click.echo(f"  Error checking APIs: {e}")
+
+    # Contacts status (macOS only, for iMessage name lookup)
+    click.echo()
+    _check_contacts_status()
 
     # iMessage status (doesn't require Google auth)
     click.echo()
@@ -256,8 +265,42 @@ def _get_google_status() -> dict:
     return result
 
 
+def _get_contacts_status() -> dict:
+    """Get macOS Contacts.app status as a dict."""
+    if not is_contacts_enabled():
+        return {"enabled": False}
+
+    import subprocess
+
+    result = {"enabled": True}
+
+    # Check Automation permission for Contacts.app
+    test_script = 'tell application "Contacts" to get name of first person'
+    proc = subprocess.run(
+        ["osascript", "-e", test_script],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    # Success or "no person" error both indicate we have permission
+    if proc.returncode == 0 or "Can't get" in proc.stderr:
+        result["authenticated"] = True
+    else:
+        result["authenticated"] = False
+        error = proc.stderr.strip()
+        if "not allowed" in error.lower() or "assistive" in error.lower():
+            result["error"] = "Automation permission required"
+        else:
+            result["error"] = error
+
+    return result
+
+
 def _get_imessage_status() -> dict:
     """Get iMessage status as a dict."""
+    if not is_imessage_enabled():
+        return {"enabled": False}
+
     import sqlite3
     import subprocess
     from pathlib import Path
@@ -302,6 +345,9 @@ def _get_imessage_status() -> dict:
 
 def _get_reminders_status() -> dict:
     """Get Apple Reminders status as a dict."""
+    if not is_reminders_enabled():
+        return {"enabled": False}
+
     import subprocess
 
     result = {"enabled": True}
@@ -461,11 +507,50 @@ def _check_google_apis() -> None:
     )
 
 
+def _check_contacts_status() -> None:
+    """Check macOS Contacts.app availability."""
+    import subprocess
+
+    click.echo("Contacts:")
+
+    # Contacts only available on macOS
+    if sys.platform != "darwin":
+        click.echo("  " + click.style("Not available (macOS only)", fg="yellow"))
+        return
+
+    # Check if feature is enabled
+    if not is_contacts_enabled():
+        click.echo("  " + click.style("Disabled", fg="yellow"))
+        click.echo("    Enable: jean-claude config set enable_contacts true")
+        return
+
+    # Check Automation permission for Contacts.app
+    test_script = 'tell application "Contacts" to get name of first person'
+    result = subprocess.run(
+        ["osascript", "-e", test_script],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    # Success or "no person" error both indicate we have permission
+    if result.returncode == 0 or "Can't get" in result.stderr:
+        click.echo("  Access: " + click.style("OK", fg="green"))
+    else:
+        error = result.stderr.strip()
+        if "not allowed" in error.lower() or "assistive" in error.lower():
+            click.echo(
+                "  Access: " + click.style("No Automation permission", fg="yellow")
+            )
+            click.echo("    Grant when prompted on first use, or enable in:")
+            click.echo("    System Settings > Privacy & Security > Automation")
+        else:
+            click.echo("  Access: " + click.style(f"Error - {error}", fg="red"))
+
+
 def _check_imessage_status() -> None:
     """Check iMessage availability (send and read capabilities)."""
     import sqlite3
     import subprocess
-    import sys
     from pathlib import Path
 
     click.echo("iMessage:")
@@ -473,6 +558,12 @@ def _check_imessage_status() -> None:
     # iMessage only available on macOS
     if sys.platform != "darwin":
         click.echo("  " + click.style("Not available (macOS only)", fg="yellow"))
+        return
+
+    # Check if feature is enabled
+    if not is_imessage_enabled():
+        click.echo("  " + click.style("Disabled", fg="yellow"))
+        click.echo("    Enable: jean-claude config set enable_imessage true")
         return
 
     # Check send capability (AppleScript/Automation permission)
@@ -493,7 +584,7 @@ def _check_imessage_status() -> None:
                 "  Send: " + click.style("No Automation permission", fg="yellow")
             )
             click.echo("    Grant when prompted on first send, or enable in:")
-            click.echo("    System Preferences > Privacy & Security > Automation")
+            click.echo("    System Settings > Privacy & Security > Automation")
         else:
             click.echo("  Send: " + click.style(f"Error - {error}", fg="red"))
 
@@ -509,7 +600,7 @@ def _check_imessage_status() -> None:
             if "unable to open" in str(e):
                 click.echo("  Read: " + click.style("No Full Disk Access", fg="yellow"))
                 click.echo(
-                    "    System Preferences > Privacy & Security > Full Disk Access"
+                    "    System Settings > Privacy & Security > Full Disk Access"
                 )
                 click.echo("    Add and enable your terminal app")
             else:
@@ -527,13 +618,18 @@ def _check_imessage_status() -> None:
 def _check_reminders_status() -> None:
     """Check Apple Reminders availability."""
     import subprocess
-    import sys
 
     click.echo("Reminders:")
 
     # Reminders only available on macOS
     if sys.platform != "darwin":
         click.echo("  " + click.style("Not available (macOS only)", fg="yellow"))
+        return
+
+    # Check if feature is enabled
+    if not is_reminders_enabled():
+        click.echo("  " + click.style("Disabled", fg="yellow"))
+        click.echo("    Enable: jean-claude config set enable_reminders true")
         return
 
     # Test AppleScript access to Reminders.app
@@ -557,7 +653,7 @@ def _check_reminders_status() -> None:
                 "  Access: " + click.style("No Automation permission", fg="yellow")
             )
             click.echo("    Grant when prompted on first use, or enable in:")
-            click.echo("    System Preferences > Privacy & Security > Automation")
+            click.echo("    System Settings > Privacy & Security > Automation")
         else:
             click.echo("  Access: " + click.style(f"Error - {error}", fg="red"))
 

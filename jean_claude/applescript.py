@@ -49,7 +49,7 @@ def _parse_applescript_error(stderr: str) -> str:
         if "not allowed" in message.lower() or "assistive" in message.lower():
             return (
                 f"{app_name}: Automation permission required.\n"
-                f"  Grant access in System Preferences > Privacy & Security > Automation"
+                f"  Grant access in System Settings > Privacy & Security > Automation"
             )
 
         # General error with cleaned message
