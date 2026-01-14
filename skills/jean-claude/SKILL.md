@@ -7,7 +7,7 @@ description: "This skill should be used when the user asks to search/send/draft 
 
 Gmail, Calendar, Drive, Docs, Sheets, iMessage, WhatsApp, Signal, and Reminders.
 
-**Command prefix:** `jean-claude `
+**Command prefix:** `uv run --project ${CLAUDE_PLUGIN_ROOT} jean-claude `
 
 ## First-Time Users
 
