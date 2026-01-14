@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime
 
 import click
 
@@ -28,6 +29,7 @@ from .imessage import cli as imessage_cli
 from .reminders import cli as reminders_cli
 from .signal import cli as signal_cli
 from .logging import JeanClaudeError, configure_logging, get_logger
+from .timezone import TIMEZONE
 from .whatsapp import cli as whatsapp_cli
 
 logger = get_logger(__name__)
@@ -113,7 +115,9 @@ def _status_json():
     # Signal status
     services["signal"] = _get_signal_status()
 
+    now = datetime.now()
     result = {
+        "current_time": f"{now.strftime('%A, %Y-%m-%d %H:%M')} ({TIMEZONE})",
         "platform": sys.platform,
         "config_exists": CONFIG_FILE.exists(),
         "setup_completed": is_setup_completed(),

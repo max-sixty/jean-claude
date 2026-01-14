@@ -738,6 +738,9 @@ Credentials are stored in `~/.local/share/jean-claude/signal/`.
 
 ## Gmail
 
+**CLI convention:** Email addresses are comma-separated (`--to "a@x.com,b@x.com"`).
+Other multi-value flags use repeated flags (`--attach f1 --attach f2`).
+
 ### Reading Emails
 
 See "Personalization" section for default behaviors and user skill overrides.
@@ -835,6 +838,11 @@ EOF
 # Create with CC/BCC
 cat << 'EOF' | jean-claude gmail draft create --to "recipient@example.com" --subject "Subject" --cc "cc@example.com"
 Multi-line message body here.
+EOF
+
+# Multiple recipients
+cat << 'EOF' | jean-claude gmail draft create --to "alice@example.com,bob@example.com" --subject "Team update"
+Message to multiple people.
 EOF
 
 # Reply to a message (body from stdin, preserves threading, includes quoted original)
@@ -1155,6 +1163,9 @@ When creating events, add useful information proactively:
 
 A calendar invite should have everything attendees need to show up prepared.
 
+**Description is visible to all attendees.** Never put internal notes or context
+about the person/company in the `--description` field.
+
 ### Check for Conflicts
 
 Always check the calendar before creating events.
@@ -1183,8 +1194,19 @@ If there's a conflict the user may not be aware of, confirm before creating:
 3. **Verify after creating.** Run `jean-claude gcal list` for that date to confirm. If
    wrong, delete and recreate before confirming to the user.
 
-4. **Show what you're creating.** Before `jean-claude gcal create`, state: title, date/time
-   (with day of week), attendees (with emails), location (with address).
+4. **Show invite and get confirmation.** Before `jean-claude gcal create`, show
+   the full invite and ask for approval — just like messages:
+
+   > **Calendar invite to create:**
+   > - **Title:** 1:1 with Alice
+   > - **When:** Tuesday 2025-12-30, 2:00–2:30pm PT
+   > - **Attendees:** alice@example.com
+   > - **Location:** Zoom (link in description)
+   > - **Description:** Weekly sync
+   >
+   > Create this invite?
+
+   Include location and description if set. Wait for "yes" before creating.
 
 5. **Confirm ambiguous locations.** "SVB" could mean West Hollywood or Santa
    Monica — ask which one.
@@ -1196,8 +1218,9 @@ User: "Add a meeting with Alice for next Tuesday at 2pm"
 1. Check: date -v+0d "+%A %Y-%m-%d" → "Friday 2025-12-26"
 2. Calculate: next Tuesday = 2025-12-30
 3. Look up Alice's email
-4. State: "Creating for Tuesday 2025-12-30 at 2pm, inviting alice@example.com"
-5. Create, then verify with `jean-claude gcal list`
+4. Show the full invite preview (title, date/time, attendees, location, description)
+5. Wait for user confirmation
+6. Create, then verify with `jean-claude gcal list`
 ```
 
 ### List Events
@@ -1220,12 +1243,17 @@ jean-claude gcal list --from 2025-01-15 --to 2025-01-20
 jean-claude gcal create "Team Meeting" \
   --start "2025-01-15 14:00" --end "2025-01-15 15:00"
 
-# With attendees, location, and description
+# With attendee, location, and description
 jean-claude gcal create "1:1 with Alice" \
   --start "2025-01-15 10:00" --duration 30 \
   --attendees alice@example.com \
   --location "Conference Room A" \
   --description "Weekly sync"
+
+# Multiple attendees
+jean-claude gcal create "Team Sync" \
+  --start "2025-01-15 14:00" --duration 25 \
+  --attendees "alice@example.com,bob@example.com"
 
 # All-day event (single day)
 jean-claude gcal create "Holiday" \
