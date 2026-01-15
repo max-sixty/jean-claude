@@ -636,10 +636,14 @@ def _write_email_cache(
     return str(json_path)
 
 
-def extract_message_summary(msg: dict) -> dict:
+def extract_message_summary(msg: dict, include_headers: bool = False) -> dict:
     """Extract essential fields from a message for compact output.
 
     Writes cache files: JSON metadata, .txt body, and .html body when present.
+
+    Args:
+        msg: Gmail API message object
+        include_headers: If True, include all email headers in the output
     """
     headers = _get_headers(msg)
     result = {
@@ -657,6 +661,10 @@ def extract_message_summary(msg: dict) -> dict:
 
     body, html_body = extract_body(msg["payload"])
     result["file"] = _write_email_cache("email", msg["id"], result, body, html_body)
+
+    # Add full headers to output (not to cache file, to keep cache consistent)
+    if include_headers:
+        result["headers"] = headers
     return result
 
 
@@ -765,7 +773,12 @@ def search(query: str, max_results: int, page_token: str | None):
 
 @cli.command()
 @click.argument("message_ids", nargs=-1, required=True)
-def get(message_ids: tuple[str, ...]):
+@click.option(
+    "--headers",
+    is_flag=True,
+    help="Include all email headers (Delivered-To, X-Original-To, etc.)",
+)
+def get(message_ids: tuple[str, ...], headers: bool):
     """Get messages by ID, written to files.
 
     Fetches full message content and writes to ~/.cache/jean-claude/emails/.
@@ -775,6 +788,7 @@ def get(message_ids: tuple[str, ...]):
     Examples:
         jean-claude gmail get 19b51f93fcf3f8ca
         jean-claude gmail get id1 id2 id3
+        jean-claude gmail get --headers 19b51f93fcf3f8ca
     """
     service = get_gmail()
     summaries = []
@@ -785,7 +799,7 @@ def get(message_ids: tuple[str, ...]):
             .get(userId="me", id=message_id, format="full")
             .execute()
         )
-        summaries.append(extract_message_summary(msg))
+        summaries.append(extract_message_summary(msg, include_headers=headers))
     click.echo(json.dumps(summaries, indent=2))
 
 

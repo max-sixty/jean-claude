@@ -8,6 +8,8 @@ Usage: jean-claude gmail get [OPTIONS] MESSAGE_IDS...
   Examples:
       jean-claude gmail get 19b51f93fcf3f8ca
       jean-claude gmail get id1 id2 id3
+      jean-claude gmail get --headers 19b51f93fcf3f8ca
 
 Options:
-  --help  Show this message and exit.
+  --headers  Include all email headers (Delivered-To, X-Original-To, etc.)
+  --help     Show this message and exit.
