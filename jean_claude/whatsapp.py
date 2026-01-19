@@ -539,7 +539,7 @@ def mark_read(chat_ids: tuple[str, ...]):
 
     for chat_id in chat_ids:
         result = _run_whatsapp_cli("mark-read", chat_id)
-        if result:
+        if result and isinstance(result, dict):
             results.append(result)
             total_messages += result.get("messages_marked", 0)
             total_receipts += result.get("receipts_sent", 0)

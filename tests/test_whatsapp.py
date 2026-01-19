@@ -40,7 +40,11 @@ def _extract_data(output: dict | list, key: str) -> list:
     if isinstance(output, list):
         return output
     if isinstance(output, dict) and key in output:
-        return output[key]
+        data = output[key]
+        assert isinstance(data, list)
+        return data
+    # Fallback - shouldn't happen in normal use
+    assert isinstance(output, list)
     return output
 
 
