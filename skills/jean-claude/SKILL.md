@@ -390,7 +390,7 @@ When you show the full body of a message to the user — not just the snippet
 from a list — mark it as read. The user has effectively read it.
 
 **Mark as read when:**
-- Reading the full email body (via `jean-claude gmail get` or reading the cached body file)
+- Reading the full email body (via `jean-claude gmail message` or reading the cached body file)
 - Creating a reply or forward (you read the original to compose the response)
 - The user explicitly asks to read a specific message
 
@@ -806,10 +806,46 @@ Other multi-value flags use repeated flags (`--attach f1 --attach f2`).
 
 See "Personalization" section for default behaviors and user skill overrides.
 
-1. **List/search** returns compact JSON with summaries and file paths
-2. **Read the body file** directly with `cat` if you need the full body
+**Two data types:**
 
-**Search/Inbox response schema:**
+- **Threads** — Conversations (one or more messages). Returned by `inbox`.
+- **Messages** — Individual emails. Returned by `search` and `get`.
+
+**Thread response schema (from `inbox`):**
+
+```json
+{
+  "threads": [
+    {
+      "threadId": "19b29039fd36d1c1",
+      "messageCount": 3,
+      "unreadCount": 1,
+      "subject": "Subject line",
+      "labels": ["INBOX", "UNREAD"],
+      "messages": [
+        {"id": "msg_id_1", "date": "2025-12-14T10:00:00-08:00", "from": "alice@example.com", "to": "you@example.com", "labels": ["INBOX"], "unread": false},
+        {"id": "msg_id_2", "date": "2025-12-15T14:30:00-08:00", "from": "you@example.com", "to": "alice@example.com", "labels": ["SENT"], "unread": false},
+        {"id": "msg_id_3", "date": "2025-12-16T09:00:00-08:00", "from": "alice@example.com", "to": "you@example.com", "labels": ["INBOX", "UNREAD"], "unread": true}
+      ],
+      "latest": {
+        "id": "msg_id_3",
+        "date": "2025-12-16T09:00:00-08:00",
+        "from": "alice@example.com",
+        "snippet": "Latest message snippet..."
+      },
+      "file": "~/.cache/jean-claude/emails/thread-19b29039fd36d1c1.json"
+    }
+  ],
+  "nextPageToken": "abc123..."
+}
+```
+
+Thread files contain **metadata only** (no message bodies). The `messages` array
+shows each message with date, sender, and read status — **ordered oldest to newest**.
+The `latest` object provides quick access to the most recent message's metadata and
+snippet. To read message bodies, use `gmail message MESSAGE_ID` or `gmail thread THREAD_ID`.
+
+**Message response schema (from `search`):**
 
 ```json
 {
@@ -819,9 +855,8 @@ See "Personalization" section for default behaviors and user skill overrides.
       "threadId": "19b29039fd36d1c1",
       "from": "Name <email@example.com>",
       "to": "recipient@example.com",
-      "cc": "other@example.com",
       "subject": "Subject line",
-      "date": "Tue, 16 Dec 2025 21:12:21 +0000",
+      "date": "2025-12-16T21:12:21-08:00",
       "snippet": "First ~200 chars of body...",
       "labels": ["INBOX", "UNREAD"],
       "file": "~/.cache/jean-claude/emails/email-19b29039fd36d1c1.json"
@@ -831,12 +866,24 @@ See "Personalization" section for default behaviors and user skill overrides.
 }
 ```
 
-**Split file format:** Each email creates three files in `~/.cache/jean-claude/emails/`:
-- `email-{id}.json` — Metadata (queryable with `jq`)
-- `email-{id}.txt` — Plain text body (readable with `cat`/`less`)
-- `email-{id}.html` — HTML body when present (viewable in browser)
+**`get` returns a list directly** (no pagination wrapper):
 
-The JSON includes `body_file` and `html_file` paths. HTML contains unsubscribe links.
+```json
+[
+  {
+    "id": "19b29039fd36d1c1",
+    "threadId": "19b29039fd36d1c1",
+    "from": "Name <email@example.com>",
+    ...
+    "file": "~/.cache/jean-claude/emails/email-19b29039fd36d1c1.json"
+  }
+]
+```
+
+**Message file format:** Each message creates three files:
+- `email-{id}.json` — Metadata with `body_file` and `html_file` paths
+- `email-{id}.txt` — Plain text body (readable with `cat`/`less`)
+- `email-{id}.html` — HTML body when present (contains unsubscribe links)
 
 The `nextPageToken` field is only present when more results are available. Use
 `--page-token` to fetch the next page:
@@ -874,11 +921,17 @@ jean-claude gmail inbox --unread -n 50 --page-token "TOKEN"
 Common Gmail search operators: `in:inbox`, `is:unread`, `is:starred`, `from:`,
 `to:`, `subject:`, `after:2025/01/01`, `has:attachment`, `label:`
 
-### Get a Single Message
+### Fetch Messages and Threads
 
 ```bash
-# Get message by ID (writes full body to ~/.cache/jean-claude/emails/)
-jean-claude gmail get MESSAGE_ID
+# Fetch message by ID (writes body to ~/.cache/jean-claude/emails/)
+jean-claude gmail message MESSAGE_ID
+
+# Fetch multiple messages
+jean-claude gmail message MSG_ID_1 MSG_ID_2 MSG_ID_3
+
+# Fetch all messages in a thread (full conversation)
+jean-claude gmail thread THREAD_ID
 ```
 
 Use this when you have a specific message ID and want to read its full content.
@@ -1021,10 +1074,10 @@ attachments — confirm the right files are attached before sending.
 ### Manage Threads and Messages
 
 Most commands operate on threads (matching Gmail UI behavior). Use `threadId` from
-inbox/search output. Star/unstar operate on individual messages (use `latestMessageId`).
+inbox output. Star/unstar operate on individual messages (use IDs from `messages` array).
 
 ```bash
-# Star/unstar (message-level - use latestMessageId)
+# Star/unstar (message-level - use message IDs from `messages` array)
 jean-claude gmail star MSG_ID1 MSG_ID2 MSG_ID3
 jean-claude gmail unstar MSG_ID1 MSG_ID2
 
@@ -1042,8 +1095,8 @@ jean-claude gmail trash THREAD_ID1 THREAD_ID2 THREAD_ID3
 ```
 
 **Which ID to use:**
-- Thread operations (archive, mark-read, trash): use `threadId`
-- Message operations (star): use `latestMessageId`
+- Thread operations (archive, mark-read, trash, `gmail thread`): use `threadId`
+- Message operations (star, `gmail message`, reply): use `id` from `messages` array
 - Use `--query` for pattern-based operations (archive supports this)
 
 ### Attachments

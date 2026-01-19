@@ -51,8 +51,8 @@ interest. This is a messaging preferences file, not a dossier.
   iMessage/WhatsApp, read 30-50 messages from top 3-5 contacts.
 - **Empty search results** — If a search (e.g., "Regards,") returns nothing,
   that's useful data. Move on and focus on patterns that do appear.
-- **Email body files** — The gmail output includes a `file` path to JSON
-  metadata. Read that JSON to get the `body_file` path for the actual text.
+- **Email body files** — Thread output (`inbox`) contains metadata only. Use
+  `gmail message MESSAGE_ID` to fetch bodies. The message JSON includes `body_file` path.
 - **"No sign-off" is a preference** — If the user just ends with their name
   and no preceding word ("Best,", "Thanks,"), that's itself a pattern.
 - **User can always edit** — Mention that they can edit the file directly

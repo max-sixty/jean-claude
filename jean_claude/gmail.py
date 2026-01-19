@@ -668,46 +668,75 @@ def extract_message_summary(msg: dict, include_headers: bool = False) -> dict:
     return result
 
 
+def _write_thread_metadata(thread_id: str, metadata: dict) -> str:
+    """Write thread metadata to cache as JSON only (no body files).
+
+    Thread files contain metadata about the conversation (message IDs, counts,
+    labels) but NOT message bodies. Use `gmail message` to fetch bodies.
+    """
+    EMAIL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    json_path = EMAIL_CACHE_DIR / f"thread-{_sanitize_id(thread_id)}.json"
+    json_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    return str(json_path)
+
+
 def extract_thread_summary(thread: dict) -> dict:
     """Extract essential fields from a thread for compact output.
 
-    Returns info about the thread with the latest message's details.
-    Gmail UI shows threads, not individual messages, so this matches that view.
+    Returns info about the thread with all message IDs exposed. The cached
+    thread file contains metadata only - use `get MESSAGE_ID` or
+    `get --thread THREAD_ID` to fetch message bodies.
     """
     messages = thread["messages"]
     if not messages:
-        return {"threadId": thread["id"], "messageCount": 0}
+        result = {"threadId": thread["id"], "messageCount": 0, "messages": []}
+        result["file"] = _write_thread_metadata(thread["id"], result)
+        return result
 
     # Get the latest message for display
     latest_msg = messages[-1]
     headers = _get_headers(latest_msg)
 
-    # Aggregate labels across all messages in thread
+    # Aggregate labels and build message summaries (oldest to newest)
     all_labels = set()
     unread_count = 0
+    message_summaries = []
     for msg in messages:
         labels = msg.get("labelIds", [])
         all_labels.update(labels)
-        if "UNREAD" in labels:
+        is_unread = "UNREAD" in labels
+        if is_unread:
             unread_count += 1
+        msg_headers = _get_headers(msg)
+        msg_summary = {
+            "id": msg["id"],
+            "date": _convert_to_local_time(msg_headers.get("Date", "")),
+            "from": msg_headers.get("From", ""),
+            "to": msg_headers.get("To", ""),
+            "labels": labels,
+            "unread": is_unread,
+        }
+        if cc := msg_headers.get("Cc"):
+            msg_summary["cc"] = cc
+        message_summaries.append(msg_summary)
 
     result = {
         "threadId": thread["id"],
         "messageCount": len(messages),
         "unreadCount": unread_count,
-        "latestMessageId": latest_msg["id"],
-        "from": headers.get("From", ""),
-        "to": headers.get("To", ""),
         "subject": headers.get("Subject", ""),
-        "date": _convert_to_local_time(headers.get("Date", "")),
-        "snippet": html.unescape(latest_msg.get("snippet", "")),
         "labels": sorted(all_labels),
+        "messages": message_summaries,
+        "latest": {
+            "id": latest_msg["id"],
+            "date": _convert_to_local_time(headers.get("Date", "")),
+            "from": headers.get("From", ""),
+            "snippet": html.unescape(latest_msg.get("snippet", "")),
+        },
     }
-    if cc := headers.get("Cc"):
-        result["cc"] = cc
 
-    body, html_body = extract_body(latest_msg["payload"])
-    result["file"] = _write_email_cache("thread", thread["id"], result, body, html_body)
+    # Write metadata-only cache file (no body)
+    result["file"] = _write_thread_metadata(thread["id"], result)
 
     return result
 
@@ -778,17 +807,17 @@ def search(query: str, max_results: int, page_token: str | None):
     is_flag=True,
     help="Include all email headers (Delivered-To, X-Original-To, etc.)",
 )
-def get(message_ids: tuple[str, ...], headers: bool):
-    """Get messages by ID, written to files.
+def message(message_ids: tuple[str, ...], headers: bool):
+    """Fetch messages by ID.
 
     Fetches full message content and writes to ~/.cache/jean-claude/emails/.
     Returns message summaries as JSON to stdout.
 
     \b
     Examples:
-        jean-claude gmail get 19b51f93fcf3f8ca
-        jean-claude gmail get id1 id2 id3
-        jean-claude gmail get --headers 19b51f93fcf3f8ca
+        jean-claude gmail message 19b51f93fcf3f8ca
+        jean-claude gmail message id1 id2 id3
+        jean-claude gmail message --headers 19b51f93fcf3f8ca
     """
     service = get_gmail()
     summaries = []
@@ -800,6 +829,38 @@ def get(message_ids: tuple[str, ...], headers: bool):
             .execute()
         )
         summaries.append(extract_message_summary(msg, include_headers=headers))
+    click.echo(json.dumps(summaries, indent=2))
+
+
+@cli.command()
+@click.argument("thread_ids", nargs=-1, required=True)
+@click.option(
+    "--headers",
+    is_flag=True,
+    help="Include all email headers (Delivered-To, X-Original-To, etc.)",
+)
+def thread(thread_ids: tuple[str, ...], headers: bool):
+    """Fetch all messages in a thread.
+
+    Fetches full content of all messages in the thread and writes to
+    ~/.cache/jean-claude/emails/. Returns message summaries as JSON to stdout.
+
+    \b
+    Examples:
+        jean-claude gmail thread 19b51f93fcf3f8ca
+        jean-claude gmail thread id1 id2 id3
+    """
+    service = get_gmail()
+    summaries = []
+    for thread_id in thread_ids:
+        thread_data = (
+            service.users()
+            .threads()
+            .get(userId="me", id=thread_id, format="full")
+            .execute()
+        )
+        for msg in thread_data.get("messages", []):
+            summaries.append(extract_message_summary(msg, include_headers=headers))
     click.echo(json.dumps(summaries, indent=2))
 
 

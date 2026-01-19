@@ -34,13 +34,13 @@ class TestGmailMessageOperations:
         assert len(data["messages"]) >= 1
         assert any(m["id"] == test_message for m in data["messages"])
 
-    def test_get_message(self, runner, test_message):
+    def test_message(self, runner, test_message):
         """Verify we can fetch the full message."""
-        result = runner.invoke(cli, ["gmail", "get", test_message])
+        result = runner.invoke(cli, ["gmail", "message", test_message])
         assert result.exit_code == 0
         data = json.loads(result.stdout)
-        assert data["id"] == test_message
-        assert "file" in data  # Body written to file
+        assert data[0]["id"] == test_message
+        assert "file" in data[0]  # Body written to file
 
     def test_star_and_unstar(self, runner, test_message):
         """Test starring and unstarring a message."""
@@ -49,18 +49,18 @@ class TestGmailMessageOperations:
         assert result.exit_code == 0
 
         # Verify starred
-        result = runner.invoke(cli, ["gmail", "get", test_message])
+        result = runner.invoke(cli, ["gmail", "message", test_message])
         data = json.loads(result.stdout)
-        assert "STARRED" in data["labels"]
+        assert "STARRED" in data[0]["labels"]
 
         # Unstar (restore state for other tests)
         result = runner.invoke(cli, ["gmail", "unstar", test_message])
         assert result.exit_code == 0
 
         # Verify unstarred
-        result = runner.invoke(cli, ["gmail", "get", test_message])
+        result = runner.invoke(cli, ["gmail", "message", test_message])
         data = json.loads(result.stdout)
-        assert "STARRED" not in data["labels"]
+        assert "STARRED" not in data[0]["labels"]
 
     def test_mark_read_unread(self, runner, test_message, test_thread):
         """Test marking thread read and unread."""
@@ -69,18 +69,18 @@ class TestGmailMessageOperations:
         assert result.exit_code == 0
 
         # Verify read (no UNREAD label)
-        result = runner.invoke(cli, ["gmail", "get", test_message])
+        result = runner.invoke(cli, ["gmail", "message", test_message])
         data = json.loads(result.stdout)
-        assert "UNREAD" not in data["labels"]
+        assert "UNREAD" not in data[0]["labels"]
 
         # Mark unread
         result = runner.invoke(cli, ["gmail", "mark-unread", test_thread])
         assert result.exit_code == 0
 
         # Verify unread
-        result = runner.invoke(cli, ["gmail", "get", test_message])
+        result = runner.invoke(cli, ["gmail", "message", test_message])
         data = json.loads(result.stdout)
-        assert "UNREAD" in data["labels"]
+        assert "UNREAD" in data[0]["labels"]
 
         # Restore state: mark as read
         runner.invoke(cli, ["gmail", "mark-read", test_thread])

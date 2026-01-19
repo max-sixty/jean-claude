@@ -1,14 +1,14 @@
-Usage: jean-claude gmail get [OPTIONS] MESSAGE_IDS...
+Usage: jean-claude gmail message [OPTIONS] MESSAGE_IDS...
 
-  Get messages by ID, written to files.
+  Fetch messages by ID.
 
   Fetches full message content and writes to ~/.cache/jean-claude/emails/.
   Returns message summaries as JSON to stdout.
 
   Examples:
-      jean-claude gmail get 19b51f93fcf3f8ca
-      jean-claude gmail get id1 id2 id3
-      jean-claude gmail get --headers 19b51f93fcf3f8ca
+      jean-claude gmail message 19b51f93fcf3f8ca
+      jean-claude gmail message id1 id2 id3
+      jean-claude gmail message --headers 19b51f93fcf3f8ca
 
 Options:
   --headers  Include all email headers (Delivered-To, X-Original-To, etc.)

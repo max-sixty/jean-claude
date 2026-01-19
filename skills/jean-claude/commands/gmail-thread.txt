@@ -1,0 +1,14 @@
+Usage: jean-claude gmail thread [OPTIONS] THREAD_IDS...
+
+  Fetch all messages in a thread.
+
+  Fetches full content of all messages in the thread and writes to
+  ~/.cache/jean-claude/emails/. Returns message summaries as JSON to stdout.
+
+  Examples:
+      jean-claude gmail thread 19b51f93fcf3f8ca
+      jean-claude gmail thread id1 id2 id3
+
+Options:
+  --headers  Include all email headers (Delivered-To, X-Original-To, etc.)
+  --help     Show this message and exit.
