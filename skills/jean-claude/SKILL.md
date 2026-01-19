@@ -193,14 +193,55 @@ System Settings > Privacy & Security > Automation.
 
 ### Refreshing State
 
-When users ask for updates ("what's new", "anything else in my inbox", "check my
-messages again"), re-fetch current data rather than working from earlier results.
-Inbox state changes constantly — new emails arrive, messages get read on other
-devices.
+**Summaries become stale immediately.** Once you present an inbox summary, that
+snapshot is already potentially outdated. State changes constantly:
+
+- New messages arrive
+- Messages get read/sent from other devices or apps
+- The user takes actions outside this conversation
+- You took actions earlier in the conversation that you may not be tracking
+
+**Verify before making claims.** When the user asks about current state — "did I
+reply?", "is that still unread?", "how many are left?" — re-check rather than
+relying on your memory of earlier summaries. Your memory is of what was true
+when you last checked, not what's true now.
+
+<example>
+<bad>
+
+User: "Did I reply to the Acme email?"
+
+Agent: _recalls earlier summary where it wasn't replied to_
+
+"No, that thread is still waiting for your reply."
+
+</bad>
+<good>
+
+User: "Did I reply to the Acme email?"
+
+Agent: _searches for sent messages to Acme_
+
+"Yes — you replied today at 12:27pm following up on their question."
+
+</good>
+</example>
+
+**Re-fetch when:**
+
+- User asks about current counts or status
+- User asks "did I..." or "is it still..."
+- Presenting a summary after taking actions
+
+**General principle:** If you're about to make a claim about current state, that's
+a signal to verify it first.
 
 ```bash
 # Re-fetch inbox for email updates
 jean-claude gmail inbox -n 20
+
+# Check sent messages to verify replies
+jean-claude gmail search "in:sent to:someone@example.com" -n 5
 
 # Re-fetch iMessage (see platforms/imessage.md for full docs)
 jean-claude imessage messages --unread
