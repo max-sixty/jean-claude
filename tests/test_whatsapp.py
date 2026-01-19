@@ -23,6 +23,27 @@ def _fail_if_called():
     raise AssertionError("_get_all_chats should not be called")
 
 
+def _extract_data(output: dict | list, key: str) -> list:
+    """Extract data list from CLI output, handling both formats.
+
+    The CLI returns either:
+    - A plain list when everything is OK
+    - An object with '_status' and the data key when there are warnings (auth/staleness)
+
+    Args:
+        output: Parsed JSON output from CLI
+        key: Key to extract when output is wrapped (e.g., 'chats', 'messages')
+
+    Returns:
+        The data list, regardless of wrapper format
+    """
+    if isinstance(output, list):
+        return output
+    if isinstance(output, dict) and key in output:
+        return output[key]
+    return output
+
+
 def _get_whatsapp_cli_binary() -> Path | None:
     """Find or build the whatsapp-cli binary for testing.
 
@@ -268,14 +289,16 @@ class TestWhatsAppCLIChats:
         result = whatsapp_cli("chats", data_dir=whatsapp_data_dir)
         assert result.returncode == 0, f"CLI failed: {result.stderr}"
 
-        chats = json.loads(result.stdout)
+        output = json.loads(result.stdout)
+        chats = _extract_data(output, "chats")
         assert isinstance(chats, list)
         assert len(chats) > 0
 
     def test_chats_sorted_by_last_message_time(self, whatsapp_cli, whatsapp_data_dir):
         """Test that chats are sorted by last_message_time descending."""
         result = whatsapp_cli("chats", data_dir=whatsapp_data_dir)
-        chats = json.loads(result.stdout)
+        output = json.loads(result.stdout)
+        chats = _extract_data(output, "chats")
 
         # Extract timestamps (may be None for some chats)
         timestamps = [c.get("last_message_time") or 0 for c in chats]
@@ -284,7 +307,8 @@ class TestWhatsAppCLIChats:
     def test_chats_have_expected_fields(self, whatsapp_cli, whatsapp_data_dir):
         """Test that each chat has the expected fields."""
         result = whatsapp_cli("chats", data_dir=whatsapp_data_dir)
-        chats = json.loads(result.stdout)
+        output = json.loads(result.stdout)
+        chats = _extract_data(output, "chats")
 
         for chat in chats:
             assert "jid" in chat
@@ -297,13 +321,15 @@ class TestWhatsAppCLIChats:
         result = whatsapp_cli("chats", "--unread", data_dir=whatsapp_data_dir)
         assert result.returncode == 0
 
-        chats = json.loads(result.stdout)
+        output = json.loads(result.stdout)
+        chats = _extract_data(output, "chats")
         # Sample data has chats with unread messages and one marked_as_unread
         assert len(chats) > 0, "Should have at least one unread chat"
 
         # Verify it's filtering - get all chats and compare
         all_result = whatsapp_cli("chats", data_dir=whatsapp_data_dir)
-        all_chats = json.loads(all_result.stdout)
+        all_output = json.loads(all_result.stdout)
+        all_chats = _extract_data(all_output, "chats")
         assert len(chats) < len(all_chats), "Unread filter should return fewer chats"
 
 
@@ -315,14 +341,16 @@ class TestWhatsAppCLIMessages:
         result = whatsapp_cli("messages", data_dir=whatsapp_data_dir)
         assert result.returncode == 0, f"CLI failed: {result.stderr}"
 
-        messages = json.loads(result.stdout)
+        output = json.loads(result.stdout)
+        messages = _extract_data(output, "messages")
         assert isinstance(messages, list)
         assert len(messages) > 0
 
     def test_messages_have_expected_fields(self, whatsapp_cli, whatsapp_data_dir):
         """Test that each message has the expected fields."""
         result = whatsapp_cli("messages", data_dir=whatsapp_data_dir)
-        messages = json.loads(result.stdout)
+        output = json.loads(result.stdout)
+        messages = _extract_data(output, "messages")
 
         for msg in messages:
             assert "id" in msg
@@ -334,7 +362,8 @@ class TestWhatsAppCLIMessages:
     def test_messages_sorted_by_timestamp_desc(self, whatsapp_cli, whatsapp_data_dir):
         """Test that messages are sorted by timestamp descending (newest first)."""
         result = whatsapp_cli("messages", data_dir=whatsapp_data_dir)
-        messages = json.loads(result.stdout)
+        output = json.loads(result.stdout)
+        messages = _extract_data(output, "messages")
 
         timestamps = [m["timestamp"] for m in messages]
         assert len(timestamps) >= 2, "Need multiple messages to verify sort order"
@@ -344,7 +373,8 @@ class TestWhatsAppCLIMessages:
         """Test filtering messages by chat JID."""
         # First get all chats to find a valid JID
         chats_result = whatsapp_cli("chats", data_dir=whatsapp_data_dir)
-        chats = json.loads(chats_result.stdout)
+        chats_output = json.loads(chats_result.stdout)
+        chats = _extract_data(chats_output, "chats")
         chat_jid = chats[0]["jid"]
 
         # Filter messages to that chat
@@ -353,14 +383,16 @@ class TestWhatsAppCLIMessages:
         )
         assert result.returncode == 0
 
-        messages = json.loads(result.stdout)
+        output = json.loads(result.stdout)
+        messages = _extract_data(output, "messages")
         for msg in messages:
             assert msg["chat_jid"] == chat_jid
 
     def test_messages_include_reactions(self, whatsapp_cli, whatsapp_data_dir):
         """Test that messages include reactions when present."""
         result = whatsapp_cli("messages", data_dir=whatsapp_data_dir)
-        messages = json.loads(result.stdout)
+        output = json.loads(result.stdout)
+        messages = _extract_data(output, "messages")
 
         # Find a message with reactions (from sample data)
         messages_with_reactions = [m for m in messages if m.get("reactions")]
@@ -380,7 +412,8 @@ class TestWhatsAppCLISearch:
         result = whatsapp_cli("search", "lunch", data_dir=whatsapp_data_dir)
         assert result.returncode == 0
 
-        messages = json.loads(result.stdout)
+        output = json.loads(result.stdout)
+        messages = _extract_data(output, "messages")
         assert len(messages) > 0
         for msg in messages:
             assert "lunch" in msg.get("text", "").lower()
@@ -392,7 +425,8 @@ class TestWhatsAppCLISearch:
         )
         assert result.returncode == 0
 
-        messages = json.loads(result.stdout)
+        output = json.loads(result.stdout)
+        messages = _extract_data(output, "messages")
         assert len(messages) <= 2
 
 

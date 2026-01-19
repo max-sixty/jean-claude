@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
@@ -270,4 +271,81 @@ func printJSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
+}
+
+// DataStatus contains information about authentication and data freshness.
+// Used to warn agents when data may be incomplete or stale.
+type DataStatus struct {
+	Authenticated   bool   `json:"authenticated"`
+	LastMessageTime int64  `json:"last_message_time,omitempty"` // Unix timestamp of most recent message
+	Warning         string `json:"warning,omitempty"`           // Human-readable warning if issues detected
+}
+
+// staleDataThreshold is the age in seconds after which data is considered stale.
+// Currently 1 hour - if the most recent message is older than this, agents are warned.
+const staleDataThreshold = 3600
+
+// getDataStatus checks authentication status and data freshness.
+// Returns status info that can be included in command output.
+func getDataStatus() DataStatus {
+	status := DataStatus{
+		Authenticated:   checkAuthenticated(),
+		LastMessageTime: getLastMessageTime(),
+	}
+
+	// Generate warning if there are issues
+	var warnings []string
+	if !status.Authenticated {
+		warnings = append(warnings, "WhatsApp not authenticated - run 'whatsapp auth' to connect")
+	}
+	if status.LastMessageTime > 0 {
+		ageSeconds := currentUnixTime() - status.LastMessageTime
+		if ageSeconds > staleDataThreshold {
+			ageDays := ageSeconds / 86400
+			if ageDays >= 1 {
+				warnings = append(warnings, fmt.Sprintf("Data is %d days old - new messages may be missing", ageDays))
+			} else {
+				ageHours := ageSeconds / 3600
+				warnings = append(warnings, fmt.Sprintf("Data is %d hours old - new messages may be missing", ageHours))
+			}
+		}
+	}
+
+	if len(warnings) > 0 {
+		status.Warning = strings.Join(warnings, "; ")
+	}
+
+	return status
+}
+
+// checkAuthenticated checks if WhatsApp is authenticated by looking for a device ID
+// in the session store. This is faster than initializing the full client.
+func checkAuthenticated() bool {
+	sessionPath := configDir + "/session.db"
+	db, err := sql.Open("sqlite", sessionPath)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = db.Close() }()
+
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM whatsmeow_device WHERE jid IS NOT NULL AND jid != ''").Scan(&count)
+	return err == nil && count > 0
+}
+
+// getLastMessageTime returns the timestamp of the most recent message in the database.
+func getLastMessageTime() int64 {
+	if messageDB == nil {
+		return 0
+	}
+	var lastTime sql.NullInt64
+	if err := messageDB.QueryRow("SELECT MAX(timestamp) FROM messages").Scan(&lastTime); err == nil && lastTime.Valid {
+		return lastTime.Int64
+	}
+	return 0
+}
+
+// currentUnixTime returns the current Unix timestamp.
+func currentUnixTime() int64 {
+	return time.Now().Unix()
 }

@@ -660,6 +660,13 @@ func cmdMessages(args []string) error {
 		return err
 	}
 
+	// Check data status (will be included in output if there are issues)
+	var dataStatus DataStatus
+	if !unreadOnly {
+		// Only check/warn if not syncing - --unread will sync first anyway
+		dataStatus = getDataStatus()
+	}
+
 	// Auto-sync when checking unread messages to ensure fresh data
 	if unreadOnly {
 		if err := initClient(ctx); err != nil {
@@ -798,6 +805,15 @@ func cmdMessages(args []string) error {
 				msg["reactions"] = reactions
 			}
 		}
+	}
+
+	// Include data status warning in output if there are issues
+	if dataStatus.Warning != "" {
+		output := map[string]any{
+			"messages": messages,
+			"_status":  dataStatus,
+		}
+		return printJSON(output)
 	}
 
 	return printJSON(messages)
@@ -966,6 +982,9 @@ func cmdChats(args []string) error {
 		return err
 	}
 
+	// Check data status and warn if there are issues
+	dataStatus := getDataStatus()
+
 	// Parse args
 	var unreadOnly bool
 	for i := 0; i < len(args); i++ {
@@ -1045,6 +1064,15 @@ func cmdChats(args []string) error {
 		chats = append(chats, chat)
 	}
 
+	// Include data status warning in output if there are issues
+	if dataStatus.Warning != "" {
+		output := map[string]any{
+			"chats":   chats,
+			"_status": dataStatus,
+		}
+		return printJSON(output)
+	}
+
 	return printJSON(chats)
 }
 
@@ -1057,6 +1085,9 @@ func cmdSearch(args []string) error {
 	if err := initMessageDB(); err != nil {
 		return err
 	}
+
+	// Check data status (will be included in output if there are issues)
+	dataStatus := getDataStatus()
 
 	// Parse args - first non-flag arg is query
 	var query string
@@ -1127,6 +1158,15 @@ func cmdSearch(args []string) error {
 			msg["media_type"] = mediaType.String
 		}
 		messages = append(messages, msg)
+	}
+
+	// Include data status warning in output if there are issues
+	if dataStatus.Warning != "" {
+		output := map[string]any{
+			"messages": messages,
+			"_status":  dataStatus,
+		}
+		return printJSON(output)
 	}
 
 	return printJSON(messages)
