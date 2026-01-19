@@ -38,17 +38,102 @@ func cmdAuth() error {
 		return nil
 	}
 
+	// Initialize message DB to save history sync data
+	if err := initMessageDB(); err != nil {
+		return err
+	}
+
 	// Channel to signal when pairing is complete
 	pairComplete := make(chan struct{})
 
-	// Add event handler to detect when pairing is truly complete
+	// Track history sync progress
+	var historyReceived atomic.Bool
+	var messageCount atomic.Int64
+	var lastActivity atomic.Int64
+	var stopProcessing atomic.Bool
+	lastActivity.Store(time.Now().UnixNano())
+
+	// Add event handler to detect when pairing is truly complete and save history
 	client.AddEventHandler(func(evt interface{}) {
-		switch evt.(type) {
+		// Stop processing events once we've decided to disconnect
+		if stopProcessing.Load() {
+			return
+		}
+		lastActivity.Store(time.Now().UnixNano())
+		switch v := evt.(type) {
 		case *events.PairSuccess:
 			fmt.Fprintln(os.Stderr, "Device paired successfully!")
 		case *events.Connected:
 			fmt.Fprintln(os.Stderr, "Connected to WhatsApp!")
 			close(pairComplete)
+		case *events.HistorySync:
+			historyReceived.Store(true)
+			for _, conv := range v.Data.Conversations {
+				chatJID := conv.GetID()
+				isGroup := strings.HasSuffix(chatJID, "@g.us")
+				unreadCount := int(conv.GetUnreadCount())
+
+				if unreadCount == 0 && !conv.GetMarkedAsUnread() {
+					if _, err := messageDB.Exec(`UPDATE messages SET is_read = 1 WHERE chat_jid = ? AND is_read = 0`, chatJID); err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: failed to mark chat messages read during history sync: %v\n", err)
+					}
+				}
+
+				var latestTimestamp int64
+				type msgInfo struct {
+					msg       *waWeb.WebMessageInfo
+					timestamp int64
+					isFromMe  bool
+				}
+				var messages []msgInfo
+
+				for _, msg := range conv.Messages {
+					if m := msg.Message; m != nil {
+						ts := int64(m.GetMessageTimestamp())
+						isFromMe := m.GetKey().GetFromMe()
+						messages = append(messages, msgInfo{m, ts, isFromMe})
+						if ts > latestTimestamp {
+							latestTimestamp = ts
+						}
+					}
+				}
+
+				sort.Slice(messages, func(i, j int) bool {
+					return messages[i].timestamp > messages[j].timestamp
+				})
+
+				incomingCount := 0
+				for _, m := range messages {
+					isRead := m.isFromMe || incomingCount >= unreadCount
+					saved, err := saveHistoryMessageWithReadStatus(chatJID, m.msg, isRead)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "Failed to save history message: %v\n", err)
+					} else if saved {
+						messageCount.Add(1)
+						if !m.isFromMe {
+							incomingCount++
+						}
+					}
+				}
+
+				chatName := getChatName(ctx, chatJID, isGroup)
+				if latestTimestamp > 0 || chatName != "" {
+					if err := saveChat(chatJID, chatName, isGroup, latestTimestamp, conv.GetMarkedAsUnread()); err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: failed to save chat %s: %v\n", chatJID, err)
+					}
+				}
+			}
+			fmt.Fprintf(os.Stderr, "  History sync: %d messages saved\n", messageCount.Load())
+		case *events.Message:
+			if err := saveMessage(v); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to save message: %v\n", err)
+			} else {
+				messageCount.Add(1)
+			}
+		case *events.PushName:
+			if err := saveContact(v.JID.String(), "", v.NewPushName); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to save contact: %v\n", err)
+			}
 		}
 	})
 
@@ -82,10 +167,52 @@ func cmdAuth() error {
 			fmt.Fprintln(os.Stderr, "Waiting for device sync to complete...")
 			select {
 			case <-pairComplete:
-				fmt.Fprintln(os.Stderr, "Device registration complete!")
+				fmt.Fprintln(os.Stderr, "Connected! Waiting for history sync...")
 			case <-time.After(60 * time.Second):
 				fmt.Fprintln(os.Stderr, "Warning: Timed out waiting for connection, but auth may still be valid")
+				stopProcessing.Store(true)
+				time.Sleep(500 * time.Millisecond)
+				client.Disconnect()
+				return nil
 			}
+
+			// Wait for history sync to complete using idle detection
+			// History sync can take a while on first pair - use longer timeout
+			// WhatsApp sends history in batches with gaps, so we need longer idle detection
+			const (
+				minWaitTime = 5 * time.Second   // Minimum time to wait for history to start
+				idleTimeout = 5 * time.Second   // Exit after this much silence (history comes in bursts with gaps)
+				maxSyncTime = 180 * time.Second // Safety cap for large histories (3 min)
+			)
+			ticker := time.NewTicker(100 * time.Millisecond)
+			maxWait := time.After(maxSyncTime)
+			minWait := time.After(minWaitTime)
+			minWaitDone := false
+
+		SyncLoop:
+			for {
+				select {
+				case <-maxWait:
+					fmt.Fprintln(os.Stderr, "History sync timeout reached")
+					break SyncLoop
+				case <-minWait:
+					minWaitDone = true
+				case <-ticker.C:
+					// Only check idle after minimum wait and after we've received some history
+					if minWaitDone && historyReceived.Load() && time.Since(time.Unix(0, lastActivity.Load())) > idleTimeout {
+						break SyncLoop
+					}
+				}
+			}
+			ticker.Stop()
+
+			// Stop processing any more events before we disconnect
+			stopProcessing.Store(true)
+
+			// Give a moment for any in-flight event handlers to complete
+			time.Sleep(500 * time.Millisecond)
+
+			fmt.Fprintf(os.Stderr, "Device registration complete! %d messages synced.\n", messageCount.Load())
 			client.Disconnect()
 			return nil
 		case "timeout":
