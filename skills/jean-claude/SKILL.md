@@ -232,9 +232,11 @@ Agent: _searches for sent messages to Acme_
 - User asks about current counts or status
 - User asks "did I..." or "is it still..."
 - Presenting a summary after taking actions
+- You need metadata (dates, IDs, recipients) — conversation summaries lose it,
+  so re-query the API rather than inferring from content
 
-**General principle:** If you're about to make a claim about current state, that's
-a signal to verify it first.
+**General principle:** Verify claims from the source. Re-fetching is cheap;
+wrong information is expensive.
 
 ```bash
 # Re-fetch inbox for email updates
