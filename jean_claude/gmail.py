@@ -767,15 +767,47 @@ def cli():
     """Gmail CLI - search, draft, and send emails."""
 
 
+def _parse_date(date_str: str) -> str:
+    """Parse a date string (human-readable or explicit) to YYYY/MM/DD format.
+
+    Accepts:
+        - Human-readable: "yesterday", "last week", "3 days ago", "Monday"
+        - Explicit: "2026-01-21", "Jan 21", "January 21 2026"
+
+    Returns date in Gmail's after: format (YYYY/MM/DD).
+    Raises JeanClaudeError if parsing fails.
+    """
+    from datetime import datetime
+
+    import dateparser
+
+    parsed = dateparser.parse(
+        date_str,
+        settings={
+            "PREFER_DATES_FROM": "past",
+            "RELATIVE_BASE": datetime.now(tz=LOCAL_TZ).replace(tzinfo=None),
+        },
+    )
+    if parsed is None:
+        raise JeanClaudeError(f"Could not parse date: {date_str!r}")
+    return parsed.strftime("%Y/%m/%d")
+
+
 @cli.command()
 @click.option("-n", "--max-results", default=100, help="Maximum results")
 @click.option("--unread", is_flag=True, help="Only show unread threads")
+@click.option(
+    "--since", help="Only show emails from this date (e.g., 'yesterday', '3 days ago')"
+)
 @click.option("--page-token", help="Token for next page of results")
-def inbox(max_results: int, unread: bool, page_token: str | None):
+def inbox(max_results: int, unread: bool, since: str | None, page_token: str | None):
     """List threads in inbox.
 
     Returns threads (conversations) matching Gmail UI behavior.
     A thread shows as unread if ANY message in it is unread.
+
+    Use --since to filter by date (recommended over -n for complete results).
+    Accepts human-readable dates like "yesterday", "last week", "3 days ago".
 
     Note: Gmail has a known bug where previously-snoozed threads may appear in
     --unread results even after being read. The snooze state isn't exposed via
@@ -785,7 +817,9 @@ def inbox(max_results: int, unread: bool, page_token: str | None):
     query = "in:inbox"
     if unread:
         query += " is:unread"
-    _search_threads(query, max_results, page_token)
+    if since:
+        query += f" after:{_parse_date(since)}"
+    _search_threads(query, max_results, page_token, include_inbox_counts=True)
 
 
 @cli.command()
@@ -899,15 +933,44 @@ def _search_messages(query: str, max_results: int, page_token: str | None = None
     )
 
 
-def _search_threads(query: str, max_results: int, page_token: str | None = None):
+def _get_inbox_counts(service) -> dict:
+    """Get total thread and unread counts for inbox.
+
+    Uses Gmail's labels.get API which provides accurate counts without
+    needing to paginate through all messages.
+    """
+    label = service.users().labels().get(userId="me", id="INBOX").execute()
+    return {
+        "total_threads": label.get("threadsTotal", 0),
+        "total_unread": label.get("threadsUnread", 0),
+    }
+
+
+def _search_threads(
+    query: str,
+    max_results: int,
+    page_token: str | None = None,
+    include_inbox_counts: bool = False,
+):
     """Search for threads, returning thread-level summaries.
 
     This matches Gmail UI behavior where conversations (threads) are shown,
     not individual messages. A thread appears in inbox if ANY message has
     INBOX label, and shows as unread if ANY message is unread.
+
+    Args:
+        query: Gmail search query
+        max_results: Maximum threads to return
+        page_token: Pagination token
+        include_inbox_counts: If True, include total_threads and total_unread
+            from the INBOX label (useful for inbox command to show accurate counts)
     """
     logger.info(f"Searching threads: {query}", max_results=max_results)
     service = get_gmail()
+
+    # Fetch inbox counts first if requested (single API call)
+    inbox_counts = _get_inbox_counts(service) if include_inbox_counts else None
+
     list_kwargs = {"userId": "me", "q": query, "maxResults": max_results}
     if page_token:
         list_kwargs["pageToken"] = page_token
@@ -917,9 +980,10 @@ def _search_threads(query: str, max_results: int, page_token: str | None = None)
     logger.debug(f"Found {len(threads)} threads")
 
     if not threads:
-        click.echo(
-            json.dumps(paginated_output("threads", [], next_page_token), indent=2)
-        )
+        output = paginated_output("threads", [], next_page_token)
+        if inbox_counts:
+            output.update(inbox_counts)
+        click.echo(json.dumps(output, indent=2))
         return
 
     # Batch fetch threads (10/chunk - threads.get is heavier than messages.get)
@@ -934,9 +998,10 @@ def _search_threads(query: str, max_results: int, page_token: str | None = None)
         for t in threads
         if t["id"] in responses
     ]
-    click.echo(
-        json.dumps(paginated_output("threads", detailed, next_page_token), indent=2)
-    )
+    output = paginated_output("threads", detailed, next_page_token)
+    if inbox_counts:
+        output.update(inbox_counts)
+    click.echo(json.dumps(output, indent=2))
 
 
 # Draft command group

@@ -5,6 +5,9 @@ Usage: jean-claude gmail inbox [OPTIONS]
   Returns threads (conversations) matching Gmail UI behavior. A thread shows
   as unread if ANY message in it is unread.
 
+  Use --since to filter by date (recommended over -n for complete results).
+  Accepts human-readable dates like "yesterday", "last week", "3 days ago".
+
   Note: Gmail has a known bug where previously-snoozed threads may appear in
   --unread results even after being read. The snooze state isn't exposed via
   the API, so we can't filter these client-side. See:
@@ -13,5 +16,7 @@ Usage: jean-claude gmail inbox [OPTIONS]
 Options:
   -n, --max-results INTEGER  Maximum results
   --unread                   Only show unread threads
+  --since TEXT               Only show emails from this date (e.g.,
+                             'yesterday', '3 days ago')
   --page-token TEXT          Token for next page of results
   --help                     Show this message and exit.

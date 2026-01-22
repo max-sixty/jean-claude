@@ -239,8 +239,8 @@ Agent: _searches for sent messages to Acme_
 wrong information is expensive.
 
 ```bash
-# Re-fetch inbox for email updates
-jean-claude gmail inbox -n 20
+# Re-fetch inbox for email updates (use --since for complete results)
+jean-claude gmail inbox --since yesterday
 
 # Check sent messages to verify replies
 jean-claude gmail search "in:sent to:someone@example.com" -n 5
@@ -328,6 +328,26 @@ date "+%Y-%m-%d %H:%M %Z"  # Current date/time for reference
 - Quote or paraphrase what's actually there
 
 When uncertain, say so: "The email doesn't specify who the assessment is for."
+
+### Accurate Counts
+
+**Use the `total_threads` and `total_unread` fields from the inbox response.**
+
+The inbox command returns accurate counts from Gmail's label stats:
+
+```json
+{"total_threads": 32, "total_unread": 28, "threads": [...]}
+```
+
+When reporting counts, use these fields — not the number of threads returned.
+The `-n` flag limits how many threads are fetched, not how many exist.
+
+**Prefer `--since` over `-n` for complete results.** If you need emails from
+today, use `--since today` rather than `-n 20`. The `-n` flag returns the
+N most recent threads but may miss older unread emails in the inbox.
+
+The `--since` flag accepts human-readable dates like "yesterday", "3 days ago",
+"last week", or explicit dates like "2026-01-21".
 
 Hallucinated details erode trust. The user can't distinguish fabrications from
 real data.
@@ -909,9 +929,18 @@ jean-claude gmail search "from:newsletter@example.com" -n 10
 # Unread inbox emails
 jean-claude gmail search "in:inbox is:unread"
 
-# Shortcut for inbox
+# Shortcut for inbox (includes total_threads and total_unread counts)
 jean-claude gmail inbox
 jean-claude gmail inbox --unread
+
+# Use --since for complete results from a date (preferred over -n)
+# Accepts human-readable dates like "yesterday", "last week", "3 days ago"
+jean-claude gmail inbox --since yesterday
+jean-claude gmail inbox --since "3 days ago"
+jean-claude gmail inbox --since "last week"
+jean-claude gmail inbox --since 2026-01-20
+
+# -n limits results but may miss older emails - use --since instead
 jean-claude gmail inbox -n 5
 
 # Inbox also supports pagination
