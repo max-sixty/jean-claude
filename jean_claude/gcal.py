@@ -518,15 +518,13 @@ def invitations(days: int | None, expand: bool, calendar: tuple[str, ...]):
 @click.option(
     "--notify/--no-notify", default=True, help="Notify organizer (default: notify)"
 )
-@click.option(
-    "--calendar",
-    default="primary",
-    help="Calendar ID, email, or name (default: primary)",
-)
-def respond(event_id: str, response: str, notify: bool, calendar: str):
+def respond(event_id: str, response: str, notify: bool):
     """Respond to a calendar invitation.
 
     EVENT_ID: The event ID (from invitations or list output)
+
+    Invitations are always responded to from your primary calendar, where you
+    are listed as an attendee.
 
     \b
     Examples:
@@ -537,11 +535,12 @@ def respond(event_id: str, response: str, notify: bool, calendar: str):
     if not response:
         raise click.UsageError("Must specify --accept, --decline, or --tentative")
 
-    calendar_id = resolve_calendar_id(calendar)
+    # Invitations are received on the user's primary calendar, not on the
+    # organizer's calendar. Always use primary to find the user's attendee entry.
     service = get_calendar()
 
-    # Get the event
-    event = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
+    # Get the event from primary calendar
+    event = service.events().get(calendarId="primary", eventId=event_id).execute()
 
     # Find the user's attendee entry and update their response
     attendees = event.get("attendees", [])
@@ -563,7 +562,7 @@ def respond(event_id: str, response: str, notify: bool, calendar: str):
     # Update the event with new response status
     send_updates = "all" if notify else "none"
     service.events().patch(
-        calendarId=calendar_id,
+        calendarId="primary",
         eventId=event_id,
         body={"attendees": attendees},
         sendUpdates=send_updates,
