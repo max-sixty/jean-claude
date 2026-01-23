@@ -239,7 +239,10 @@ Agent: _searches for sent messages to Acme_
 wrong information is expensive.
 
 ```bash
-# Re-fetch inbox for email updates (use --since for complete results)
+# Check full inbox state (total count, all threads)
+jean-claude gmail inbox
+
+# Check recent emails only (useful for "what's new")
 jean-claude gmail inbox --since yesterday
 
 # Check sent messages to verify replies
@@ -251,6 +254,13 @@ jean-claude imessage messages --unread
 # Re-sync WhatsApp for message updates
 jean-claude whatsapp messages --unread
 ```
+
+**Choosing between filtered and full inbox:**
+
+- **`--since yesterday`** — Use for "what's new" or daily triage. Shows recent
+  arrivals only. After archiving these, there may still be older emails in inbox.
+- **No filter** — Use when reporting inbox state ("inbox cleared", "X emails
+  left") or when the user wants to see everything, not just recent.
 
 ## Defaults
 
@@ -348,6 +358,22 @@ N most recent threads but may miss older unread emails in the inbox.
 
 The `--since` flag accepts human-readable dates like "yesterday", "3 days ago",
 "last week", or explicit dates like "2026-01-21".
+
+### Filtered Results
+
+When `--since` or `--unread` is used, the `threads` array is a **subset** of
+the full inbox. The `total_threads` and `total_unread` fields still reflect the
+full inbox, not the filtered results.
+
+**Report filtered results accurately:**
+
+- "6 threads from yesterday (32 total in inbox, 28 unread)"
+- "Archived 6 threads from yesterday"
+
+**Never claim "inbox cleared" after archiving filtered results.** If you
+archived 6 threads from `--since yesterday` and `total_threads` was 32, there
+are still 26 other threads in the inbox. To check true inbox state after
+triaging recent emails, run `jean-claude gmail inbox` without filters.
 
 Hallucinated details erode trust. The user can't distinguish fabrications from
 real data.
