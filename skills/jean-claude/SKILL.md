@@ -395,6 +395,31 @@ real data.
 **The test:** If the user might need to quote, reference, or respond to the exact
 wording, show the full text. If they just need to understand the gist, summarize.
 
+### Presenting Individual Emails
+
+When showing the full text of an email, include all relevant headers:
+
+```
+From: Sender Name <sender@example.com>
+To: Recipient <recipient@example.com>
+Date: Yesterday at 9:54 PM
+Subject: Meeting follow-up
+
+[email body]
+```
+
+**Always include:**
+- **From** — Who sent it
+- **To** — Who it was sent to (important for context, especially forwarded emails)
+- **Date** — When it was sent (use conversational format per date rules above)
+- **Subject** — The email subject
+
+**Include when present:**
+- **CC** — If others were copied
+
+The To field helps the user understand context — was this sent directly to them,
+to a group, or forwarded from somewhere else?
+
 <example>
 <bad>
 
@@ -414,7 +439,10 @@ User: "Reply to Alex's email and say I can't make it"
 
 Agent: _reads email, shows it first_
 
-"Alex's email (Sunday 9:34 PM):
+"From: Alex Chen <alex@sequoiacap.com>
+To: Max <max@example.com>
+Date: Sunday at 9:34 PM
+Subject: Re: Napa Trip Logistics
 
 > Hey- Sam is going to fly back on Friday with Jordan and me. Same itinerary
 > as Jordan all the way back to LA. please let the office know. Also she'll
