@@ -460,19 +460,13 @@ Hi Alex,
 
 ### Marking Messages as Read
 
-When you show the full body of a message to the user — not just the snippet
-from a list — mark it as read. The user has effectively read it.
+When you show the full body of a message — not just a snippet from a list —
+mark it as read. The `gmail message` and `gmail thread` commands print a
+reminder with the exact command to run.
 
-**Mark as read when:**
-- Reading the full email body (via `jean-claude gmail message` or reading the cached body file)
-- Creating a reply or forward (you read the original to compose the response)
-- The user explicitly asks to read a specific message
+**Don't mark as read** when only showing inbox/search results (snippets).
 
-**Don't mark as read when:**
-- Showing inbox/search results (snippets only)
-- Listing messages without showing full content
-
-This applies across messaging services:
+Cross-service commands:
 - Gmail: `jean-claude gmail mark-read THREAD_ID`
 - iMessage: `jean-claude imessage mark-read CHAT_ID`
 - WhatsApp: `jean-claude whatsapp mark-read CHAT_ID`
@@ -1018,6 +1012,16 @@ jean-claude gmail thread THREAD_ID
 ```
 
 Use this when you have a specific message ID and want to read its full content.
+
+**Mark as read after fetching.** When you fetch unread messages, the command
+prints a reminder with the exact mark-read command to run:
+
+```
+To mark as read: jean-claude gmail mark-read THREAD_ID
+```
+
+Run that command after presenting the content to the user. This also applies
+when creating replies or forwards (you read the original to compose the response).
 
 ### Drafts
 

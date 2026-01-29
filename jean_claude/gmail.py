@@ -855,6 +855,7 @@ def message(message_ids: tuple[str, ...], headers: bool):
     """
     service = get_gmail()
     summaries = []
+    unread_thread_ids = set()
     for message_id in message_ids:
         msg = (
             service.users()
@@ -863,7 +864,14 @@ def message(message_ids: tuple[str, ...], headers: bool):
             .execute()
         )
         summaries.append(extract_message_summary(msg, include_headers=headers))
+        if "UNREAD" in msg.get("labelIds", []):
+            unread_thread_ids.add(msg["threadId"])
     click.echo(json.dumps(summaries, indent=2))
+
+    # Hint to mark as read after viewing full content
+    if unread_thread_ids:
+        ids = " ".join(sorted(unread_thread_ids))
+        logger.info(f"To mark as read: jean-claude gmail mark-read {ids}")
 
 
 @cli.command()
@@ -886,6 +894,7 @@ def thread(thread_ids: tuple[str, ...], headers: bool):
     """
     service = get_gmail()
     summaries = []
+    unread_thread_ids = set()
     for thread_id in thread_ids:
         thread_data = (
             service.users()
@@ -895,7 +904,14 @@ def thread(thread_ids: tuple[str, ...], headers: bool):
         )
         for msg in thread_data.get("messages", []):
             summaries.append(extract_message_summary(msg, include_headers=headers))
+            if "UNREAD" in msg.get("labelIds", []):
+                unread_thread_ids.add(msg["threadId"])
     click.echo(json.dumps(summaries, indent=2))
+
+    # Hint to mark as read after viewing full content
+    if unread_thread_ids:
+        ids = " ".join(sorted(unread_thread_ids))
+        logger.info(f"To mark as read: jean-claude gmail mark-read {ids}")
 
 
 def _search_messages(query: str, max_results: int, page_token: str | None = None):
