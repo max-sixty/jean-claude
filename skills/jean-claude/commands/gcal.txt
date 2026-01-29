@@ -7,8 +7,10 @@ Options:
 
 Commands:
   calendars    List available calendars.
+  conflicts    Find overlapping events (scheduling conflicts).
   create       Create a calendar event.
   delete       Delete/cancel a calendar event.
+  freebusy     Check availability across calendars.
   invitations  List pending calendar invitations.
   list         List calendar events.
   respond      Respond to a calendar invitation.

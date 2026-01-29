@@ -1,0 +1,19 @@
+Usage: jean-claude gcal conflicts [OPTIONS]
+
+  Find overlapping events (scheduling conflicts).
+
+  Compares all timed events in the date range and reports pairs that overlap.
+  All-day events are excluded from conflict detection.
+
+  Examples:
+      jean-claude gcal conflicts
+      jean-claude gcal conflicts --from today --to "2 weeks"
+      jean-claude gcal conflicts --calendar work --calendar personal
+
+Options:
+  --from TEXT      Start date (e.g., 2024-01-15, today). Relative dates prefer
+                   future.
+  --to TEXT        End date (e.g., friday, '2 weeks'). Relative dates prefer
+                   future.
+  --calendar TEXT  Calendar ID, email, or name (repeatable; default: primary)
+  --help           Show this message and exit.

@@ -9,9 +9,9 @@ Usage: jean-claude gcal create [OPTIONS] SUMMARY
       jean-claude gcal create "Vacation" --start 2024-01-15 --end 2024-01-20 --all-day
 
 Options:
-  --start TEXT        Start time (YYYY-MM-DD HH:MM) or date (YYYY-MM-DD)
+  --start TEXT        Start time (e.g., 2024-01-15 14:00, tomorrow 2pm)
                       [required]
-  --end TEXT          End time (YYYY-MM-DD HH:MM) or date (YYYY-MM-DD)
+  --end TEXT          End time (e.g., 2024-01-15 15:00, tomorrow 3pm)
   --duration INTEGER  Duration in minutes (or days if --all-day)
   --all-day           Create all-day event (uses date only)
   --location TEXT     Event location

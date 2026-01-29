@@ -4,9 +4,6 @@ Usage: jean-claude gcal respond [OPTIONS] EVENT_ID
 
   EVENT_ID: The event ID (from invitations or list output)
 
-  Invitations are always responded to from your primary calendar, where you
-  are listed as an attendee.
-
   Examples:
       jean-claude gcal respond EVENT_ID --accept
       jean-claude gcal respond EVENT_ID --decline --no-notify
@@ -17,4 +14,5 @@ Options:
   --decline               Decline the invitation
   --tentative             Tentatively accept
   --notify / --no-notify  Notify organizer (default: notify)
+  --calendar TEXT         Calendar ID, email, or name (default: primary)
   --help                  Show this message and exit.

@@ -17,6 +17,6 @@ Options:
   -n, --max-results INTEGER  Maximum results
   --unread                   Only show unread threads
   --since TEXT               Only show emails from this date (e.g.,
-                             'yesterday', '3 days ago')
+                             'yesterday', 'monday'). Prefers past.
   --page-token TEXT          Token for next page of results
   --help                     Show this message and exit.

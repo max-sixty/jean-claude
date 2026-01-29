@@ -215,6 +215,25 @@ uv run jean-claude gmail --help
 
 ## CLI API Conventions
 
+### Consistency Is Non-Negotiable
+
+Commands doing similar things must work the same way. When adding a new command,
+find an existing command that does something similar and match its patterns
+exactly.
+
+**Calendar resolution:** All gcal commands that accept calendars use
+`resolve_calendar_ids()`. This function accepts IDs, emails, or friendly names.
+Never accept raw calendar IDs directly — always resolve through this function.
+
+**Date parsing:** All date/time options use `parse_datetime()`. This handles ISO
+formats (`2024-01-15`), relative dates (`today`, `tomorrow`), and natural
+language (`next monday`, `in 3 days`). Don't parse dates manually.
+
+**Flag names:** Same concept = same flag name across all commands:
+- `--calendar` for calendar selection (not `--cal`, `--calendar-id`)
+- `--from` / `--to` for date ranges (not `--start-date`, `--after`)
+- `-n` / `--max-results` for limiting results (not `--limit`, `--count`)
+
 **Update commands should support all create options.** If `create` accepts a
 field, `update` should accept it too. Agents shouldn't need to delete and
 recreate resources just to change a field.

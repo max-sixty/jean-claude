@@ -4,8 +4,10 @@ Usage: jean-claude gcal list [OPTIONS]
 
 Options:
   --days INTEGER             Number of days to show (default: 1)
-  --from TEXT                Start date (YYYY-MM-DD)
-  --to TEXT                  End date (YYYY-MM-DD)
+  --from TEXT                Start date (e.g., 2024-01-15, today, monday).
+                             Relative dates prefer future.
+  --to TEXT                  End date (e.g., 2024-01-20, friday). Relative
+                             dates prefer future.
   -n, --max-results INTEGER  Maximum events to return per page
   --page-token TEXT          Token for next page of results
   --calendar TEXT            Calendar ID, email, or name (repeatable; default:

@@ -797,7 +797,8 @@ def _parse_date(date_str: str) -> str:
 @click.option("-n", "--max-results", default=100, help="Maximum results")
 @click.option("--unread", is_flag=True, help="Only show unread threads")
 @click.option(
-    "--since", help="Only show emails from this date (e.g., 'yesterday', '3 days ago')"
+    "--since",
+    help="Only show emails from this date (e.g., 'yesterday', 'monday'). Prefers past.",
 )
 @click.option("--page-token", help="Token for next page of results")
 def inbox(max_results: int, unread: bool, since: str | None, page_token: str | None):

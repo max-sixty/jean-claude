@@ -1,0 +1,18 @@
+Usage: jean-claude gcal freebusy [OPTIONS]
+
+  Check availability across calendars.
+
+  Returns busy time ranges for each calendar.
+
+  Examples:
+      jean-claude gcal freebusy --calendar "Work"
+      jean-claude gcal freebusy --calendar "Work" --calendar "Personal" --to "3 days"
+
+Options:
+  --from TEXT      Start date (e.g., 2024-01-15, today). Relative dates prefer
+                   future.
+  --to TEXT        End date (e.g., friday, '3 days'). Relative dates prefer
+                   future.
+  --calendar TEXT  Calendar ID, email, or name (repeatable, required)
+                   [required]
+  --help           Show this message and exit.

@@ -8,8 +8,8 @@ Usage: jean-claude gcal update [OPTIONS] EVENT_ID
 
 Options:
   --summary TEXT      New event title
-  --start TEXT        New start time (YYYY-MM-DD HH:MM) or date (YYYY-MM-DD)
-  --end TEXT          New end time (YYYY-MM-DD HH:MM) or date (YYYY-MM-DD)
+  --start TEXT        New start time (e.g., 2024-01-15 14:00, tomorrow 2pm)
+  --end TEXT          New end time (e.g., 2024-01-15 15:00, tomorrow 3pm)
   --duration INTEGER  New duration in minutes (or days if --all-day)
   --all-day           Make this an all-day event (uses date only)
   --location TEXT     New location

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import click
@@ -9,6 +10,8 @@ import pytest
 
 from jean_claude.gcal import (
     CalendarErrorHandlingGroup,
+    _events_overlap,
+    _parse_event_times,
     parse_datetime,
     resolve_calendar_ids,
 )
@@ -55,8 +58,48 @@ class TestParseDateTime:
     def test_invalid_format(self):
         """Test that invalid formats raise BadParameter."""
         with pytest.raises(click.BadParameter) as exc_info:
-            parse_datetime("January 15, 2024")
+            parse_datetime("not a date at all xyz")
         assert "Cannot parse datetime" in str(exc_info.value)
+
+    def test_relative_today(self):
+        """Test 'today' parses to current date."""
+        result = parse_datetime("today")
+        today = datetime.now()
+        assert result.year == today.year
+        assert result.month == today.month
+        assert result.day == today.day
+
+    def test_relative_tomorrow(self):
+        """Test 'tomorrow' parses to next day."""
+        result = parse_datetime("tomorrow")
+        tomorrow = datetime.now() + timedelta(days=1)
+        assert result.year == tomorrow.year
+        assert result.month == tomorrow.month
+        assert result.day == tomorrow.day
+
+    def test_relative_days(self):
+        """Test 'in 3 days' parses correctly."""
+        result = parse_datetime("in 3 days")
+        expected = datetime.now() + timedelta(days=3)
+        assert result.year == expected.year
+        assert result.month == expected.month
+        assert result.day == expected.day
+
+    def test_relative_week(self):
+        """Test '1 week' parses correctly."""
+        result = parse_datetime("in 1 week")
+        expected = datetime.now() + timedelta(weeks=1)
+        # Allow 1 day tolerance for edge cases around midnight
+        assert abs((result - expected).days) <= 1
+
+    def test_named_day(self):
+        """Test named days like 'monday' parse to future dates."""
+        result = parse_datetime("monday")
+        # Should be a valid datetime in the future
+        assert result >= datetime.now().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        assert result.weekday() == 0  # Monday is 0
 
 
 class TestResolveCalendarIds:
@@ -204,3 +247,77 @@ class TestCalendarErrorHandling:
 
         msg = handler._http_error_message(error)
         assert msg == "Not found: Not Found"
+
+
+class TestEventConflicts:
+    """Tests for conflict detection helpers."""
+
+    def test_parse_event_times_with_datetime(self):
+        """Events with dateTime should parse correctly."""
+        event = {
+            "start": {"dateTime": "2024-01-15T10:00:00-08:00"},
+            "end": {"dateTime": "2024-01-15T11:00:00-08:00"},
+        }
+        start, end = _parse_event_times(event)
+        assert start is not None
+        assert end is not None
+        assert start.hour == 10 or start.hour == 18  # Depends on TZ handling
+        assert end > start
+
+    def test_parse_event_times_all_day(self):
+        """All-day events should return None."""
+        event = {
+            "start": {"date": "2024-01-15"},
+            "end": {"date": "2024-01-16"},
+        }
+        start, end = _parse_event_times(event)
+        assert start is None
+        assert end is None
+
+    def test_events_overlap_true(self):
+        """Overlapping events should be detected."""
+        event1 = {
+            "start": {"dateTime": "2024-01-15T10:00:00Z"},
+            "end": {"dateTime": "2024-01-15T11:00:00Z"},
+        }
+        event2 = {
+            "start": {"dateTime": "2024-01-15T10:30:00Z"},
+            "end": {"dateTime": "2024-01-15T11:30:00Z"},
+        }
+        assert _events_overlap(event1, event2) is True
+
+    def test_events_overlap_false(self):
+        """Non-overlapping events should not be flagged."""
+        event1 = {
+            "start": {"dateTime": "2024-01-15T10:00:00Z"},
+            "end": {"dateTime": "2024-01-15T11:00:00Z"},
+        }
+        event2 = {
+            "start": {"dateTime": "2024-01-15T11:00:00Z"},
+            "end": {"dateTime": "2024-01-15T12:00:00Z"},
+        }
+        assert _events_overlap(event1, event2) is False
+
+    def test_events_overlap_one_contains_other(self):
+        """Event fully contained in another should overlap."""
+        event1 = {
+            "start": {"dateTime": "2024-01-15T09:00:00Z"},
+            "end": {"dateTime": "2024-01-15T17:00:00Z"},
+        }
+        event2 = {
+            "start": {"dateTime": "2024-01-15T10:00:00Z"},
+            "end": {"dateTime": "2024-01-15T11:00:00Z"},
+        }
+        assert _events_overlap(event1, event2) is True
+
+    def test_events_overlap_all_day_skipped(self):
+        """All-day events should not report conflicts."""
+        event1 = {
+            "start": {"date": "2024-01-15"},
+            "end": {"date": "2024-01-16"},
+        }
+        event2 = {
+            "start": {"dateTime": "2024-01-15T10:00:00Z"},
+            "end": {"dateTime": "2024-01-15T11:00:00Z"},
+        }
+        assert _events_overlap(event1, event2) is False

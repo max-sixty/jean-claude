@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from urllib.parse import unquote
 
 import click
+import dateparser
 from googleapiclient.errors import HttpError
 
 from .auth import build_service
@@ -144,12 +145,32 @@ def get_event_start(event: dict) -> str:
 
 
 def parse_datetime(s: str) -> datetime:
-    """Parse datetime from various formats."""
+    """Parse datetime from various formats including relative dates.
+
+    Supports:
+        - ISO-like: "2024-01-15", "2024-01-15 14:00", "2024/01/15"
+        - Relative: "today", "tomorrow", "yesterday"
+        - Named days: "monday", "next friday", "last tuesday"
+        - Relative periods: "3 days", "1 week", "in 2 hours"
+    """
+    # First try exact formats for unambiguous parsing
     for fmt in ["%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y/%m/%d %H:%M", "%Y/%m/%d"]:
         try:
             return datetime.strptime(s, fmt)
         except ValueError:
             continue
+
+    # Fall back to dateparser for relative dates
+    parsed = dateparser.parse(
+        s,
+        settings={
+            "PREFER_DATES_FROM": "future",
+            "RELATIVE_BASE": datetime.now(),
+        },
+    )
+    if parsed:
+        return parsed
+
     raise click.BadParameter(f"Cannot parse datetime: {s}")
 
 
@@ -200,10 +221,85 @@ def calendars():
     click.echo(json.dumps(output, indent=2))
 
 
+@cli.command()
+@click.option(
+    "--from",
+    "from_date",
+    default="today",
+    help="Start date (e.g., 2024-01-15, today). Relative dates prefer future.",
+)
+@click.option(
+    "--to",
+    "to_date",
+    default="1 week",
+    help="End date (e.g., friday, '3 days'). Relative dates prefer future.",
+)
+@click.option(
+    "--calendar",
+    "calendars",
+    multiple=True,
+    required=True,
+    help="Calendar ID, email, or name (repeatable, required)",
+)
+def freebusy(from_date: str, to_date: str, calendars: tuple[str, ...]):
+    """Check availability across calendars.
+
+    Returns busy time ranges for each calendar.
+
+    \b
+    Examples:
+        jean-claude gcal freebusy --calendar "Work"
+        jean-claude gcal freebusy --calendar "Work" --calendar "Personal" --to "3 days"
+    """
+    calendar_ids = resolve_calendar_ids(calendars)
+
+    time_min = parse_datetime(from_date).replace(tzinfo=LOCAL_TZ)
+    time_max = parse_datetime(to_date).replace(
+        hour=23, minute=59, second=59, tzinfo=LOCAL_TZ
+    )
+
+    # If to_date parsed to before from_date, it's likely a duration like "1 week"
+    # that dateparser interpreted relative to now. Fall back to 7 days from start.
+    if time_max <= time_min:
+        time_max = time_min + timedelta(days=7)
+
+    service = get_calendar()
+    body = {
+        "timeMin": time_min.isoformat(),
+        "timeMax": time_max.isoformat(),
+        "items": [{"id": cal_id} for cal_id, _ in calendar_ids],
+    }
+
+    result = service.freebusy().query(body=body).execute()
+
+    # Output as list to avoid duplicate name collisions
+    output = []
+    id_to_name = {cal_id: name for cal_id, name in calendar_ids}
+    for cal_id, cal_data in result.get("calendars", {}).items():
+        output.append(
+            {
+                "id": cal_id,
+                "name": id_to_name.get(cal_id, cal_id),
+                "busy": cal_data.get("busy", []),
+                "errors": cal_data.get("errors", []),
+            }
+        )
+
+    click.echo(json.dumps(output, indent=2))
+
+
 @cli.command("list")
 @click.option("--days", default=1, help="Number of days to show (default: 1)")
-@click.option("--from", "from_date", help="Start date (YYYY-MM-DD)")
-@click.option("--to", "to_date", help="End date (YYYY-MM-DD)")
+@click.option(
+    "--from",
+    "from_date",
+    help="Start date (e.g., 2024-01-15, today, monday). Relative dates prefer future.",
+)
+@click.option(
+    "--to",
+    "to_date",
+    help="End date (e.g., 2024-01-20, friday). Relative dates prefer future.",
+)
 @click.option("-n", "--max-results", type=int, help="Maximum events to return per page")
 @click.option("--page-token", help="Token for next page of results")
 @click.option(
@@ -275,9 +371,11 @@ def list_events(
 @cli.command()
 @click.argument("summary")
 @click.option(
-    "--start", required=True, help="Start time (YYYY-MM-DD HH:MM) or date (YYYY-MM-DD)"
+    "--start",
+    required=True,
+    help="Start time (e.g., 2024-01-15 14:00, tomorrow 2pm)",
 )
-@click.option("--end", help="End time (YYYY-MM-DD HH:MM) or date (YYYY-MM-DD)")
+@click.option("--end", help="End time (e.g., 2024-01-15 15:00, tomorrow 3pm)")
 @click.option("--duration", type=int, help="Duration in minutes (or days if --all-day)")
 @click.option(
     "--all-day", "all_day", is_flag=True, help="Create all-day event (uses date only)"
@@ -518,13 +616,15 @@ def invitations(days: int | None, expand: bool, calendar: tuple[str, ...]):
 @click.option(
     "--notify/--no-notify", default=True, help="Notify organizer (default: notify)"
 )
-def respond(event_id: str, response: str, notify: bool):
+@click.option(
+    "--calendar",
+    default="primary",
+    help="Calendar ID, email, or name (default: primary)",
+)
+def respond(event_id: str, response: str, notify: bool, calendar: str):
     """Respond to a calendar invitation.
 
     EVENT_ID: The event ID (from invitations or list output)
-
-    Invitations are always responded to from your primary calendar, where you
-    are listed as an attendee.
 
     \b
     Examples:
@@ -535,12 +635,11 @@ def respond(event_id: str, response: str, notify: bool):
     if not response:
         raise click.UsageError("Must specify --accept, --decline, or --tentative")
 
-    # Invitations are received on the user's primary calendar, not on the
-    # organizer's calendar. Always use primary to find the user's attendee entry.
+    calendar_id = resolve_calendar_id(calendar)
     service = get_calendar()
 
-    # Get the event from primary calendar
-    event = service.events().get(calendarId="primary", eventId=event_id).execute()
+    # Get the event from the specified calendar
+    event = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
 
     # Find the user's attendee entry and update their response
     attendees = event.get("attendees", [])
@@ -562,7 +661,7 @@ def respond(event_id: str, response: str, notify: bool):
     # Update the event with new response status
     send_updates = "all" if notify else "none"
     service.events().patch(
-        calendarId="primary",
+        calendarId=calendar_id,
         eventId=event_id,
         body={"attendees": attendees},
         sendUpdates=send_updates,
@@ -608,8 +707,8 @@ def delete(event_id: str, notify: bool, calendar: str):
 @cli.command()
 @click.argument("event_id")
 @click.option("--summary", help="New event title")
-@click.option("--start", help="New start time (YYYY-MM-DD HH:MM) or date (YYYY-MM-DD)")
-@click.option("--end", help="New end time (YYYY-MM-DD HH:MM) or date (YYYY-MM-DD)")
+@click.option("--start", help="New start time (e.g., 2024-01-15 14:00, tomorrow 2pm)")
+@click.option("--end", help="New end time (e.g., 2024-01-15 15:00, tomorrow 3pm)")
 @click.option(
     "--duration", type=int, help="New duration in minutes (or days if --all-day)"
 )
@@ -708,3 +807,131 @@ def update(
 
     logger.info("Event updated", event_id=result["id"], notified=notify)
     click.echo(json.dumps(result, indent=2))
+
+
+def _parse_event_times(event: dict) -> tuple[datetime | None, datetime | None]:
+    """Extract start/end datetimes from an event.
+
+    Returns (start, end) as datetime objects, or (None, None) for all-day events.
+    """
+    start_data = event.get("start", {})
+    end_data = event.get("end", {})
+
+    # Skip all-day events (they have 'date' not 'dateTime')
+    if "date" in start_data or "date" in end_data:
+        return None, None
+
+    start_str = start_data.get("dateTime")
+    end_str = end_data.get("dateTime")
+
+    if not start_str or not end_str:
+        return None, None
+
+    start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+    end = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
+    return start, end
+
+
+def _events_overlap(event1: dict, event2: dict) -> bool:
+    """Check if two events have overlapping times."""
+    start1, end1 = _parse_event_times(event1)
+    start2, end2 = _parse_event_times(event2)
+
+    # Skip if either is all-day or has no time data
+    if start1 is None or end1 is None or start2 is None or end2 is None:
+        return False
+
+    # Events overlap if one starts before the other ends
+    return start1 < end2 and start2 < end1
+
+
+@cli.command()
+@click.option(
+    "--from",
+    "from_date",
+    default="today",
+    help="Start date (e.g., 2024-01-15, today). Relative dates prefer future.",
+)
+@click.option(
+    "--to",
+    "to_date",
+    default="1 week",
+    help="End date (e.g., friday, '2 weeks'). Relative dates prefer future.",
+)
+@click.option(
+    "--calendar",
+    multiple=True,
+    help="Calendar ID, email, or name (repeatable; default: primary)",
+)
+def conflicts(from_date: str, to_date: str, calendar: tuple[str, ...]):
+    """Find overlapping events (scheduling conflicts).
+
+    Compares all timed events in the date range and reports pairs that overlap.
+    All-day events are excluded from conflict detection.
+
+    \b
+    Examples:
+        jean-claude gcal conflicts
+        jean-claude gcal conflicts --from today --to "2 weeks"
+        jean-claude gcal conflicts --calendar work --calendar personal
+    """
+    calendar_ids = resolve_calendar_ids(calendar)
+
+    time_min = parse_datetime(from_date).replace(tzinfo=LOCAL_TZ)
+    time_max = parse_datetime(to_date).replace(
+        hour=23, minute=59, second=59, tzinfo=LOCAL_TZ
+    )
+
+    # If to_date is relative, ensure it's after from_date
+    if time_max <= time_min:
+        time_max = time_min + timedelta(days=7)
+
+    service = get_calendar()
+    all_events = []
+
+    for calendar_id, calendar_name in calendar_ids:
+        result = (
+            service.events()
+            .list(
+                calendarId=calendar_id,
+                timeMin=time_min.isoformat(),
+                timeMax=time_max.isoformat(),
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
+        )
+
+        for event in result.get("items", []):
+            event["calendar_id"] = calendar_id
+            event["calendar_name"] = calendar_name
+            all_events.append(event)
+
+    # Sort by start time
+    all_events.sort(key=get_event_start)
+
+    # Find conflicts
+    conflicts_found = []
+    for i, event in enumerate(all_events):
+        for other in all_events[i + 1 :]:
+            if _events_overlap(event, other):
+                conflicts_found.append(
+                    {
+                        "event1": {
+                            "id": event["id"],
+                            "summary": event.get("summary", "(no title)"),
+                            "start": event.get("start"),
+                            "end": event.get("end"),
+                            "calendar": event.get("calendar_name"),
+                        },
+                        "event2": {
+                            "id": other["id"],
+                            "summary": other.get("summary", "(no title)"),
+                            "start": other.get("start"),
+                            "end": other.get("end"),
+                            "calendar": other.get("calendar_name"),
+                        },
+                    }
+                )
+
+    click.echo(json.dumps({"conflicts": conflicts_found}, indent=2))
