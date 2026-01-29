@@ -471,10 +471,43 @@ Cross-service commands:
 - iMessage: `jean-claude imessage mark-read CHAT_ID`
 - WhatsApp: `jean-claude whatsapp mark-read CHAT_ID`
 
-### Availability Questions
+### Cross-Referencing Email and Calendar
 
-When a message asks about availability ("Are you free Tuesday?", "Which works
-better — the 6th or 8th?"), check the calendar and include the answer:
+**Always cross-reference between email and calendar.** When processing messages,
+check if they relate to calendar events. When reviewing calendar, check email
+for relevant context.
+
+**Messages → Calendar:**
+
+- **Availability questions** ("Are you free Tuesday?") → Check calendar, include
+  the answer
+- **Meeting details** (phone numbers, Zoom links, addresses) → Check for matching
+  event, offer to add details
+- **Schedule mentions** ("call at 11:30", "meeting tomorrow") → Check if event
+  exists, offer to create if not
+- **Changes** ("let's push to 3pm", "need to reschedule") → Find the event,
+  offer to update
+- **Cancellations** ("can't make it", "let's cancel") → Find the event, offer
+  to delete or decline
+
+<example>
+<bad>
+
+```
+1. Dana Chen (today at 10:33 AM) — "Please call Marcus at 415-555-0142"
+   → You have his number for the 11:30 call.
+```
+
+</bad>
+<good>
+
+```
+1. Dana Chen (today at 10:33 AM) — "Please call Marcus at 415-555-0142"
+   → You have "Call with Marcus" at 11:30. Want me to add his number to the invite?
+```
+
+</good>
+</example>
 
 <example>
 <bad>
@@ -496,10 +529,18 @@ better — the 6th or 8th?"), check the calendar and include the answer:
 </good>
 </example>
 
-The user shouldn't have to ask "what's on my calendar those days?" as a
-follow-up. If someone's asking about dates, checking availability is the
-obvious next step — do it proactively. Check calendars where the user has
-events (see "Choosing the Right Calendar").
+**Calendar → Email:**
+
+When reviewing calendar events, check email for related context:
+
+- Upcoming meeting with someone → Recent emails with them may have agenda items
+- Event missing details → Search email for the invite or logistics thread
+- Unfamiliar attendee → Search email history to understand the relationship
+
+The user shouldn't have to ask "what's on my calendar?" or "did they send
+details?" as follow-ups. If a message relates to a scheduled event, check the
+calendar proactively. Check calendars where the user has events (see "Choosing
+the Right Calendar").
 
 ## Proactive Behavior
 
