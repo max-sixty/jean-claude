@@ -332,7 +332,7 @@ date "+%Y-%m-%d %H:%M %Z"  # Current date/time for reference
 
 **Never fabricate details not present in the data.**
 
-- If an email says "your child", say "your child" — don't invent "Rachel"
+- **Never invent names.** If an email says "your child", say "your child"
 - If a sender's relationship isn't stated, don't assume it
 - If a time/date isn't specified, say so — don't guess
 - Quote or paraphrase what's actually there
