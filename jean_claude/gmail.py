@@ -482,12 +482,12 @@ def _batch_fetch(
 
 
 def _get_headers(msg: dict) -> dict[str, str]:
-    """Extract headers from a message payload as a name->value dict."""
-    return {h["name"]: h["value"] for h in msg["payload"]["headers"]}
+    """Extract headers from a message payload as a lowercase name->value dict.
 
-
-def _get_headers_lower(msg: dict) -> dict[str, str]:
-    """Extract headers from a message payload as a lowercase name->value dict."""
+    Email header names are case-insensitive per RFC 2822. Different mail servers
+    use different casings (e.g., Microsoft Exchange sends "CC", Gmail sends "Cc").
+    Normalizing to lowercase ensures consistent lookups.
+    """
     return {h["name"].lower(): h["value"] for h in msg["payload"]["headers"]}
 
 
@@ -649,22 +649,22 @@ def extract_message_summary(msg: dict, include_headers: bool = False) -> dict:
     result = {
         "id": msg["id"],
         "threadId": msg["threadId"],
-        "from": headers.get("From", ""),
-        "to": headers.get("To", ""),
-        "subject": headers.get("Subject", ""),
-        "date": _convert_to_local_time(headers.get("Date", "")),
+        "from": headers.get("from", ""),
+        "to": headers.get("to", ""),
+        "subject": headers.get("subject", ""),
+        "date": _convert_to_local_time(headers.get("date", "")),
         "snippet": html.unescape(msg.get("snippet", "")),
         "labels": msg.get("labelIds", []),
     }
-    if cc := headers.get("Cc"):
+    if cc := headers.get("cc"):
         result["cc"] = cc
 
     body, html_body = extract_body(msg["payload"])
     result["file"] = _write_email_cache("email", msg["id"], result, body, html_body)
 
-    # Add full headers to output (not to cache file, to keep cache consistent)
+    # Add full headers with original casing for debugging
     if include_headers:
-        result["headers"] = headers
+        result["headers"] = {h["name"]: h["value"] for h in msg["payload"]["headers"]}
     return result
 
 
@@ -710,13 +710,13 @@ def extract_thread_summary(thread: dict) -> dict:
         msg_headers = _get_headers(msg)
         msg_summary = {
             "id": msg["id"],
-            "date": _convert_to_local_time(msg_headers.get("Date", "")),
-            "from": msg_headers.get("From", ""),
-            "to": msg_headers.get("To", ""),
+            "date": _convert_to_local_time(msg_headers.get("date", "")),
+            "from": msg_headers.get("from", ""),
+            "to": msg_headers.get("to", ""),
             "labels": labels,
             "unread": is_unread,
         }
-        if cc := msg_headers.get("Cc"):
+        if cc := msg_headers.get("cc"):
             msg_summary["cc"] = cc
         message_summaries.append(msg_summary)
 
@@ -724,13 +724,13 @@ def extract_thread_summary(thread: dict) -> dict:
         "threadId": thread["id"],
         "messageCount": len(messages),
         "unreadCount": unread_count,
-        "subject": headers.get("Subject", ""),
+        "subject": headers.get("subject", ""),
         "labels": sorted(all_labels),
         "messages": message_summaries,
         "latest": {
             "id": latest_msg["id"],
-            "date": _convert_to_local_time(headers.get("Date", "")),
-            "from": headers.get("From", ""),
+            "date": _convert_to_local_time(headers.get("date", "")),
+            "from": headers.get("from", ""),
             "snippet": html.unescape(latest_msg.get("snippet", "")),
         },
     }
@@ -748,11 +748,11 @@ def extract_draft_summary(draft: dict) -> dict:
     result = {
         "id": draft["id"],
         "messageId": msg["id"],
-        "to": headers.get("To", ""),
-        "subject": headers.get("Subject", ""),
+        "to": headers.get("to", ""),
+        "subject": headers.get("subject", ""),
         "snippet": html.unescape(msg.get("snippet", "")),
     }
-    if cc := headers.get("Cc"):
+    if cc := headers.get("cc"):
         result["cc"] = cc
     return result
 
@@ -1262,7 +1262,7 @@ def _create_reply_draft(
     my_from_addr = get_my_from_address(service)
     _, my_email = parseaddr(my_from_addr)
 
-    headers = _get_headers_lower(original)
+    headers = _get_headers(original)
     thread_id = original["threadId"]
 
     subject = headers.get("subject", "")
@@ -1476,7 +1476,7 @@ def draft_forward(
         .execute()
     )
 
-    headers = _get_headers_lower(original)
+    headers = _get_headers(original)
     orig_subject = headers.get("subject", "")
     from_addr = headers.get("from", "")
     date = headers.get("date", "")
@@ -1649,7 +1649,7 @@ def draft_get(draft_id: str):
         service.users().drafts().get(userId="me", id=draft_id, format="full").execute()
     )
     msg = draft["message"]
-    headers = _get_headers_lower(msg)
+    headers = _get_headers(msg)
     body = decode_body(msg["payload"])
 
     DRAFT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -1770,7 +1770,7 @@ def draft_update(
     thread_id = existing_msg.get("threadId")
 
     # Start with existing headers
-    headers = _get_headers_lower(existing_msg)
+    headers = _get_headers(existing_msg)
     existing_body = decode_body(existing_msg["payload"])
 
     # Apply updates (only for provided values)

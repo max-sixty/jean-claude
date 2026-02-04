@@ -21,7 +21,10 @@ from jean_claude.gmail import (
     _strip_html,
     decode_body,
     extract_attachments_from_payload,
+    extract_draft_summary,
     extract_inline_images_from_payload,
+    extract_message_summary,
+    extract_thread_summary,
 )
 
 
@@ -114,6 +117,110 @@ class TestDecodeBody:
         result = decode_body(payload)
         assert "HTML content" in result
         assert "<p>" not in result  # Tags should be stripped
+
+
+class TestExtractSummary:
+    """Tests for message/thread/draft summary extraction.
+
+    These tests verify RFC 2822 compliance: email header names are case-insensitive.
+    Different mail servers use different casings (e.g., Microsoft Exchange uses "CC"
+    while Gmail uses "Cc"), so we must normalize them.
+    """
+
+    def _make_message(self, headers: list[tuple[str, str]]) -> dict:
+        """Create a minimal Gmail API message object with given headers."""
+        return {
+            "id": "msg123",
+            "threadId": "thread456",
+            "payload": {
+                "headers": [{"name": k, "value": v} for k, v in headers],
+                "body": {"data": ""},
+            },
+            "snippet": "Test snippet",
+            "labelIds": ["INBOX"],
+        }
+
+    def test_extract_message_cc_uppercase(self, tmp_path, monkeypatch):
+        """Test CC header detection with Microsoft Exchange casing (all caps)."""
+        monkeypatch.setattr("jean_claude.gmail.EMAIL_CACHE_DIR", tmp_path)
+
+        msg = self._make_message(
+            [
+                ("From", "sender@example.com"),
+                ("To", "recipient@example.com"),
+                ("Subject", "Test"),
+                ("Date", "Mon, 1 Jan 2024 12:00:00 +0000"),
+                ("CC", "cc@example.com"),  # Microsoft Exchange uses all caps
+            ]
+        )
+
+        result = extract_message_summary(msg)
+        assert result["cc"] == "cc@example.com"
+        assert result["from"] == "sender@example.com"
+        assert result["to"] == "recipient@example.com"
+        assert result["subject"] == "Test"
+
+    def test_extract_message_cc_mixedcase(self, tmp_path, monkeypatch):
+        """Test CC header detection with Gmail casing (mixed case)."""
+        monkeypatch.setattr("jean_claude.gmail.EMAIL_CACHE_DIR", tmp_path)
+
+        msg = self._make_message(
+            [
+                ("From", "sender@example.com"),
+                ("To", "recipient@example.com"),
+                ("Subject", "Test"),
+                ("Date", "Mon, 1 Jan 2024 12:00:00 +0000"),
+                ("Cc", "cc@example.com"),  # Gmail uses mixed case
+            ]
+        )
+
+        result = extract_message_summary(msg)
+        assert result["cc"] == "cc@example.com"
+
+    def test_extract_thread_cc_uppercase(self, tmp_path, monkeypatch):
+        """Test thread summary extracts CC regardless of casing."""
+        monkeypatch.setattr("jean_claude.gmail.EMAIL_CACHE_DIR", tmp_path)
+
+        thread = {
+            "id": "thread456",
+            "messages": [
+                self._make_message(
+                    [
+                        ("From", "sender@example.com"),
+                        ("To", "recipient@example.com"),
+                        ("Subject", "Test thread"),
+                        ("Date", "Mon, 1 Jan 2024 12:00:00 +0000"),
+                        ("CC", "cc@example.com"),  # All caps
+                    ]
+                ),
+            ],
+        }
+
+        result = extract_thread_summary(thread)
+        assert result["messages"][0]["cc"] == "cc@example.com"
+        assert result["subject"] == "Test thread"
+
+    def test_extract_draft_cc_uppercase(self):
+        """Test draft summary extracts CC regardless of casing."""
+        draft = {
+            "id": "draft789",
+            "message": {
+                "id": "msg123",
+                "payload": {
+                    "headers": [
+                        {"name": "To", "value": "recipient@example.com"},
+                        {"name": "Subject", "value": "Draft test"},
+                        {"name": "CC", "value": "cc@example.com"},  # All caps
+                    ],
+                },
+                "snippet": "Draft content",
+            },
+        }
+
+        result = extract_draft_summary(draft)
+        assert result["cc"] == "cc@example.com"
+        assert result["to"] == "recipient@example.com"
+        assert result["subject"] == "Draft test"
 
 
 class TestExtractAttachments:
