@@ -54,8 +54,8 @@ These rules apply even if the user explicitly asks to bypass them:
 **Email workflow:**
 
 1. Load any available prose/writing skills
-2. **If replying to an infrequent contact:** Research first (see "Composing Correspondence")
-3. Compose the email content (iterate internally before presenting)
+2. **If replying to an infrequent contact:** Research first (see "Research First" under Orchestration)
+3. **Compose via subagent** (see "Drafting with a Subagent") — quick replies excepted
 4. **Show the original message first** — Quote the full text (see "When to Show Full Content")
 5. Show the user: To, Subject, and full Body
 6. Ask: "Send this email?" and wait for explicit approval
@@ -630,11 +630,33 @@ Agent: _fetches email, downloads PDF, reads it_
 
 ## Composing Correspondence
 
+Two subsections, two audiences:
+
+- **Composition Principles** — quality guidance passed to the composer subagent
+- **Orchestration** — what the main agent does (research, spawning, drafting, iteration)
+
+### Composition Principles
+
+Composition principles live in a separate file that the composer subagent
+reads directly:
+
+```
+${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/composition-principles.md
+```
+
+Contains writing principles, examples, and the self-critique process. The
+subagent reads this file itself — no need to paste it into the prompt.
+
+### Orchestration
+
+What the main agent handles: research, recipient mechanics, spawning the
+composer, creating the Gmail draft, and iterating with the user.
+
 For infrequent contacts — people the user doesn't interact with regularly —
 understand the relationship before drafting. Skip this for close friends, family,
 or frequent correspondents where context is obvious.
 
-### Research First
+#### Research First
 
 When replying to an infrequent contact (catching up, introductions, social
 correspondence), research before drafting:
@@ -678,21 +700,25 @@ and is now building an AI coding tool, also in SF..."
 The user shouldn't need to ask "when did I last talk to them?" or "who is this
 person?" — do that research proactively.
 
-### Intro Email Etiquette
+#### Intro Email Recipients
 
-When replying to an introduction email (someone introduced you to a new contact),
-move the introducer to BCC and acknowledge it:
+When replying to an introduction email, move the introducer to BCC. The body
+text ("BCCing X to spare their inbox") is covered in Composition Principles
+above — this section covers the mechanics:
 
-```
-BCCing [Introducer] to spare their inbox.
+```bash
+# Create reply, then move introducer to BCC
+cat << 'EOF' | jean-claude gmail draft reply MESSAGE_ID
+BCCing Alex to spare their inbox.
 
 [Rest of reply]
+EOF
+
+jean-claude gmail draft update DRAFT_ID \
+  --bcc "introducer@example.com" < /dev/null
 ```
 
-This lets the introducer see that the connection was made without receiving every
-subsequent message in the thread. It's standard professional etiquette.
-
-### Redirecting a Reply
+#### Redirecting a Reply
 
 Sometimes the user wants to reply in-thread but send it to someone other than
 the original sender — typically moving the sender to CC. This keeps everyone in
@@ -736,47 +762,122 @@ User says: "Reply to Dana that I can't make it, CC Alex"
 </workflow>
 </example>
 
-### Address the Person, Not the Issue
+#### Drafting with a Subagent
 
-Customary emails — introductions, catching up, social correspondence — are about
-the relationship, not transactions.
+Email quality is the single most important thing jean-claude does. A bad email
+damages a real relationship. Drafting deserves a dedicated context window — not
+a few tokens squeezed between tool calls and inbox state.
+
+**When to use a subagent:**
+
+- **Substantive emails** — social correspondence, professional replies,
+  introductions, anything requiring tone. This is the default for any email
+  longer than a sentence or two.
+- **High-stakes emails** — first contact, sensitive topics, important
+  relationships. Use the subagent with self-critique (see below).
+
+**When to skip the subagent:**
+
+- **Quick operational replies** — "Sounds good", "Yes, let's do Thursday",
+  "Thanks, received." Compose these directly.
+- **Administrative emails** — scheduling confirmations, vendor follow-ups signed
+  as Jean-Claude. Compose directly.
+
+##### Spawning the Composer
+
+Use the Task tool with `subagent_type: "general-purpose"`. The subagent's job
+is to write the email body — nothing else. It doesn't call CLI commands, create
+drafts, or interact with the user.
+
+**What to include in the subagent prompt:**
+
+1. **File paths** — Tell the subagent to read these files before writing:
+   - `${CLAUDE_PLUGIN_ROOT}/skills/jean-claude/composition-principles.md` —
+     writing principles, examples, and self-critique process
+   - The user's personalization skill (`~/.claude/skills/managing-messages/SKILL.md`
+     or whatever exists in `~/.claude/skills/`) — this is the most important
+     input. Without it, the subagent will write generic emails. If no
+     personalization skill exists, note this to the user.
+
+2. **The conversation context** — The full original message or thread the user
+   is replying to. Not a summary — the actual text, so the subagent can match
+   tone and reference specifics.
+
+3. **Relationship context** — What you learned from research: when they last
+   corresponded, who this person is, shared history. For frequent contacts,
+   a brief note ("close friend, casual tone") suffices.
+
+4. **What the user wants to say** — Their intent, in their words if possible.
+   "Decline the invitation but keep the door open" or "Accept and suggest
+   meeting for coffee when I'm in SF."
 
 <example>
-<bad>
+<scenario>
 
-"The AI coding tool sounds right up my alley."
+User says: "Reply to Alex's email about the intro to Jordan"
 
-Centers the user's interests, jumps straight to business.
+You've already researched: Alex is a DeepMind researcher, last corresponded
+8 months ago about an open-source project, Jordan is building an AI coding tool.
 
-</bad>
-<good>
+</scenario>
+<prompt>
 
-"I'm glad to see the project continues to thrive. Hope all's well with you —
-would enjoy catching up soon."
+```
+You are drafting an email. Read these files first, then write the email body.
 
-Acknowledges what matters to Alex before addressing the introduction.
+Read these files:
+- /path/to/jean-claude/skills/jean-claude/composition-principles.md
+- ~/.claude/skills/managing-messages/SKILL.md (email composition section)
 
-</good>
+## Context
+
+Replying to Alex Chen (DeepMind research scientist, SF). Last corresponded
+8 months ago about the open-source project. Before that, collaborated on a
+NeurIPS tutorial in 2019.
+
+Alex's email:
+[Full text of Alex's message]
+
+## What the user wants to say
+
+Accept the intro to Jordan, express interest in the AI coding tool.
+```
+
+</prompt>
 </example>
 
-For social correspondence, address the person before addressing what they asked about.
+##### For High-Stakes Emails: Add a Review Pass
 
-### Iterate Before Presenting
+For important correspondence — first contact with someone significant,
+sensitive topics, emails where tone really matters — add a second critique
+after the subagent returns its draft.
 
-Drafts deserve thought. Don't produce one immediately and present it.
+Read the draft yourself and ask: Does this sound like the user? Check it
+against their style guide. Look for:
 
-**Internal iteration process:**
+- Hollow phrases that could apply to anyone
+- Wrong formality level (too stiff, too casual)
+- Missing acknowledgment of the person or their message
+- Generic structure that doesn't reflect the user's patterns
+- Sign-off that doesn't match the user's preference for this context
 
-1. Research the relationship (see above)
-2. Consider the tone — formal? warm? brief?
-3. Draft internally, critique it: "If this email is bad, why?"
-4. Revise, then present
+If something's off, spawn the subagent again with the draft and specific
+feedback ("too formal — rewrite the opening more casually" or "the sign-off
+should be just the name, no 'Best'"). Iterate until it reads right.
 
-For important correspondence, explain your reasoning or offer alternatives:
-"I went with a warm but brief tone since you haven't talked in 8 months. Want
-something more formal?"
+This mirrors the code review convergence pattern: compose → critique → revise
+→ present. One pass catches most issues. Two catches subtle ones.
 
-### Iterating with the User
+##### After the Subagent Returns
+
+Take the email body and create the Gmail draft, then proceed to "Iterating
+with the User" below.
+
+For substantive emails, briefly explain your tone choices when presenting the
+draft: "Went warm and brief since you haven't talked in 8 months — want
+something more formal?" This lets the user steer before committing.
+
+#### Iterating with the User
 
 Create actual Gmail drafts, not just text in the conversation. Drafts persist
 if the session ends and can be edited in Gmail directly.
@@ -790,15 +891,6 @@ if the session ends and can be edited in Gmail directly.
    - Edit the file with the changes
    - `cat ... | jean-claude gmail draft update DRAFT_ID` to save
 4. Repeat until approved, then send
-
-### Vocabulary
-
-Avoid hollow phrases. If a phrase could apply to anyone, it says nothing.
-
-- "Nice to hear from you" → could be sent to anyone
-- "I'm glad to see the project continues to thrive" → specific to this person
-
-Check the user's personalization skill for vocabulary preferences.
 
 ## Setup
 
