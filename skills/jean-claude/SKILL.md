@@ -1398,6 +1398,9 @@ one or context suggests otherwise (work event → work calendar).
 
 When creating events, add useful information proactively:
 
+- **Titles** — Include both people's names for 1:1 meetings ("Coffee: Max &
+  Andrea", not "Coffee with Andrea"). The calendar already implies the owner is
+  involved, but both names read better on a shared invite.
 - **Attendees** — If the user mentions meeting someone, look up their email and
   add them
 - **Locations** — If the user mentions a place, search for the full address
@@ -1440,7 +1443,7 @@ If there's a conflict the user may not be aware of, confirm before creating:
    the full invite and ask for approval — just like messages:
 
    > **Calendar invite to create:**
-   > - **Title:** 1:1 with Alice
+   > - **Title:** 1:1: Max & Alice
    > - **When:** Tuesday 2025-12-30, 2:00–2:30pm PT
    > - **Attendees:** alice@example.com
    > - **Location:** Zoom (link in description)
@@ -1486,7 +1489,7 @@ jean-claude gcal create "Team Meeting" \
   --start "2025-01-15 14:00" --end "2025-01-15 15:00"
 
 # With attendee, location, and description
-jean-claude gcal create "1:1 with Alice" \
+jean-claude gcal create "1:1: Max & Alice" \
   --start "2025-01-15 10:00" --duration 30 \
   --attendees alice@example.com \
   --location "Conference Room A" \
