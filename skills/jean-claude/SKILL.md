@@ -1312,10 +1312,18 @@ jean-claude gmail mark-unread THREAD_ID1 THREAD_ID2
 
 # Trash (thread-level - use threadId)
 jean-claude gmail trash THREAD_ID1 THREAD_ID2 THREAD_ID3
+
+# Modify labels (thread-level - add/remove any label)
+jean-claude gmail modify-labels THREAD_ID --add SPAM --remove INBOX
+jean-claude gmail modify-labels THREAD_ID1 THREAD_ID2 --add STARRED
+jean-claude gmail modify-labels THREAD_ID --remove UNREAD
 ```
 
+**Spam:** Use `modify-labels --add SPAM --remove INBOX` to report spam. Unlike
+trash, this trains Gmail's spam filter for future messages from that sender.
+
 **Which ID to use:**
-- Thread operations (archive, mark-read, trash, `gmail thread`): use `threadId`
+- Thread operations (archive, mark-read, trash, modify-labels, `gmail thread`): use `threadId`
 - Message operations (star, `gmail message`, reply): use `id` from `messages` array
 - Use `--query` for pattern-based operations (archive supports this)
 

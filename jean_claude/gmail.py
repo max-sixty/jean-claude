@@ -2004,6 +2004,53 @@ def trash(thread_ids: tuple[str, ...]):
     logger.info(f"Trashed {len(ids)} threads", count=len(ids))
 
 
+@cli.command("modify-labels")
+@click.argument("thread_ids", nargs=-1, required=True)
+@click.option(
+    "--add", "add_labels", multiple=True, help="Label to add (e.g., SPAM, STARRED)"
+)
+@click.option(
+    "--remove", "remove_labels", multiple=True, help="Label to remove (e.g., INBOX)"
+)
+def modify_labels(
+    thread_ids: tuple[str, ...],
+    add_labels: tuple[str, ...],
+    remove_labels: tuple[str, ...],
+):
+    """Add or remove labels on threads.
+
+    Operates on entire threads, matching Gmail UI behavior.
+
+    \b
+    Examples:
+        jean-claude gmail modify-labels THREAD_ID --add SPAM --remove INBOX
+        jean-claude gmail modify-labels ID1 ID2 --add STARRED
+        jean-claude gmail modify-labels THREAD_ID --remove UNREAD
+    """
+    if not add_labels and not remove_labels:
+        raise click.UsageError("Provide at least one --add or --remove label")
+
+    service = get_gmail()
+    ids = list(thread_ids)
+    _modify_thread_labels(
+        service,
+        ids,
+        add_label_ids=list(add_labels) or None,
+        remove_label_ids=list(remove_labels) or None,
+    )
+    parts = []
+    if add_labels:
+        parts.append(f"added {', '.join(add_labels)}")
+    if remove_labels:
+        parts.append(f"removed {', '.join(remove_labels)}")
+    logger.info(
+        f"Modified {len(ids)} threads: {'; '.join(parts)}",
+        count=len(ids),
+        added=list(add_labels),
+        removed=list(remove_labels),
+    )
+
+
 def _extract_attachments(parts: list, attachments: list) -> None:
     """Recursively extract attachment info from message parts."""
     for part in parts:

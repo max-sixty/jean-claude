@@ -1,0 +1,15 @@
+Usage: jean-claude gmail modify-labels [OPTIONS] THREAD_IDS...
+
+  Add or remove labels on threads.
+
+  Operates on entire threads, matching Gmail UI behavior.
+
+  Examples:
+      jean-claude gmail modify-labels THREAD_ID --add SPAM --remove INBOX
+      jean-claude gmail modify-labels ID1 ID2 --add STARRED
+      jean-claude gmail modify-labels THREAD_ID --remove UNREAD
+
+Options:
+  --add TEXT     Label to add (e.g., SPAM, STARRED)
+  --remove TEXT  Label to remove (e.g., INBOX)
+  --help         Show this message and exit.

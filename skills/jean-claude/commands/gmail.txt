@@ -16,6 +16,7 @@ Commands:
   mark-read            Mark threads as read (all messages in thread).
   mark-unread          Mark threads as unread.
   message              Fetch messages by ID.
+  modify-labels        Add or remove labels on threads.
   search               Search Gmail messages.
   star                 Star messages.
   thread               Fetch all messages in a thread.
