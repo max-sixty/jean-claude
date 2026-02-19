@@ -20,8 +20,8 @@ logger = get_logger(__name__)
 # Users can override by placing their own client_secret.json in CONFIG_DIR.
 EMBEDDED_CLIENT_CONFIG = {
     "installed": {
-        "client_id": "632159173278-jdi7d5i4aldosvhu4vvu2hsck4fusg00.apps.googleusercontent.com",
-        "client_secret": "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",
+        "client_id": "931846696063-c133cbfkbi5gq3nc7aa51tvsp0qusm5p.apps.googleusercontent.com",
+        "client_secret": "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",
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
         "token_uri": "https://oauth2.googleapis.com/token",
         "redirect_uris": ["http://localhost"],
