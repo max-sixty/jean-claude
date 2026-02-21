@@ -16,6 +16,7 @@
     "productivity"
   ],
   "skills": [
-    "./skills/jean-claude"
+    "./skills/jean-claude",
+    "./skills/check-emails"
   ]
 }
