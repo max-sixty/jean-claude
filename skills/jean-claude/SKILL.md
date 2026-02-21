@@ -1620,7 +1620,7 @@ jean-claude gcal search "standup" --days 90
 jean-claude gcal update EVENT_ID --start "2025-01-16 14:00"
 
 # Delete
-jean-claude gcal delete EVENT_ID --notify
+jean-claude gcal delete EVENT_ID
 ```
 
 ### Invitations

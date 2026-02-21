@@ -682,7 +682,11 @@ def respond(event_id: str, response: str, notify: bool, calendar: str):
 
 @cli.command()
 @click.argument("event_id")
-@click.option("--notify", is_flag=True, help="Send cancellation emails to attendees")
+@click.option(
+    "--notify/--no-notify",
+    default=True,
+    help="Send cancellation emails to attendees (default: notify)",
+)
 @click.option(
     "--calendar",
     default="primary",
@@ -721,7 +725,11 @@ def delete(event_id: str, notify: bool, calendar: str):
 @click.option("--location", help="New location")
 @click.option("--description", help="New description")
 @click.option("--attendees", help="Comma-separated attendee emails (replaces existing)")
-@click.option("--notify", is_flag=True, help="Send update emails to attendees")
+@click.option(
+    "--notify/--no-notify",
+    default=True,
+    help="Send update emails to attendees (default: notify)",
+)
 @click.option(
     "--calendar",
     default="primary",

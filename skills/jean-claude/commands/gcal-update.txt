@@ -7,14 +7,15 @@ Usage: jean-claude gcal update [OPTIONS] EVENT_ID
   Only specified fields are updated; others remain unchanged.
 
 Options:
-  --summary TEXT      New event title
-  --start TEXT        New start time (e.g., 2024-01-15 14:00, tomorrow 2pm)
-  --end TEXT          New end time (e.g., 2024-01-15 15:00, tomorrow 3pm)
-  --duration INTEGER  New duration in minutes (or days if --all-day)
-  --all-day           Make this an all-day event (uses date only)
-  --location TEXT     New location
-  --description TEXT  New description
-  --attendees TEXT    Comma-separated attendee emails (replaces existing)
-  --notify            Send update emails to attendees
-  --calendar TEXT     Calendar ID, email, or name (default: primary)
-  --help              Show this message and exit.
+  --summary TEXT          New event title
+  --start TEXT            New start time (e.g., 2024-01-15 14:00, tomorrow
+                          2pm)
+  --end TEXT              New end time (e.g., 2024-01-15 15:00, tomorrow 3pm)
+  --duration INTEGER      New duration in minutes (or days if --all-day)
+  --all-day               Make this an all-day event (uses date only)
+  --location TEXT         New location
+  --description TEXT      New description
+  --attendees TEXT        Comma-separated attendee emails (replaces existing)
+  --notify / --no-notify  Send update emails to attendees (default: notify)
+  --calendar TEXT         Calendar ID, email, or name (default: primary)
+  --help                  Show this message and exit.
