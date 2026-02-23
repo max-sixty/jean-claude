@@ -15,7 +15,7 @@ Usage: jean-claude imessage messages [OPTIONS]
 
 Options:
   --chat TEXT                Filter to specific chat ID or phone number
-  --name TEXT                Filter to specific contact by name
+  --name TEXT                Filter by chat or contact name
   -n, --max-results INTEGER  Maximum messages to return
   --unread                   Show only unread messages
   --include-spam             Include spam-filtered messages

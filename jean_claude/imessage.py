@@ -1067,7 +1067,7 @@ def mark_read(chat_ids: tuple[str, ...]):
 
 @cli.command()
 @click.option("--chat", "chat_id", help="Filter to specific chat ID or phone number")
-@click.option("--name", help="Filter to specific contact by name")
+@click.option("--name", help="Filter by chat or contact name")
 @click.option("-n", "--max-results", default=50, help="Maximum messages to return")
 @click.option("--unread", is_flag=True, help="Show only unread messages")
 @click.option("--include-spam", is_flag=True, help="Include spam-filtered messages")
@@ -1095,30 +1095,35 @@ def messages(
     # Resolve chat identifiers from name or chat_id
     chat_identifiers: list[str] | None = None
     if name:
-        contacts = find_contacts_by_name(name)
-        if not contacts:
-            raise JeanClaudeError(
-                f"No contact found matching '{name}' with a phone number"
-            )
-        # Collect all phone numbers from all matching contacts
-        all_phones = [phone for _, phones in contacts for phone in phones]
-        # Find chat IDs for these phones
-        chat_identifiers = []
-        for phone in all_phones:
-            chat_id_for_phone = get_chat_id_for_phone(phone)
-            if chat_id_for_phone:
-                chat_identifiers.append(chat_id_for_phone.split(";")[-1])
-        if not chat_identifiers:
-            contact_names = [c[0] for c in contacts]
-            raise JeanClaudeError(
-                f"No message history found for contacts matching '{name}' ({', '.join(contact_names)})"
-            )
-        # Log which contacts we're showing messages from
-        if len(contacts) > 1:
-            contact_names = [c[0] for c in contacts]
-            logger.info(
-                "Showing messages from multiple contacts", contacts=contact_names
-            )
+        # Try group/individual chat name first (via Messages.app)
+        chat_matches = find_chats_by_name(name)
+        if chat_matches:
+            chat_identifiers = [cid.split(";")[-1] for cid, _ in chat_matches]
+            if len(chat_matches) > 1:
+                chat_names = [n for _, n in chat_matches]
+                logger.info("Showing messages from multiple chats", chats=chat_names)
+        else:
+            # Fall back to contact name lookup
+            contacts = find_contacts_by_name(name)
+            if not contacts:
+                raise JeanClaudeError(f"No chat or contact found matching '{name}'")
+            all_phones = [phone for _, phones in contacts for phone in phones]
+            chat_identifiers = []
+            for phone in all_phones:
+                chat_id_for_phone = get_chat_id_for_phone(phone)
+                if chat_id_for_phone:
+                    chat_identifiers.append(chat_id_for_phone.split(";")[-1])
+            if not chat_identifiers:
+                contact_names = [c[0] for c in contacts]
+                raise JeanClaudeError(
+                    f"No message history found for contacts matching '{name}' ({', '.join(contact_names)})"
+                )
+            if len(contacts) > 1:
+                contact_names = [c[0] for c in contacts]
+                logger.info(
+                    "Showing messages from multiple contacts",
+                    contacts=contact_names,
+                )
     elif chat_id:
         chat_identifiers = [chat_id.split(";")[-1] if ";" in chat_id else chat_id]
 
