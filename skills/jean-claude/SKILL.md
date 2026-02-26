@@ -336,6 +336,17 @@ date "+%Y-%m-%d %H:%M %Z"  # Current date/time for reference
 - If a sender's relationship isn't stated, don't assume it
 - If a time/date isn't specified, say so — don't guess
 - Quote or paraphrase what's actually there
+- **Never use "likely", "probably", or "appears to"** when describing message
+  content. If you don't know what a message says, read it — don't guess.
+
+**Read multi-message threads before summarizing.** The inbox response only
+contains metadata and the latest message's snippet. For threads with multiple
+messages, read the thread (`gmail thread THREAD_ID`) to know what the other
+messages actually say. Never infer thread content from the snippet alone.
+
+Bad: "3-message thread — likely includes Effie's reply"
+Good: _reads thread first_ → "Kristin nominated Effie; Effie replied accepting
+and asking about travel logistics; Kristin confirmed hotel is covered"
 
 When uncertain, say so: "The email doesn't specify who the assessment is for."
 
