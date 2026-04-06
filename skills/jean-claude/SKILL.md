@@ -1455,7 +1455,7 @@ jean-claude gcal list --calendar work@company.com
 
 # Create event on another calendar
 jean-claude gcal create "Team Sync" \
-  --start "2025-01-15 14:00" --calendar work@company.com
+  --start "2025-01-15T14:00" --calendar work@company.com
 
 # Search by calendar name (case-insensitive substring match)
 jean-claude gcal list --calendar "Family"
@@ -1597,19 +1597,24 @@ jean-claude gcal list --from 2025-01-15 --to 2025-01-20
 ```bash
 # Simple event
 jean-claude gcal create "Team Meeting" \
-  --start "2025-01-15 14:00" --end "2025-01-15 15:00"
+  --start "2025-01-15T14:00" --end "2025-01-15T15:00"
 
 # With attendee, location, and description
 jean-claude gcal create "1:1: Max & Alice" \
-  --start "2025-01-15 10:00" --duration 30 \
+  --start "2025-01-15T10:00" --duration 30 \
   --attendees alice@example.com \
   --location "Conference Room A" \
   --description "Weekly sync"
 
 # Multiple attendees
 jean-claude gcal create "Team Sync" \
-  --start "2025-01-15 14:00" --duration 25 \
+  --start "2025-01-15T14:00" --duration 25 \
   --attendees "alice@example.com,bob@example.com"
+
+# Event in a specific timezone (use --timezone with the IANA name)
+jean-claude gcal create "Call with Denver office" \
+  --start "2025-01-15T14:00" --duration 60 \
+  --timezone America/Denver
 
 # All-day event (single day)
 jean-claude gcal create "Holiday" \
@@ -1620,6 +1625,11 @@ jean-claude gcal create "Vacation" \
   --start 2025-01-15 --end 2025-01-20 --all-day
 ```
 
+**Timezones:** Events default to the user's local timezone. When the user
+mentions a different timezone (e.g., "3pm Mountain Time"), pass
+`--timezone America/Denver` (or the appropriate IANA name). Use the IANA name,
+not a UTC offset — the library handles DST correctly from the name.
+
 ### Search & Manage Events
 
 ```bash
@@ -1628,7 +1638,7 @@ jean-claude gcal search "standup"
 jean-claude gcal search "standup" --days 90
 
 # Update
-jean-claude gcal update EVENT_ID --start "2025-01-16 14:00"
+jean-claude gcal update EVENT_ID --start "2025-01-16T14:00"
 
 # Delete
 jean-claude gcal delete EVENT_ID

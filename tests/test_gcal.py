@@ -7,11 +7,13 @@ from unittest.mock import MagicMock, patch
 
 import click
 import pytest
+from click.testing import CliRunner
 
 from jean_claude.gcal import (
     CalendarErrorHandlingGroup,
     _events_overlap,
     _parse_event_times,
+    cli,
     parse_datetime,
     resolve_calendar_ids,
 )
@@ -329,3 +331,38 @@ class TestEventConflicts:
             "end": {"dateTime": "2024-01-15T11:00:00Z"},
         }
         assert _events_overlap(event1, event2) is False
+
+
+class TestUpdateDurationPreservation:
+    """Tests for update command preserving event duration."""
+
+    def test_update_start_preserves_original_duration(self):
+        """Changing only --start should keep the original event duration."""
+        existing_event = {
+            "summary": "Existing Meeting",
+            "start": {"dateTime": "2024-01-15T10:00:00+00:00"},
+            "end": {"dateTime": "2024-01-15T11:30:00+00:00"},
+        }
+        updated_event = {**existing_event, "id": "evt123"}
+
+        service = MagicMock()
+        service.events().get().execute.return_value = existing_event
+        service.events().update().execute.return_value = updated_event
+
+        with (
+            patch("jean_claude.gcal.get_calendar", return_value=service),
+            patch("jean_claude.gcal.resolve_calendar_id", return_value="primary"),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli, ["update", "evt123", "--start", "2024-01-20T14:00:00"]
+            )
+
+        assert result.exit_code == 0, result.output
+
+        # Check the body passed to update() preserved 90-minute duration
+        call_kwargs = service.events().update.call_args[1]
+        body = call_kwargs["body"]
+        new_start = datetime.fromisoformat(body["start"]["dateTime"])
+        new_end = datetime.fromisoformat(body["end"]["dateTime"])
+        assert new_end - new_start == timedelta(minutes=90)
