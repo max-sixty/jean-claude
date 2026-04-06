@@ -101,6 +101,30 @@ class TestParseDateTime:
         )
         assert result.weekday() == 0  # Monday is 0
 
+    def test_iso_with_timezone_offset(self):
+        """ISO datetime with explicit offset preserves timezone info."""
+        result = parse_datetime("2026-04-04T17:30:00-06:00")
+        assert result.year == 2026
+        assert result.month == 4
+        assert result.day == 4
+        assert result.hour == 17
+        assert result.minute == 30
+        assert result.tzinfo is not None
+        assert result.utcoffset() == timedelta(hours=-6)
+
+    def test_iso_with_utc_offset(self):
+        """ISO datetime with +00:00 offset is timezone-aware."""
+        result = parse_datetime("2026-04-04T17:30:00+00:00")
+        assert result.tzinfo is not None
+        assert result.utcoffset() == timedelta(0)
+
+    def test_iso_without_offset_is_naive(self):
+        """ISO datetime without offset returns naive datetime."""
+        result = parse_datetime("2026-04-04T17:30:00")
+        assert result.tzinfo is None
+        assert result.hour == 17
+        assert result.minute == 30
+
 
 class TestResolveCalendarIds:
     """Tests for calendar ID resolution."""

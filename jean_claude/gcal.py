@@ -148,13 +148,23 @@ def parse_datetime(s: str) -> datetime:
     """Parse datetime from various formats including relative dates.
 
     Supports:
-        - ISO-like: "2024-01-15", "2024-01-15 14:00", "2024/01/15"
+        - ISO 8601: "2024-01-15", "2024-01-15T14:00:00-06:00"
+        - ISO-like: "2024-01-15 14:00", "2024/01/15"
         - Relative: "today", "tomorrow", "yesterday"
         - Named days: "monday", "next friday", "last tuesday"
         - Relative periods: "3 days", "1 week", "in 2 hours"
+
+    Returns a timezone-aware datetime when the input includes a UTC offset,
+    otherwise returns a naive datetime.
     """
-    # First try exact formats for unambiguous parsing
-    for fmt in ["%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y/%m/%d %H:%M", "%Y/%m/%d"]:
+    # Try ISO 8601 first (handles timezone offsets like -06:00)
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        pass
+
+    # Try slash-separated formats
+    for fmt in ["%Y/%m/%d %H:%M", "%Y/%m/%d"]:
         try:
             return datetime.strptime(s, fmt)
         except ValueError:
@@ -192,6 +202,11 @@ def calculate_all_day_dates(
     else:
         end_date = (start_dt + timedelta(days=1)).strftime("%Y-%m-%d")
     return start_date, end_date
+
+
+def _ensure_aware(dt: datetime) -> datetime:
+    """Make a datetime timezone-aware, preserving existing tzinfo."""
+    return dt if dt.tzinfo else dt.replace(tzinfo=LOCAL_TZ)
 
 
 @click.group(cls=CalendarErrorHandlingGroup)
@@ -253,9 +268,9 @@ def freebusy(from_date: str, to_date: str, calendars: tuple[str, ...]):
     """
     calendar_ids = resolve_calendar_ids(calendars)
 
-    time_min = parse_datetime(from_date).replace(tzinfo=LOCAL_TZ)
-    time_max = parse_datetime(to_date).replace(
-        hour=23, minute=59, second=59, tzinfo=LOCAL_TZ
+    time_min = _ensure_aware(parse_datetime(from_date))
+    time_max = _ensure_aware(parse_datetime(to_date)).replace(
+        hour=23, minute=59, second=59
     )
 
     # If to_date parsed to before from_date, it's likely a duration like "1 week"
@@ -319,15 +334,15 @@ def list_events(
     calendar_ids = resolve_calendar_ids(calendar)
 
     if from_date:
-        time_min = parse_datetime(from_date).replace(tzinfo=LOCAL_TZ)
+        time_min = _ensure_aware(parse_datetime(from_date))
     else:
         time_min = datetime.now(LOCAL_TZ).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
 
     if to_date:
-        time_max = parse_datetime(to_date).replace(
-            hour=23, minute=59, second=59, tzinfo=LOCAL_TZ
+        time_max = _ensure_aware(parse_datetime(to_date)).replace(
+            hour=23, minute=59, second=59
         )
     else:
         time_max = time_min + timedelta(days=days)
@@ -384,6 +399,11 @@ def list_events(
 @click.option("--description", help="Event description")
 @click.option("--attendees", help="Comma-separated attendee emails")
 @click.option(
+    "--timezone",
+    "tz",
+    help="IANA timezone for the event (e.g., America/Denver). Defaults to local timezone.",
+)
+@click.option(
     "--calendar",
     default="primary",
     help="Calendar ID, email, or name (default: primary)",
@@ -397,6 +417,7 @@ def create(
     location: str,
     description: str,
     attendees: str,
+    tz: str,
     calendar: str,
 ):
     """Create a calendar event.
@@ -424,10 +445,11 @@ def create(
         else:
             end_dt = start_dt + timedelta(hours=1)
 
+        event_tz = tz or TIMEZONE
         event_body = {
             "summary": summary,
-            "start": {"dateTime": start_dt.isoformat(), "timeZone": TIMEZONE},
-            "end": {"dateTime": end_dt.isoformat(), "timeZone": TIMEZONE},
+            "start": {"dateTime": start_dt.isoformat(), "timeZone": event_tz},
+            "end": {"dateTime": end_dt.isoformat(), "timeZone": event_tz},
         }
 
     if location:
@@ -726,6 +748,11 @@ def delete(event_id: str, notify: bool, calendar: str):
 @click.option("--description", help="New description")
 @click.option("--attendees", help="Comma-separated attendee emails (replaces existing)")
 @click.option(
+    "--timezone",
+    "tz",
+    help="IANA timezone for the event (e.g., America/Denver). Defaults to local timezone.",
+)
+@click.option(
     "--notify/--no-notify",
     default=True,
     help="Send update emails to attendees (default: notify)",
@@ -745,6 +772,7 @@ def update(
     location: str,
     description: str,
     attendees: str,
+    tz: str,
     notify: bool,
     calendar: str,
 ):
@@ -778,7 +806,10 @@ def update(
         event["end"] = {"date": end_date}
     elif start:
         start_dt = parse_datetime(start)
-        event["start"] = {"dateTime": start_dt.isoformat(), "timeZone": TIMEZONE}
+        event_tz = tz or TIMEZONE
+        old_start = event.get("start", {}).get("dateTime", "")
+        old_end = event.get("end", {}).get("dateTime", "")
+        event["start"] = {"dateTime": start_dt.isoformat(), "timeZone": event_tz}
 
         if end:
             end_dt = parse_datetime(end)
@@ -786,8 +817,6 @@ def update(
             end_dt = start_dt + timedelta(minutes=duration)
         else:
             # Keep same duration as before
-            old_start = event.get("start", {}).get("dateTime", "")
-            old_end = event.get("end", {}).get("dateTime", "")
             if old_start and old_end:
                 old_duration = datetime.fromisoformat(
                     old_end.replace("Z", "+00:00")
@@ -796,10 +825,10 @@ def update(
             else:
                 end_dt = start_dt + timedelta(hours=1)
 
-        event["end"] = {"dateTime": end_dt.isoformat(), "timeZone": TIMEZONE}
+        event["end"] = {"dateTime": end_dt.isoformat(), "timeZone": event_tz}
     elif end:
         end_dt = parse_datetime(end)
-        event["end"] = {"dateTime": end_dt.isoformat(), "timeZone": TIMEZONE}
+        event["end"] = {"dateTime": end_dt.isoformat(), "timeZone": tz or TIMEZONE}
 
     send_updates = "all" if notify else "none"
     result = (
@@ -885,9 +914,9 @@ def conflicts(from_date: str, to_date: str, calendar: tuple[str, ...]):
     """
     calendar_ids = resolve_calendar_ids(calendar)
 
-    time_min = parse_datetime(from_date).replace(tzinfo=LOCAL_TZ)
-    time_max = parse_datetime(to_date).replace(
-        hour=23, minute=59, second=59, tzinfo=LOCAL_TZ
+    time_min = _ensure_aware(parse_datetime(from_date))
+    time_max = _ensure_aware(parse_datetime(to_date)).replace(
+        hour=23, minute=59, second=59
     )
 
     # If to_date is relative, ensure it's after from_date

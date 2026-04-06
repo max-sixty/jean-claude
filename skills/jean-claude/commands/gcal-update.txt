@@ -16,6 +16,8 @@ Options:
   --location TEXT         New location
   --description TEXT      New description
   --attendees TEXT        Comma-separated attendee emails (replaces existing)
+  --timezone TEXT         IANA timezone for the event (e.g., America/Denver).
+                          Defaults to local timezone.
   --notify / --no-notify  Send update emails to attendees (default: notify)
   --calendar TEXT         Calendar ID, email, or name (default: primary)
   --help                  Show this message and exit.
