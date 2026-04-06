@@ -39,22 +39,6 @@ class TestParseDateTime:
         assert result.hour == 0
         assert result.minute == 0
 
-    def test_slash_date_with_time(self):
-        """Test YYYY/MM/DD HH:MM format."""
-        result = parse_datetime("2024/01/15 09:00")
-        assert result.year == 2024
-        assert result.month == 1
-        assert result.day == 15
-        assert result.hour == 9
-        assert result.minute == 0
-
-    def test_slash_date_only(self):
-        """Test YYYY/MM/DD format."""
-        result = parse_datetime("2024/01/15")
-        assert result.year == 2024
-        assert result.month == 1
-        assert result.day == 15
-
     def test_invalid_format(self):
         """Test that invalid formats raise BadParameter."""
         with pytest.raises(click.BadParameter) as exc_info:

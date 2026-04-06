@@ -148,8 +148,7 @@ def parse_datetime(s: str) -> datetime:
     """Parse datetime from various formats including relative dates.
 
     Supports:
-        - ISO 8601: "2024-01-15", "2024-01-15T14:00:00-06:00"
-        - ISO-like: "2024-01-15 14:00", "2024/01/15"
+        - ISO 8601: "2024-01-15", "2024-01-15T14:00:00", "2024-01-15T14:00:00-06:00"
         - Relative: "today", "tomorrow", "yesterday"
         - Named days: "monday", "next friday", "last tuesday"
         - Relative periods: "3 days", "1 week", "in 2 hours"
@@ -162,13 +161,6 @@ def parse_datetime(s: str) -> datetime:
         return datetime.fromisoformat(s)
     except ValueError:
         pass
-
-    # Try slash-separated formats
-    for fmt in ["%Y/%m/%d %H:%M", "%Y/%m/%d"]:
-        try:
-            return datetime.strptime(s, fmt)
-        except ValueError:
-            continue
 
     # Fall back to dateparser for relative dates
     parsed = dateparser.parse(
