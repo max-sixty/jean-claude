@@ -1,6 +1,6 @@
 ---
-name: jean-claude
-description: "This skill should be used when the user asks to search/send/draft email, check calendar, create events, schedule meetings, find/upload/share Drive files, read/edit Google Docs, read spreadsheet data, send texts/iMessages, send WhatsApp messages, send Signal messages, check messages, or create reminders. Manages Gmail, Google Calendar, Google Drive, Google Docs, Google Sheets, iMessage, WhatsApp, Signal, and Apple Reminders."
+name: jc
+description: "Use when the user wants to do anything with email, calendar, messaging, or files: search/send/draft Gmail, check inbox, create/find calendar events, schedule meetings, upload/share Google Drive files, read/edit Google Docs or Sheets, send or read iMessages, WhatsApp messages, Signal messages, or create Apple Reminders. Triggers: 'send email', 'check my calendar', 'schedule a meeting', 'share a file', 'send a text', 'WhatsApp', 'Signal', 'remind me'."
 ---
 
 # jean-claude
