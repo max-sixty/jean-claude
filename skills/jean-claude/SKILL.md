@@ -1680,6 +1680,18 @@ jean-claude gcal respond EVENT_ID --tentative
 jean-claude gcal respond EVENT_ID --accept --no-notify
 ```
 
+**After responding, archive the invitation email.** When the user asked you to
+RSVP from an invitation email in their inbox, the RSVP makes that email
+redundant. Archive it as part of the same action — don't leave it for the user
+to clean up separately:
+
+```bash
+jean-claude gmail archive THREAD_ID
+```
+
+If the user hasn't mentioned an email (e.g., they asked about an invite from
+`gcal invitations`), skip this — there's no specific thread to archive.
+
 ## Other Platforms
 
 Load these platform-specific guides as needed:
