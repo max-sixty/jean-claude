@@ -284,27 +284,41 @@ exists, use these behaviors:
 
 ### Presenting Messages
 
-When showing messages (inbox, unread, search results), use a numbered list so
-the user can reference items by number: "archive 1, reply to 2", "star 3 and 5".
+When showing messages (inbox, unread, search results), group by category and use
+**group-letter numbering** so the user can reference items individually
+("archive A1", "reply to B2") or by group ("archive all of C", "archive B1-B3").
 
-**Use manual numbering, not markdown lists.** Markdown numbered lists auto-correct
-to be sequential — if you write "3. 4. 5. 7. 15. 16." the renderer displays
-"3. 4. 5. 6. 7. 8." causing a mismatch between what you wrote and what the user
-sees. Instead, format as `N:` on each line:
+**Group-letter numbering.** Pick a small set of categories (typically 3–5) that
+fit the messages at hand — common ones are *Needs attention*, *Travel /
+receipts*, *Newsletters*, *In progress*. Label each group with a letter (A, B,
+C, ...) and number items within the group starting at 1:
 
 ```
-1: DoorDash (35 min ago) — Your order...
-2: Squarespace (yesterday) — Domain transfer...
+**Needs attention:**
+A1: Flo critical alert — water shutoff at the main valve
+A2: Zach Perret (yesterday) — Invite to dinner Thursday
+
+**Travel & receipts:**
+B1: Delta (today at 10:37 AM) — LAX → TUS trip details Apr 22
+B2: Waymo (yesterday) — Ride receipts (4 messages)
+
+**Newsletters:**
+C1: The Economist (today) — Weekly edition
+C2: The Browser (today) — Sunday Supplement
 ```
 
-This prevents the renderer from "fixing" your numbering.
+**Use manual `N:` formatting, not markdown lists.** Markdown numbered lists
+auto-correct to be sequential — if you write "3. 4. 5. 7. 15. 16." the renderer
+displays "3. 4. 5. 6. 7. 8." causing a mismatch between what you wrote and what
+the user sees. The `A1:` / `B2:` form sidesteps the renderer entirely.
 
 **Keep items compact — no blank lines between them.** Blank lines waste vertical
-space and make the list harder to scan. Items should be on consecutive lines.
+space and make the list harder to scan. Items within a group should be on
+consecutive lines; one blank line separates groups.
 
-**Preserve original numbers through the session.** After archiving items 1 and 3
-from a list of 1-5, show items 2, 4, 5 with their original numbers — don't
-renumber to 1, 2, 3. This gives items stable identifiers across operations.
+**Preserve identifiers through the session.** After archiving A1 and A3, show
+the remaining items as A2, A4, A5 — don't renumber. This gives items stable
+identifiers across operations.
 
 **Always include dates conversationally.** Check today's date before formatting:
 
@@ -321,11 +335,16 @@ date "+%Y-%m-%d %H:%M %Z"  # Current date/time for reference
 
 **Example** (assuming today is Sunday, Dec 29):
 ```
-1: DoorDash (35 min ago) — Your order from Superba
-2: Squarespace (yesterday at 9:15 AM) — Domain transfer rejected
-3: GitHub (Friday at 4:30 PM) — PR merged: fix-auth-flow
-4: Goodreads (today at 10:30 AM) — Book newsletter
-5: Jordan Lee (Nov 15) — Forwarded: Fellowship nomination
+**Needs attention:**
+A1: Jordan Lee (Nov 15) — Forwarded: Fellowship nomination, asks for response by Jan 5
+A2: Squarespace (yesterday at 9:15 AM) — Domain transfer rejected for maxroos.com
+
+**Receipts & confirmations:**
+B1: DoorDash (35 min ago) — Your order from Superba
+B2: GitHub (Friday at 4:30 PM) — PR merged: fix-auth-flow
+
+**Newsletters:**
+C1: Goodreads (today at 10:30 AM) — Book newsletter
 ```
 
 ### Accuracy in Summaries
