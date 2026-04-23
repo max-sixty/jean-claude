@@ -322,7 +322,7 @@ def list_events(
     page_token: str,
     calendar: tuple[str, ...],
 ):
-    """List calendar events. Returns JSON with events and optional nextPageToken."""
+    """List calendar events. Returns JSON object: {events: [...], nextPageToken?: ...}."""
     calendar_ids = resolve_calendar_ids(calendar)
 
     if from_date:
@@ -475,7 +475,7 @@ def create(
 def search(
     query: str, days: int, max_results: int, page_token: str, calendar: tuple[str, ...]
 ):
-    """Search calendar events. Returns JSON with events and optional nextPageToken.
+    """Search calendar events. Returns JSON object: {events: [...], nextPageToken?: ...}.
 
     QUERY: Text to search for in event titles/descriptions
     """

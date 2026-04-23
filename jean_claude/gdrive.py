@@ -65,7 +65,7 @@ def cli():
 @click.option("-n", "--max-results", default=20, help="Maximum results per page")
 @click.option("--page-token", help="Token for next page of results")
 def list_files(folder: str | None, max_results: int, page_token: str):
-    """List files in a folder. Returns JSON with files and optional nextPageToken."""
+    """List files in a folder. Returns JSON object: {files: [...], nextPageToken?: ...}."""
     parent = folder or "root"
     query = f"'{parent}' in parents and trashed = false"
 
@@ -92,7 +92,7 @@ def list_files(folder: str | None, max_results: int, page_token: str):
 @click.option("-n", "--max-results", default=20, help="Maximum results per page")
 @click.option("--page-token", help="Token for next page of results")
 def search(query: str, max_results: int, page_token: str):
-    """Search for files. Returns JSON with files and optional nextPageToken.
+    """Search for files. Returns JSON object: {files: [...], nextPageToken?: ...}.
 
     QUERY: Search query (e.g., 'name contains "report"', 'mimeType = "application/pdf"')
     """

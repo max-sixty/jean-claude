@@ -1,6 +1,7 @@
 Usage: jean-claude gcal list [OPTIONS]
 
-  List calendar events. Returns JSON with events and optional nextPageToken.
+  List calendar events. Returns JSON object: {events: [...], nextPageToken?:
+  ...}.
 
 Options:
   --days INTEGER             Number of days to show (default: 1)

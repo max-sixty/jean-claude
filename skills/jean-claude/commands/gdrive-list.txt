@@ -1,6 +1,7 @@
 Usage: jean-claude gdrive list [OPTIONS]
 
-  List files in a folder. Returns JSON with files and optional nextPageToken.
+  List files in a folder. Returns JSON object: {files: [...], nextPageToken?:
+  ...}.
 
 Options:
   --folder TEXT              Folder ID to list (default: root)

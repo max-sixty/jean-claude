@@ -1,6 +1,6 @@
 Usage: jean-claude gdrive search [OPTIONS] QUERY
 
-  Search for files. Returns JSON with files and optional nextPageToken.
+  Search for files. Returns JSON object: {files: [...], nextPageToken?: ...}.
 
   QUERY: Search query (e.g., 'name contains "report"', 'mimeType =
   "application/pdf"')
