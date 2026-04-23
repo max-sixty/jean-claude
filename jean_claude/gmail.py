@@ -181,7 +181,7 @@ def get_my_from_address(service=None) -> str:
             email = alias["sendAsEmail"]
             display_name = alias.get("displayName", "")
             if display_name:
-                return formataddr((display_name, email))
+                return formataddr((display_name, email), charset="utf-8")
             break
 
     if not email:
@@ -191,7 +191,7 @@ def get_my_from_address(service=None) -> str:
     # This mirrors Gmail's behavior when send-as displayName is empty
     display_name = _get_profile_display_name()
     if display_name:
-        return formataddr((display_name, email))
+        return formataddr((display_name, email), charset="utf-8")
     return email
 
 
@@ -278,6 +278,9 @@ def _format_recipients(addresses: str) -> str:
     and returns addresses formatted as "Display Name <email>" where available.
 
     Addresses that already have a display name are kept as-is.
+
+    Display names containing non-ASCII characters are RFC 2047 encoded
+    (charset='utf-8') so only the name is encoded, not the addr-spec.
     """
     if not addresses:
         return addresses
@@ -287,12 +290,12 @@ def _format_recipients(addresses: str) -> str:
     for name, email in parsed:
         if name:
             # Already has a name, keep it
-            formatted.append(formataddr((name, email)))
+            formatted.append(formataddr((name, email), charset="utf-8"))
         else:
             # Look up display name from contacts
             contact_name = _lookup_contact_name(email)
             if contact_name:
-                formatted.append(formataddr((contact_name, email)))
+                formatted.append(formataddr((contact_name, email), charset="utf-8"))
             else:
                 formatted.append(email)
     return ", ".join(formatted)
@@ -1297,7 +1300,7 @@ def _create_reply_draft(
             for name, addr in parsed
             if addr and addr.lower() not in exclude_lower
         ]
-        return ", ".join(formataddr(pair) for pair in filtered)
+        return ", ".join(formataddr(pair, charset="utf-8") for pair in filtered)
 
     # Determine recipients
     if reply_to:
@@ -1344,12 +1347,16 @@ def _create_reply_draft(
         plain_body, html_body, attachments or [], inline_image_parts or None
     )
     msg["from"] = my_from_addr
-    msg["to"] = to_addr
+    # Route through _format_recipients so Unicode display names (e.g. a
+    # sender's "From: \"Renée Dupont\" <r@example.org>") get RFC 2047 encoded
+    # only on the name — otherwise compat32 encodes the whole value including
+    # the addr-spec and Gmail rejects it as "Invalid To header".
+    msg["to"] = _format_recipients(to_addr)
     # Use custom CC if provided, otherwise use auto-detected CC for reply-all
     if custom_cc:
         msg["cc"] = _format_recipients(custom_cc)
     elif include_cc and cc_addr:
-        msg["cc"] = cc_addr
+        msg["cc"] = _format_recipients(cc_addr)
     msg["subject"] = subject
     if message_id_header:
         msg["In-Reply-To"] = message_id_header

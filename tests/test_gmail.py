@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import base64
 from email import encoders
+from email import message_from_bytes
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.header import decode_header, make_header
+from email.utils import parseaddr
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -15,8 +19,10 @@ from jean_claude.gmail import (
     GmailErrorHandlingGroup,
     _build_message_with_attachments,
     _create_attachment_part,
+    _create_reply_draft,
     _extract_attachments,
     _extract_inline_images,
+    _format_recipients,
     _get_part_header,
     _strip_html,
     decode_body,
@@ -772,3 +778,98 @@ class TestGetPartHeader:
         """Test handles part without headers key."""
         part = {"mimeType": "text/plain"}
         assert _get_part_header(part, "Content-ID") is None
+
+
+class TestFormatRecipientsUnicode:
+    """_format_recipients must RFC 2047 encode only the display name.
+
+    Regression: compat32 MIME headers Base64-encode the entire value when
+    non-ASCII is present, hiding the addr-spec inside an encoded-word. Gmail's
+    API then rejects the header as "Invalid To header".
+    """
+
+    def test_unicode_display_name_preserves_addr_spec(self):
+        """Unicode name is encoded, addr-spec stays in clear text."""
+        result = _format_recipients('"Renée Dupont" <rdupont@example.org>')
+        assert "<rdupont@example.org>" in result
+        assert "=?utf-8?" in result.lower()
+        # parseaddr splits the encoded-word name from the addr-spec
+        encoded_name, addr = parseaddr(result)
+        assert addr == "rdupont@example.org"
+        # The encoded-word decodes back to the original display name
+        assert str(make_header(decode_header(encoded_name))) == "Renée Dupont"
+
+    def test_assigned_to_mime_header_emits_valid_addr(self):
+        """When set as a MIME To header, the addr-spec appears unencoded."""
+        formatted = _format_recipients('"Renée Dupont" <rdupont@example.org>')
+        msg = MIMEMultipart("mixed")
+        msg.attach(MIMEText("hi", "plain"))
+        msg["to"] = formatted
+        raw = msg.as_bytes().decode("utf-8", errors="replace")
+        to_line = next(
+            line for line in raw.splitlines() if line.lower().startswith("to:")
+        )
+        assert "<rdupont@example.org>" in to_line
+
+
+class TestReplyUnicodeSender:
+    """_create_reply_draft must build a valid To header when the original
+    sender's display name contains non-ASCII characters."""
+
+    def _make_service(self, original_from: str, captured: dict) -> MagicMock:
+        service = MagicMock()
+        original_message = {
+            "id": "msg-abc",
+            "threadId": "thread-xyz",
+            "labelIds": ["INBOX"],
+            "payload": {
+                "headers": [
+                    {"name": "From", "value": original_from},
+                    {"name": "To", "value": "me@example.com"},
+                    {"name": "Subject", "value": "Hello"},
+                    {"name": "Date", "value": "Mon, 1 Jan 2024 12:00:00 +0000"},
+                    {"name": "Message-ID", "value": "<orig@mail.example>"},
+                ],
+                "body": {"data": ""},
+                "mimeType": "text/plain",
+            },
+        }
+        service.users().messages().get().execute.return_value = original_message
+
+        def capture_create(userId: str, body: dict):
+            captured["raw"] = body["message"]["raw"]
+            result_mock = MagicMock()
+            result_mock.execute.return_value = {
+                "id": "draft-id",
+                "message": {"id": "msg-new"},
+            }
+            return result_mock
+
+        service.users().drafts().create.side_effect = capture_create
+        return service
+
+    def test_unicode_display_name_in_from_produces_valid_to_header(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: dict = {}
+        service = self._make_service('"Renée Dupont" <rdupont@example.org>', captured)
+        monkeypatch.setattr("jean_claude.gmail.get_gmail", lambda: service)
+        monkeypatch.setattr(
+            "jean_claude.gmail.get_my_from_address", lambda _s: "me@example.com"
+        )
+        monkeypatch.setattr(
+            "jean_claude.gmail._fetch_inline_image_parts",
+            lambda *a, **kw: ([], set()),
+        )
+
+        _create_reply_draft("msg-abc", "Thanks!", include_cc=False)
+
+        raw_bytes = base64.urlsafe_b64decode(captured["raw"].encode())
+        parsed = message_from_bytes(raw_bytes)
+        to_header = parsed["To"]
+        # Must contain the addr-spec in clear text, not hidden in an
+        # encoded-word that wraps the whole mailbox.
+        assert "<rdupont@example.org>" in to_header
+        encoded_name, addr = parseaddr(to_header)
+        assert addr == "rdupont@example.org"
+        assert str(make_header(decode_header(encoded_name))) == "Renée Dupont"
