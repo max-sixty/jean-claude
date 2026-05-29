@@ -661,6 +661,8 @@ def extract_message_summary(msg: dict, include_headers: bool = False) -> dict:
     }
     if cc := headers.get("cc"):
         result["cc"] = cc
+    if bcc := headers.get("bcc"):
+        result["bcc"] = bcc
 
     body, html_body = extract_body(msg["payload"])
     result["file"] = _write_email_cache("email", msg["id"], result, body, html_body)
@@ -721,6 +723,8 @@ def extract_thread_summary(thread: dict) -> dict:
         }
         if cc := msg_headers.get("cc"):
             msg_summary["cc"] = cc
+        if bcc := msg_headers.get("bcc"):
+            msg_summary["bcc"] = bcc
         message_summaries.append(msg_summary)
 
     result = {
@@ -757,6 +761,8 @@ def extract_draft_summary(draft: dict) -> dict:
     }
     if cc := headers.get("cc"):
         result["cc"] = cc
+    if bcc := headers.get("bcc"):
+        result["bcc"] = bcc
     return result
 
 

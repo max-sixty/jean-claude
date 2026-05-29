@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from email import encoders
 from email import message_from_bytes
 from email.mime.base import MIMEBase
@@ -227,6 +228,90 @@ class TestExtractSummary:
         assert result["cc"] == "cc@example.com"
         assert result["to"] == "recipient@example.com"
         assert result["subject"] == "Draft test"
+
+    def test_extract_message_bcc(self, tmp_path, monkeypatch):
+        """Bcc is surfaced on message/search output and flows to the cache file.
+
+        Sent messages retain the Bcc header on the sender's copy. Uses Exchange
+        all-caps casing to exercise the case-insensitive header lookup.
+        """
+        monkeypatch.setattr("jean_claude.gmail.EMAIL_CACHE_DIR", tmp_path)
+
+        msg = self._make_message(
+            [
+                ("From", "sender@example.com"),
+                ("To", "recipient@example.com"),
+                ("Subject", "Test"),
+                ("Date", "Mon, 1 Jan 2024 12:00:00 +0000"),
+                ("BCC", "bcc1@example.com, bcc2@example.com"),
+            ]
+        )
+
+        result = extract_message_summary(msg)
+        assert result["bcc"] == "bcc1@example.com, bcc2@example.com"
+
+        # Bcc must also persist to the cached email-<id>.json
+        cached = json.loads(Path(result["file"]).read_text())
+        assert cached["bcc"] == "bcc1@example.com, bcc2@example.com"
+
+    def test_extract_message_no_bcc_omits_field(self, tmp_path, monkeypatch):
+        """A message without a Bcc header omits the field entirely."""
+        monkeypatch.setattr("jean_claude.gmail.EMAIL_CACHE_DIR", tmp_path)
+
+        msg = self._make_message(
+            [
+                ("From", "sender@example.com"),
+                ("To", "recipient@example.com"),
+                ("Subject", "Test"),
+                ("Date", "Mon, 1 Jan 2024 12:00:00 +0000"),
+            ]
+        )
+
+        result = extract_message_summary(msg)
+        assert "bcc" not in result
+        assert "bcc" not in json.loads(Path(result["file"]).read_text())
+
+    def test_extract_thread_bcc(self, tmp_path, monkeypatch):
+        """Thread message summaries surface Bcc regardless of casing."""
+        monkeypatch.setattr("jean_claude.gmail.EMAIL_CACHE_DIR", tmp_path)
+
+        thread = {
+            "id": "thread456",
+            "messages": [
+                self._make_message(
+                    [
+                        ("From", "sender@example.com"),
+                        ("To", "recipient@example.com"),
+                        ("Subject", "Test thread"),
+                        ("Date", "Mon, 1 Jan 2024 12:00:00 +0000"),
+                        ("BCC", "bcc@example.com"),  # All caps
+                    ]
+                ),
+            ],
+        }
+
+        result = extract_thread_summary(thread)
+        assert result["messages"][0]["bcc"] == "bcc@example.com"
+
+    def test_extract_draft_bcc(self):
+        """Draft summary surfaces Bcc regardless of casing."""
+        draft = {
+            "id": "draft789",
+            "message": {
+                "id": "msg123",
+                "payload": {
+                    "headers": [
+                        {"name": "To", "value": "recipient@example.com"},
+                        {"name": "Subject", "value": "Draft test"},
+                        {"name": "BCC", "value": "bcc@example.com"},  # All caps
+                    ],
+                },
+                "snippet": "Draft content",
+            },
+        }
+
+        result = extract_draft_summary(draft)
+        assert result["bcc"] == "bcc@example.com"
 
 
 class TestExtractAttachments:
