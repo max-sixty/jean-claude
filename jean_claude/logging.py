@@ -59,15 +59,20 @@ def configure_logging(
     """Configure structlog for the application.
 
     Args:
-        verbose: If True, enables DEBUG level console output. Otherwise INFO.
+        verbose: If True, enables DEBUG level console output. Otherwise WARNING,
+                 so INFO progress chatter stays off stderr and stdout reads as
+                 pure JSON (the JSON file log keeps full DEBUG detail regardless).
         json_log: Path to JSON log file. Use "-" for stdout, "auto" for default path,
                   None to disable file logging.
     """
     handlers: list[logging.Handler] = []
 
-    # Console handler for user-visible output
+    # Console handler for user-visible output. INFO is suppressed by default
+    # because commands emit JSON on stdout for programmatic consumption; INFO
+    # progress lines on stderr would be noise and corrupt any consumer merging
+    # the two streams. --verbose raises this to DEBUG for debugging.
     console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setLevel(logging.DEBUG if verbose else logging.INFO)
+    console_handler.setLevel(logging.DEBUG if verbose else logging.WARNING)
     console_handler.setFormatter(_get_console_formatter())
     handlers.append(console_handler)
 

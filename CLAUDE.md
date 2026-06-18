@@ -364,7 +364,7 @@ Cache can be cleared without data loss (content is re-fetchable from APIs).
 
 - **Queries** (list, search, get, read) → JSON to stdout
 - **Operations returning data** (create, update) → JSON to stdout (agent needs the ID/result)
-- **Operations with no result** (delete, star) → `logger.info()` only (exit code indicates success)
+- **Operations with no result** (delete, star) → exit code indicates success (a `logger.info()` line records it, shown only with `--verbose`)
 - **File content** → Write to file (e.g., `gdrive download`)
 
 Two output mechanisms:
@@ -373,11 +373,13 @@ Two output mechanisms:
   - `click.echo(json.dumps(output, indent=2))`
 
 - **`logger`** (structlog) — Status/progress to stderr
-  - `logger.info("Archived 5 threads", count=5)` — progress (shown by default)
+  - `logger.info("Archived 5 threads", count=5)` — progress (shown with --verbose)
   - `logger.debug("detail", context=data)` — debug info (shown with --verbose)
+  - `logger.warning(...)` / errors — shown by default
 
-Console level is INFO by default, DEBUG with --verbose. All logs also go to
-JSON file at `~/Library/Logs/jean-claude/jean-claude.log`.
+Console level is WARNING by default (so stdout stays pure JSON and stderr stays
+quiet), DEBUG with --verbose. All logs also go to the JSON file at
+`~/Library/Logs/jean-claude/jean-claude.log`, which always keeps full detail.
 
 Import: `from jean_claude.logging import get_logger; logger = get_logger(__name__)`
 
