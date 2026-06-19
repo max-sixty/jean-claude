@@ -110,20 +110,39 @@ add your terminal app.
 
 ## Image Attachments
 
-Messages include an `attachments` field with file paths to images. Use Claude's
-Read tool to view and describe the images.
+Messages carry an `attachments` field listing image attachments. Each has a
+`downloaded` flag:
 
-**Attachment schema:**
+- `downloaded: true`: the bytes are on local disk. The `file` path points to
+  them; read it with Claude's Read tool to view and describe the image.
+- `downloaded: false`: the bytes aren't on local disk. Usually the original is
+  in iCloud (Messages "Optimize Mac Storage" offloads attachment bytes), so the
+  photo exists but isn't readable locally. The entry carries `transfer_state`
+  and no `file`. To pull the original down, run `imessage open CHAT_ID` with the
+  message's `chat_id` to open the chat in Messages.app, then re-fetch the
+  messages. (If `transfer_state` is 5, the bytes were downloaded once and later
+  deleted; opening the chat re-fetches from iCloud only while iCloud still holds
+  the original.)
 
 ```json
 {
+  "chat_id": "any;+;chat123456789",
   "attachments": [
     {
       "type": "image",
       "filename": "IMG_1234.heic",
       "mimeType": "image/heic",
       "size": 456789,
+      "downloaded": true,
       "file": "/Users/you/Library/Messages/Attachments/.../IMG_1234.heic"
+    },
+    {
+      "type": "image",
+      "filename": "IMG_5678.heic",
+      "mimeType": "image/heic",
+      "size": 987654,
+      "downloaded": false,
+      "transfer_state": 0
     }
   ]
 }
@@ -131,3 +150,8 @@ Read tool to view and describe the images.
 
 Only image attachments are included (HEIC, JPEG, PNG, GIF, WebP). Other media
 types (video, audio, documents) are not exposed.
+
+A photo the user remembers sending that doesn't appear at all (no entry, even
+with `downloaded: false`) hasn't synced to this Mac: its row isn't in the local
+database. Opening the thread in Messages.app on this Mac, or on the device that
+has it, lets iCloud sync it down.

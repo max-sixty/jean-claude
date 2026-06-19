@@ -461,14 +461,20 @@ class DatabaseBuilder:
         filename: str,
         mime_type: str,
         size: int = 1024,
+        transfer_state: int = 5,
     ) -> SyntheticAttachment:
-        """Add an attachment to a message."""
+        """Add an attachment to a message.
+
+        transfer_state mirrors Apple's column: 5 = transfer complete, 0 =
+        waiting/offloaded (the bytes may not be on local disk).
+        """
         attachment = SyntheticAttachment(
             rowid=self._next_attachment_id,
             guid=f"att-{self._next_attachment_id}",
             filename=filename,
             mime_type=mime_type,
             total_bytes=size,
+            transfer_state=transfer_state,
         )
         self._next_attachment_id += 1
         self.attachments.append((attachment, message.rowid))

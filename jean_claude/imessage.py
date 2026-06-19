@@ -45,6 +45,17 @@ def get_db_connection() -> sqlite3.Connection:
         raise
 
 
+def guid_to_chat_id(guid: str) -> str:
+    """Convert a chat GUID to the Messages.app chat ID agents pass back.
+
+    The GUID is like "iMessage;-;+12345" or "iMessage;+;chat123"; the "any;"
+    prefix is the form send/open/mark-read accept.
+    """
+    if guid.startswith("iMessage;"):
+        return "any" + guid[len("iMessage") :]
+    return guid
+
+
 def build_message_dict(
     date: str,
     sender: str,
@@ -52,6 +63,7 @@ def build_message_dict(
     is_from_me: bool = False,
     contact_name: str | None = None,
     group_name: str | None = None,
+    chat_id: str | None = None,
     attachments: list[dict] | None = None,
 ) -> dict:
     """Build a message dictionary for JSON output."""
@@ -62,6 +74,7 @@ def build_message_dict(
         "is_from_me": is_from_me,
         "contact_name": contact_name,
         "group_name": group_name,
+        "chat_id": chat_id,
     }
     if attachments:
         result["attachments"] = attachments
@@ -83,9 +96,18 @@ IMAGE_MIME_TYPES = frozenset(
 
 
 def parse_attachments(attachments_json: str | None) -> list[dict]:
-    """Parse attachment JSON from SQLite query into list of attachment dicts.
+    """Parse attachment JSON from SQLite query into list of image attachment dicts.
 
-    Only returns image attachments with valid, existing file paths.
+    Every image attachment is surfaced, flagged with `downloaded`:
+
+    - Downloaded (bytes on local disk) → also carries a `file` path the agent
+      can read.
+    - Not downloaded → the original lives in iCloud (Messages "Optimize Mac
+      Storage" offloads attachment bytes, leaving the row with a path that has
+      no local file). Surfaced with `downloaded: false` and its `transfer_state`
+      so the agent knows a photo exists even though it can't be read locally.
+      Opening the chat in Messages.app pulls the original down.
+
     The SQL query defines the JSON structure, so we trust the field names.
     """
     if not attachments_json:
@@ -96,26 +118,27 @@ def parse_attachments(attachments_json: str | None) -> list[dict]:
     result = []
     for att in attachments_data:
         mime_type = att["mime_type"]
-        filename = att["filename"]
 
         # Only include images
         if mime_type not in IMAGE_MIME_TYPES:
             continue
 
-        # Expand ~ to home directory and verify file exists
-        file_path = Path(filename).expanduser()
-        if not file_path.exists():
-            continue
+        # Expand ~ to home directory; bytes are local only if the file exists
+        file_path = Path(att["filename"]).expanduser()
+        downloaded = file_path.exists()
 
-        result.append(
-            {
-                "type": mime_type.split("/")[0],
-                "filename": file_path.name,
-                "mimeType": mime_type,
-                "size": att["size"] or 0,
-                "file": str(file_path),
-            }
-        )
+        attachment = {
+            "type": mime_type.split("/")[0],
+            "filename": file_path.name,
+            "mimeType": mime_type,
+            "size": att["size"] or 0,
+            "downloaded": downloaded,
+        }
+        if downloaded:
+            attachment["file"] = str(file_path)
+        else:
+            attachment["transfer_state"] = att["transfer_state"]
+        result.append(attachment)
 
     return result
 
@@ -583,7 +606,8 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
             (SELECT json_group_array(json_object(
                 'filename', a.filename,
                 'mime_type', a.mime_type,
-                'size', a.total_bytes
+                'size', a.total_bytes,
+                'transfer_state', a.transfer_state
              ))
              FROM message_attachment_join maj
              JOIN attachment a ON maj.attachment_id = a.ROWID
@@ -591,7 +615,8 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
                AND a.filename IS NOT NULL
                AND a.transfer_state IN (0, 5)
             ) as attachments_json,
-            m.is_from_me
+            m.is_from_me,
+            c.guid
         FROM message m
         LEFT JOIN handle h ON m.handle_id = h.ROWID
         LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
@@ -631,6 +656,7 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
             participants_str,
             attachments_json,
             is_from_me_int,
+            chat_guid,
         ) = row
 
         msg_text = get_message_text(text, attributed_body)
@@ -663,6 +689,7 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
                 is_from_me=is_from_me,
                 contact_name=contact_name,
                 group_name=group_name,
+                chat_id=guid_to_chat_id(chat_guid) if chat_guid else None,
                 attachments=attachments,
             )
         )
@@ -921,13 +948,7 @@ def chats(max_results: int, unread: bool):
         last_message_date,
         unread_count,
     ) in rows:
-        # Build Messages.app-style chat ID
-        # guid format: "iMessage;-;+12345" or "iMessage;+;chat12345"
-        # We convert to "any;" prefix for compatibility
-        if guid.startswith("iMessage;"):
-            chat_id = "any" + guid[8:]  # Replace "iMessage" with "any"
-        else:
-            chat_id = guid
+        chat_id = guid_to_chat_id(guid)
 
         # Prefer AppleScript name (has contact names), fall back to database
         name = name_map.get(chat_id) or display_name or chat_identifier

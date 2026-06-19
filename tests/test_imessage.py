@@ -172,6 +172,19 @@ class TestFetchMessages:
         project_msgs = [m for m in messages if m.get("group_name") == "Project Team"]
         assert len(project_msgs) > 0
 
+    def test_message_includes_chat_id(self, imessage_sample_db):
+        """Messages carry the chat_id agents pass back to open/mark-read."""
+        query = MessageQuery(max_results=50)
+        messages = fetch_messages(imessage_sample_db, query)
+
+        assert messages
+        # Every message resolves to a Messages.app chat ID
+        for msg in messages:
+            assert msg["chat_id"].startswith("any;")
+        # Group messages resolve to a group chat ID (any;+;...)
+        group_msg = next(m for m in messages if m.get("group_name") == "Project Team")
+        assert group_msg["chat_id"].startswith("any;+;")
+
     def test_message_with_attachment_marker(self, imessage_sample_db):
         """Test that messages with attachment marker are returned.
 
@@ -352,7 +365,8 @@ class TestMessageAttachments:
     def db_with_attachments(self, imessage_db_builder, tmp_path):
         """Create a database with various attachment types.
 
-        Creates real temp files since parse_attachments validates file existence.
+        Downloaded attachments get real temp files so parse_attachments flags
+        them downloaded=true; the offloaded one deliberately has no backing file.
         """
         builder = imessage_db_builder
 
@@ -396,6 +410,23 @@ class TestMessageAttachments:
         builder.add_attachment(msg_multi, str(file1_path), "image/png", size=1024)
         builder.add_attachment(msg_multi, str(file2_path), "image/png", size=2048)
 
+        # Image whose bytes are not on local disk (offloaded to iCloud). The
+        # path is never written, and transfer_state=0 mirrors a waiting/offloaded
+        # attachment. Should still be surfaced, flagged downloaded=false.
+        msg_offloaded = builder.add_message(
+            chat,
+            "Offloaded photo",
+            sender=alice,
+            date=base_time + timedelta(minutes=12),
+        )
+        builder.add_attachment(
+            msg_offloaded,
+            str(tmp_path / "not_downloaded.heic"),
+            "image/heic",
+            size=987654,
+            transfer_state=0,
+        )
+
         # Text-only message
         builder.add_message(
             chat,
@@ -413,8 +444,28 @@ class TestMessageAttachments:
 
         photo_msg = next(m for m in messages if "Check this out" in m["text"])
         assert len(photo_msg["attachments"]) == 1
-        assert photo_msg["attachments"][0]["mimeType"] == "image/jpeg"
-        assert photo_msg["attachments"][0]["size"] == 1024000
+        att = photo_msg["attachments"][0]
+        assert att["mimeType"] == "image/jpeg"
+        assert att["size"] == 1024000
+        # Downloaded attachments carry a readable file path and downloaded=true
+        assert att["downloaded"] is True
+        assert att["file"].endswith("photo.jpeg")
+        assert "transfer_state" not in att
+
+    def test_offloaded_image_surfaced_as_not_downloaded(self, db_with_attachments):
+        """Images whose bytes aren't on local disk are flagged, not dropped."""
+        query = MessageQuery(max_results=10)
+        messages = fetch_messages(db_with_attachments, query)
+
+        offloaded_msg = next(m for m in messages if "Offloaded photo" in m["text"])
+        assert len(offloaded_msg["attachments"]) == 1
+        att = offloaded_msg["attachments"][0]
+        assert att["downloaded"] is False
+        assert att["transfer_state"] == 0
+        assert att["filename"] == "not_downloaded.heic"
+        assert att["mimeType"] == "image/heic"
+        # No local file path when the bytes aren't downloaded
+        assert "file" not in att
 
     def test_multiple_attachments_per_message(self, db_with_attachments):
         """Test messages with multiple attachments."""
