@@ -9,7 +9,8 @@
       "source": "./",
       "description": "Gmail, Calendar, Drive, and iMessage integration",
       "skills": [
-        "./skills/jean-claude"
+        "./skills/jean-claude",
+        "./skills/check-emails"
       ]
     }
   ]
