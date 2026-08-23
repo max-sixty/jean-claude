@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import sqlite3
 import sys
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from itertools import islice
 from pathlib import Path
 
 import click
@@ -200,6 +202,28 @@ def get_message_text(text: str | None, attributed_body: bytes | None) -> str | N
     if text:
         return text
     return extract_text_from_attributed_body(attributed_body)
+
+
+def confirm_search_matches(
+    rows: Iterable[tuple], search_text: str | None
+) -> Iterator[tuple]:
+    """Drop rows whose decoded text doesn't contain search_text.
+
+    The SQL prefilter matches raw attributedBody bytes, which carry archiver metadata
+    alongside the message ("number" appears in nearly every row via NSNumber). The
+    decoded text is the only authoritative version, so confirm against it here.
+    """
+    # Matches the truthiness test the WHERE clause uses, so an empty search stays a
+    # no-op in both places rather than silently dropping text-less rows here.
+    if not search_text:
+        yield from rows
+        return
+
+    needle = search_text.lower()
+    for row in rows:
+        text = get_message_text(row[2], row[3])  # m.text, m.attributedBody
+        if text and needle in text.lower():
+            yield row
 
 
 def get_chat_id_for_phone(phone: str) -> str | None:
@@ -518,7 +542,7 @@ class MessageQuery:
 
     Filtering:
         chat_identifiers: Filter to specific chats (phones/emails/chat IDs)
-        search_text: Search in message text (LIKE match)
+        search_text: Case-insensitive substring match on the decoded message text
         unread_only: Only fetch unread messages from others
         include_spam: Include filtered/spam messages (excluded by default)
 
@@ -582,8 +606,17 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
         )
 
     if query.search_text:
-        where_clauses.append("m.text LIKE ?")
-        params.append(f"%{query.search_text}%")
+        # Modern macOS leaves m.text NULL and stores the text in attributedBody, so
+        # matching m.text alone finds almost nothing. LIKE is unusable here because it
+        # stops at the blob's NUL bytes; instr() compares the full byte range.
+        #
+        # This only narrows the candidate set: the blob also contains archiver metadata
+        # (NSNumber, __kIMMessagePartAttributeName, ...), so a term like "number" matches
+        # nearly every row. The decoded text is authoritative — see the confirm below.
+        where_clauses.append(
+            "instr(lower(COALESCE(m.text, CAST(m.attributedBody AS TEXT))), lower(?)) > 0"
+        )
+        params.append(query.search_text)
 
     where_clause = " AND ".join(where_clauses) if where_clauses else ""
     cursor = conn.cursor()
@@ -624,11 +657,14 @@ def fetch_messages(conn: sqlite3.Connection, query: MessageQuery) -> list[dict]:
         WHERE (m.text IS NOT NULL OR m.attributedBody IS NOT NULL OR m.cache_has_attachments = 1)
         {("AND " + where_clause) if where_clause else ""}
         ORDER BY m.date DESC
-        LIMIT ?
     """
 
-    cursor.execute(sql, (*params, query.max_results))
-    rows = cursor.fetchall()
+    # Rows stream newest-first so the limit applies after search confirmation; SQL can't
+    # apply it, since it can't tell a real hit from a match on archiver metadata.
+    cursor.execute(sql, params)
+    rows = list(
+        islice(confirm_search_matches(cursor, query.search_text), query.max_results)
+    )
 
     if not rows:
         return []

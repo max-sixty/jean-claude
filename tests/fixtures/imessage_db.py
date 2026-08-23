@@ -19,6 +19,29 @@ IMESSAGE_INDIVIDUAL_CHAT_STYLE = 45
 IMESSAGE_GROUP_CHAT_STYLE = 43
 
 
+def build_attributed_body(text: str) -> bytes:
+    """Build an attributedBody blob in the streamtyped layout macOS writes.
+
+    Wraps the text in the same archiver scaffolding real rows carry — the NUL bytes
+    that make SQL LIKE unusable on the blob, and the class names (NSNumber,
+    __kIMMessagePartAttributeName) that a raw byte match would mistake for content.
+
+    Text must encode to under 129 bytes, the single-byte length encoding.
+    """
+    encoded = text.encode("utf-8")
+    assert len(encoded) < 0x81, f"text too long for single-byte length: {text!r}"
+    return (
+        b"\x04\x0bstreamtyped\x81\xe8\x03\x84\x01@\x84\x84\x84\x12"
+        b"NSAttributedString\x00\x84\x84\x08NSObject\x00\x85\x92"
+        b"\x84\x84\x84\x08NSString\x01\x94\x84\x01+"
+        + bytes([len(encoded)])
+        + encoded
+        + b"\x86\x84\x02iI\x01\x12\x92\x84\x84\x84\x0cNSDictionary\x00\x95\x84"
+        b"\x84\x08NSNumber\x00\x84\x84\x07NSValue\x00\x1e"
+        b"__kIMMessagePartAttributeName\x00\x86"
+    )
+
+
 @dataclass
 class SyntheticHandle:
     """A synthetic contact/handle."""

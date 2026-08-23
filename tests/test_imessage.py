@@ -15,6 +15,7 @@ from jean_claude.imessage import (
 from tests.fixtures.imessage_db import (
     IMESSAGE_GROUP_CHAT_STYLE,
     IMESSAGE_INDIVIDUAL_CHAT_STYLE,
+    build_attributed_body,
 )
 
 
@@ -260,6 +261,82 @@ class TestFetchMessagesWithFilters:
         assert len(messages) == 2
         for msg in messages:
             assert "Alice" in msg["text"] or "Message 1" in msg["text"]
+
+    @pytest.fixture
+    def db_with_attributed_body_only(self, imessage_db_builder):
+        """Messages whose text lives only in attributedBody, as on modern macOS."""
+        builder = imessage_db_builder
+        alice = builder.add_handle("+15551111111")
+        chat = builder.add_individual_chat(alice)
+        base_time = datetime.now() - timedelta(days=1)
+
+        for offset, text in enumerate(
+            ["Ice cream on Saturday", "See you at the picnic", "Bringing a dessert"]
+        ):
+            builder.add_message(
+                chat,
+                None,
+                sender=alice,
+                date=base_time + timedelta(minutes=offset),
+                attributed_body=build_attributed_body(text),
+            )
+        return builder.build()
+
+    def test_search_finds_text_stored_in_attributed_body(
+        self, db_with_attributed_body_only
+    ):
+        """Search reads attributedBody, and stays case-insensitive doing it."""
+        conn = db_with_attributed_body_only
+
+        for term in ["ice cream", "ICE CREAM", "Ice Cream"]:
+            messages = fetch_messages(conn, MessageQuery(search_text=term))
+            assert [m["text"] for m in messages] == ["Ice cream on Saturday"], (
+                f"search for {term!r} did not find the message"
+            )
+
+    def test_search_ignores_archiver_metadata(self, db_with_attributed_body_only):
+        """Terms that appear only in the blob's archiver metadata are not matches."""
+        conn = db_with_attributed_body_only
+
+        # "NSNumber" and "__kIMMessagePartAttributeName" sit in every real blob, so a
+        # raw byte match would return all three messages here.
+        for term in ["number", "message", "NSString"]:
+            messages = fetch_messages(conn, MessageQuery(search_text=term))
+            assert messages == [], f"{term!r} matched archiver metadata"
+
+    def test_search_limit_counts_confirmed_matches(self, imessage_db_builder):
+        """max_results limits real hits, not the rows the SQL prefilter let through."""
+        builder = imessage_db_builder
+        alice = builder.add_handle("+15551111111")
+        chat = builder.add_individual_chat(alice)
+        base_time = datetime.now() - timedelta(days=1)
+
+        # "number" is in every blob via NSNumber, so every row below is a prefilter
+        # candidate and only these older ones are real hits.
+        for offset in range(5):
+            builder.add_message(
+                chat,
+                None,
+                sender=alice,
+                date=base_time + timedelta(minutes=offset),
+                attributed_body=build_attributed_body(f"my number is {offset}"),
+            )
+        # Newer rows that match the prefilter on metadata alone. Were the limit applied
+        # in SQL, these would fill it and crowd out every real hit.
+        for offset in range(20):
+            builder.add_message(
+                chat,
+                None,
+                sender=alice,
+                date=base_time + timedelta(hours=1, minutes=offset),
+                attributed_body=build_attributed_body(f"unrelated {offset}"),
+            )
+
+        messages = fetch_messages(
+            builder.build(), MessageQuery(search_text="number", max_results=2)
+        )
+
+        assert [m["text"] for m in messages] == ["my number is 4", "my number is 3"]
 
 
 class TestFetchMessagesGroupChats:
