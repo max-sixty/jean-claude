@@ -502,7 +502,8 @@ def search(
 
     Google indexes terms rather than substrings, so matching is whole-word and
     case-insensitive: "birthday" matches "Alice Birthday", while "irthday",
-    "birthd", and "birthdays" match nothing. Multiple words are ANDed.
+    "birthd", and "birthdays" match nothing. Every word in a multi-word
+    query must match.
 
     The search covers only the window from now to --days ahead, on --calendar
     (default: primary). Past events never match. To filter on a substring, use
