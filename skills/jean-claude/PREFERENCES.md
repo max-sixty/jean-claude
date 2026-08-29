@@ -89,7 +89,7 @@ jean-claude whatsapp chats -n 50
 
 Note the top 5-10 most active chats — these are the key relationships.
 
-**Group chat names reveal context** — Names like "Team OA Lesly" suggest
+**Group chat names reveal context** — Names like "Team OA Alice" suggest
 household staff; "Smith Family" indicates family group. Use these to understand
 relationships without reading every message.
 
@@ -213,7 +213,7 @@ so the user can say "text Sarah" without ambiguity.
 
 **Finding family relationships:**
 
-- Spouse often CC'd on emails or mentioned ("my wife", "Ursula and I")
+- Spouse often CC'd on emails or mentioned ("my wife", "Alice and I")
 - Parents identifiable from surnames, context ("my father", formal address)
 - Children mentioned in scheduling, school emails, family updates
 - Siblings from family group chats, shared parents
@@ -267,7 +267,7 @@ Synthesize what you learned. Be specific and actionable:
 - "Uses exclamation marks freely with friends, sparingly in professional emails"
 - "Keeps emails to 2-3 sentences; uses numbered lists for technical issues"
 - "Opens casual emails with just the name + '!', professional with 'Hi [Name],'"
-- "Messages wife Ursula frequently at +1-555-123-4567"
+- "Messages wife Alice frequently at +1-555-123-4567"
 - "Often uses parenthetical asides: '(ironic that X!)'"
 
 **Bad inferences** (too vague to act on):

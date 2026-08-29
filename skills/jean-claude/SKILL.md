@@ -337,7 +337,7 @@ date "+%Y-%m-%d %H:%M %Z"  # Current date/time for reference
 ```
 **Needs attention:**
 A1: Jordan Lee (Nov 15) — Forwarded: Fellowship nomination, asks for response by Jan 5
-A2: Squarespace (yesterday at 9:15 AM) — Domain transfer rejected for maxroos.com
+A2: Squarespace (yesterday at 9:15 AM) — Domain transfer rejected for example.com
 
 **Receipts & confirmations:**
 B1: DoorDash (35 min ago) — Your order from Superba
@@ -1563,7 +1563,7 @@ If there's a conflict the user may not be aware of, confirm before creating:
    ```
    Then verify: "Sunday is 2025-12-28 — creating the event for that date."
 
-2. **Never hallucinate emails.** If the user says "add Ursula", look up her
+2. **Never hallucinate emails.** If the user says "add Alice", look up her
    email or ask. Never invent addresses.
 
 3. **Verify after creating.** Run `jean-claude gcal list` for that date to confirm. If
