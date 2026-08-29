@@ -3,7 +3,16 @@ Usage: jean-claude gcal search [OPTIONS] QUERY
   Search calendar events. Returns JSON object: {events: [...], nextPageToken?:
   ...}.
 
-  QUERY: Text to search for in event titles/descriptions
+  QUERY: Whole words to match against an event's summary, description,
+  location, and attendee names/emails.
+
+  Google indexes terms rather than substrings, so matching is whole-word and
+  case-insensitive: "birthday" matches "Alice Birthday", while "irthday",
+  "birthd", and "birthdays" match nothing. Multiple words are ANDed.
+
+  The search covers only the window from now to --days ahead, on --calendar
+  (default: primary). Past events never match. To filter on a substring, use
+  'gcal list' over the range and filter the JSON yourself.
 
 Options:
   --days INTEGER             Days to search (default: 30)

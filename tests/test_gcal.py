@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -366,3 +367,56 @@ class TestUpdateDurationPreservation:
         new_start = datetime.fromisoformat(body["start"]["dateTime"])
         new_end = datetime.fromisoformat(body["end"]["dateTime"])
         assert new_end - new_start == timedelta(minutes=90)
+
+
+class TestSearchEmptyHint:
+    """Empty search results carry a hint, so they aren't read as absence."""
+
+    def _run(self, items, args, next_page_token=None):
+        response = {"items": items}
+        if next_page_token:
+            response["nextPageToken"] = next_page_token
+
+        service = MagicMock()
+        service.events().list().execute.return_value = response
+
+        with (
+            patch("jean_claude.gcal.get_calendar", return_value=service),
+            patch(
+                "jean_claude.gcal.resolve_calendar_ids",
+                return_value=[("primary", "Personal")],
+            ),
+        ):
+            result = CliRunner().invoke(cli, args)
+
+        assert result.exit_code == 0, result.output
+        return json.loads(result.output)
+
+    def test_no_results_explains_whole_word_matching(self):
+        output = self._run([], ["search", "irthday", "--days", "400"])
+
+        assert output["events"] == []
+        hint = output["hint"]
+        assert "irthday" in hint
+        assert "whole words" in hint
+        assert "400 days" in hint
+        assert "Personal" in hint
+
+    def test_results_carry_no_hint(self):
+        event = {
+            "summary": "Alice Birthday",
+            "start": {"date": "2027-07-04"},
+            "end": {"date": "2027-07-05"},
+        }
+        output = self._run([event], ["search", "birthday"])
+
+        assert len(output["events"]) == 1
+        assert "hint" not in output
+
+    def test_empty_page_with_more_results_carries_no_hint(self):
+        """An empty page mid-pagination means "keep paging", not "no match"."""
+        output = self._run([], ["search", "birthday"], next_page_token="tok123")
+
+        assert output["events"] == []
+        assert output["nextPageToken"] == "tok123"
+        assert "hint" not in output

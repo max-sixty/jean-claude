@@ -1652,9 +1652,10 @@ not a UTC offset — the library handles DST correctly from the name.
 ### Search & Manage Events
 
 ```bash
-# Search (default: 30 days ahead)
+# Search (default: 30 days ahead, primary calendar only)
 jean-claude gcal search "standup"
 jean-claude gcal search "standup" --days 90
+jean-claude gcal search "standup" --calendar "Roos family"
 
 # Update
 jean-claude gcal update EVENT_ID --start "2025-01-16T14:00"
@@ -1662,6 +1663,29 @@ jean-claude gcal update EVENT_ID --start "2025-01-16T14:00"
 # Delete
 jean-claude gcal delete EVENT_ID
 ```
+
+**Search matches whole words, not substrings.** Google indexes the terms in an
+event's summary, description, location, and attendee names/emails, then matches
+those terms case-insensitively. Partial words find nothing:
+
+| Query | Matches "Alice Birthday"? |
+| --- | --- |
+| `birthday` / `BIRTHDAY` | Yes |
+| `Alice Birthday` | Yes — every word must match |
+| `irthday`, `birthd`, `day` | No — substring or prefix |
+| `birthdays` | No — no stemming |
+
+Search also covers only **future** events, within `--days` (default 30), on
+`--calendar` (default: primary). An event yesterday, or on the family calendar,
+won't appear unless you widen the search.
+
+**Empty results are a claim you have to check.** `{"events": []}` means "this
+query matched nothing", not "nothing is scheduled" — a misspelling, a partial
+word, too narrow a `--days`, or the wrong calendar all produce it. The command
+attaches a `hint` field explaining this when it returns nothing. Before telling
+the user something isn't on their calendar, run a control query you expect to
+match (a full word from the title, a wider `--days`), or use `gcal list` over
+the range and filter the results yourself.
 
 ### Invitations
 
