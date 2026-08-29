@@ -201,6 +201,26 @@ def _ensure_aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=LOCAL_TZ)
 
 
+def _empty_search_hint(
+    query: str, days: int, calendar_ids: list[tuple[str, str]]
+) -> str:
+    """Explain why a search found nothing, so empty isn't read as absent.
+
+    Google matches whole indexed words, not substrings, and only within the
+    requested window and calendars. Without this, an agent sees `{"events": []}`
+    and cannot tell "nothing is scheduled" from "that query cannot match".
+    """
+    names = ", ".join(name for _, name in calendar_ids)
+    return (
+        f"No events matched '{query}'. Empty does not mean nothing is scheduled: "
+        "Google matches whole words (case-insensitive), not substrings. "
+        "'birthday' matches 'Alice Birthday', while 'irthday' and 'birthd' "
+        f"match nothing. This search covered the next {days} days on {names}, "
+        "and never past events. Retry with a full word, widen --days, add "
+        "--calendar, or use 'gcal list' over the range and filter the JSON."
+    )
+
+
 @click.group(cls=CalendarErrorHandlingGroup)
 def cli():
     """Google Calendar CLI - list, create, and search events."""
@@ -477,7 +497,17 @@ def search(
 ):
     """Search calendar events. Returns JSON object: {events: [...], nextPageToken?: ...}.
 
-    QUERY: Text to search for in event titles/descriptions
+    QUERY: Whole words to match against an event's summary, description,
+    location, and attendee names/emails.
+
+    Google indexes terms rather than substrings, so matching is whole-word and
+    case-insensitive: "birthday" matches "Alice Birthday", while "irthday",
+    "birthd", and "birthdays" match nothing. Every word in a multi-word
+    query must match.
+
+    The search covers only the window from now to --days ahead, on --calendar
+    (default: primary). Past events never match. To filter on a substring, use
+    'gcal list' over the range and filter the JSON yourself.
     """
     calendar_ids = resolve_calendar_ids(calendar)
     time_min = datetime.now(LOCAL_TZ)
@@ -514,6 +544,9 @@ def search(
         next_page_token = result.get("nextPageToken")
 
     output = paginated_output("events", all_events, next_page_token)
+    # An empty page with a token means "keep paging", not "nothing matched".
+    if not all_events and not next_page_token:
+        output["hint"] = _empty_search_hint(query, days, calendar_ids)
     click.echo(json.dumps(output, indent=2))
 
 
