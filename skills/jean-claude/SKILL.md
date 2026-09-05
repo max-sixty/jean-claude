@@ -1482,7 +1482,9 @@ jean-claude gcal list --calendar "Family"
 
 The `--calendar` flag accepts:
 - Calendar ID (email or group calendar ID)
-- Calendar name (case-insensitive substring match)
+- Calendar name (case-insensitive substring match), as shown in Google
+  Calendar — for a calendar you don't own, that's your own rename of it,
+  not the owner's name
 - `primary` (default)
 
 If a name matches multiple calendars, the command fails with a list of options.

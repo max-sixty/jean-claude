@@ -14,6 +14,7 @@ from jean_claude.gcal import (
     CalendarErrorHandlingGroup,
     _events_overlap,
     _parse_event_times,
+    calendar_display_name,
     cli,
     parse_datetime,
     resolve_calendar_ids,
@@ -124,6 +125,11 @@ class TestResolveCalendarIds:
                 {"id": "m@example.com", "summary": "Max @ Personal", "primary": True},
                 {"id": "work@example.com", "summary": "Work Calendar"},
                 {"id": "family@example.com", "summary": "Family"},
+                {
+                    "id": "urs@example.com",
+                    "summary": "urs@example.com",
+                    "summaryOverride": "Ursula Gwynn",
+                },
             ]
         }
 
@@ -151,6 +157,25 @@ class TestResolveCalendarIds:
         with patch("jean_claude.gcal.get_calendar", return_value=mock_service):
             result = resolve_calendar_ids(("Family",))
             assert result == [("family@example.com", "Family")]
+
+    def test_resolve_by_summary_override(self, mock_service):
+        """A calendar the user renamed resolves by the name they see."""
+        with patch("jean_claude.gcal.get_calendar", return_value=mock_service):
+            result = resolve_calendar_ids(("Ursula Gwynn",))
+            assert result == [("urs@example.com", "Ursula Gwynn")]
+
+    def test_exact_id_reports_override_name(self, mock_service):
+        """Resolving by ID still reports the renamed display name."""
+        with patch("jean_claude.gcal.get_calendar", return_value=mock_service):
+            result = resolve_calendar_ids(("urs@example.com",))
+            assert result == [("urs@example.com", "Ursula Gwynn")]
+
+    def test_not_found_lists_override_names(self, mock_service):
+        """The available-calendars list shows renamed names, not owner names."""
+        with patch("jean_claude.gcal.get_calendar", return_value=mock_service):
+            with pytest.raises(JeanClaudeError) as exc_info:
+                resolve_calendar_ids(("Nonexistent",))
+            assert "Ursula Gwynn" in str(exc_info.value)
 
     def test_resolve_primary(self, mock_service):
         """'primary' should resolve to the primary calendar."""
@@ -420,3 +445,20 @@ class TestSearchEmptyHint:
         assert output["events"] == []
         assert output["nextPageToken"] == "tok123"
         assert "hint" not in output
+
+
+class TestCalendarDisplayName:
+    """Tests for the calendarList display-name fallback chain."""
+
+    def test_prefers_override(self):
+        cal = {"id": "x@e.com", "summary": "Owner Name", "summaryOverride": "My Name"}
+        assert calendar_display_name(cal) == "My Name"
+
+    def test_falls_back_to_summary(self):
+        assert (
+            calendar_display_name({"id": "x@e.com", "summary": "Owner Name"})
+            == "Owner Name"
+        )
+
+    def test_falls_back_to_id(self):
+        assert calendar_display_name({"id": "x@e.com"}) == "x@e.com"

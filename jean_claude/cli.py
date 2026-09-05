@@ -24,6 +24,7 @@ from .config import (
 )
 from .errors import ErrorHandlingGroup
 from .gcal import cli as gcal_cli
+from .gcal import list_calendars
 from .gdocs import cli as gdocs_cli
 from .gdrive import cli as gdrive_cli
 from .gmail import cli as gmail_cli
@@ -256,7 +257,7 @@ def _get_google_status() -> dict:
         from .auth import build_service
 
         cal = build_service("calendar", "v3")
-        result["calendars"] = _get_calendars_list(
+        result["calendars"] = list_calendars(
             cal, with_stats=True, user_email=user_email
         )
     except Exception as e:
@@ -802,94 +803,6 @@ def _show_whatsapp_counts() -> None:
             )
 
 
-def _get_calendars_list(
-    cal, with_stats: bool = False, user_email: str | None = None
-) -> list[dict]:
-    """Get list of calendars with access info and optional event stats.
-
-    When with_stats=True, also fetches:
-    - upcoming: total events in next 30 days
-    - organized: events where user is organizer (actively created)
-    - invited: events where user is an attendee (invited by someone else)
-
-    The organized/invited split helps distinguish active calendars from "block"
-    calendars that just show someone else's events.
-    """
-    from datetime import datetime, timedelta
-
-    from .gcal import LOCAL_TZ
-
-    result = cal.calendarList().list().execute()
-    calendars = []
-
-    # Time range for stats: next 30 days
-    now = datetime.now(LOCAL_TZ)
-    time_min = now.isoformat()
-    time_max = (now + timedelta(days=30)).isoformat()
-
-    for item in result.get("items", []):
-        calendar_data = {
-            "id": item["id"],
-            "name": item.get("summary", "(no name)"),
-            "primary": item.get("primary", False),
-            "accessRole": item.get("accessRole"),
-        }
-
-        if with_stats:
-            # Fetch upcoming events for this calendar
-            try:
-                events_result = (
-                    cal.events()
-                    .list(
-                        calendarId=item["id"],
-                        timeMin=time_min,
-                        timeMax=time_max,
-                        singleEvents=True,
-                        maxResults=100,
-                    )
-                    .execute()
-                )
-                events = events_result.get("items", [])
-                calendar_data["upcoming"] = len(events)
-
-                # Count organized vs invited events (requires user email)
-                if user_email:
-                    user_email_lower = user_email.lower()
-                    organized = 0
-                    invited = 0
-                    for event in events:
-                        organizer_email = event.get("organizer", {}).get("email", "")
-
-                        if organizer_email.lower() == user_email_lower:
-                            organized += 1
-                        elif any(
-                            a.get("email", "").lower() == user_email_lower
-                            for a in event.get("attendees", [])
-                        ):
-                            invited += 1
-
-                    calendar_data["organized"] = organized
-                    calendar_data["invited"] = invited
-            except Exception:
-                # Some calendars might not allow event listing (e.g., freeBusyReader)
-                calendar_data["upcoming"] = None
-
-        calendars.append(calendar_data)
-
-    # Sort: primary first, then by relevance (organized + invited), then total upcoming
-    def sort_key(c):
-        # Primary always first (0), others after (1)
-        primary_order = 0 if c["primary"] else 1
-        # Higher relevance first (events user is involved in)
-        relevance = -((c.get("organized") or 0) + (c.get("invited") or 0))
-        # Higher event counts first (negative for descending)
-        event_order = -(c.get("upcoming") or 0)
-        return (primary_order, relevance, event_order, c["name"].lower())
-
-    calendars.sort(key=sort_key)
-    return calendars
-
-
 def _show_calendar_counts(cal) -> None:
     """Show calendar event counts for today and this week."""
     from datetime import datetime, timedelta
@@ -930,7 +843,7 @@ def _show_calendar_counts(cal) -> None:
 
 def _show_calendars_list(cal, user_email: str | None = None) -> None:
     """Show list of available calendars with access roles and event counts."""
-    calendars = _get_calendars_list(cal, with_stats=True, user_email=user_email)
+    calendars = list_calendars(cal, with_stats=True, user_email=user_email)
     if not calendars:
         return
 

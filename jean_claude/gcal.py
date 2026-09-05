@@ -47,8 +47,103 @@ class CalendarErrorHandlingGroup(ErrorHandlingGroup):
         return super()._http_error_message(e)
 
 
+def calendar_display_name(cal: dict) -> str:
+    """Display name for a calendarList entry.
+
+    Google stores a user's rename of a calendar they do not own in
+    ``summaryOverride``, leaving ``summary`` as the owner's name (often a raw
+    email or feed URL). The override is what the user sees in Google Calendar,
+    so it is the name they will type at this CLI.
+    """
+    return cal.get("summaryOverride") or cal.get("summary") or cal["id"]
+
+
 def get_calendar():
     return build_service("calendar", "v3")
+
+
+def list_calendars(
+    service, with_stats: bool = False, user_email: str | None = None
+) -> list[dict]:
+    """Get list of calendars with access info and optional event stats.
+
+    When with_stats=True, also fetches:
+    - upcoming: total events in next 30 days
+    - organized: events where user is organizer (actively created)
+    - invited: events where user is an attendee (invited by someone else)
+
+    The organized/invited split helps distinguish active calendars from "block"
+    calendars that just show someone else's events.
+    """
+    result = service.calendarList().list().execute()
+    calendars = []
+
+    # Time range for stats: next 30 days
+    now = datetime.now(LOCAL_TZ)
+    time_min = now.isoformat()
+    time_max = (now + timedelta(days=30)).isoformat()
+
+    for item in result.get("items", []):
+        calendar_data = {
+            "id": item["id"],
+            "name": calendar_display_name(item),
+            "primary": item.get("primary", False),
+            "accessRole": item.get("accessRole"),
+        }
+
+        if with_stats:
+            # Fetch upcoming events for this calendar
+            try:
+                events_result = (
+                    service.events()
+                    .list(
+                        calendarId=item["id"],
+                        timeMin=time_min,
+                        timeMax=time_max,
+                        singleEvents=True,
+                        maxResults=100,
+                    )
+                    .execute()
+                )
+                events = events_result.get("items", [])
+                calendar_data["upcoming"] = len(events)
+
+                # Count organized vs invited events (requires user email)
+                if user_email:
+                    user_email_lower = user_email.lower()
+                    organized = 0
+                    invited = 0
+                    for event in events:
+                        organizer_email = event.get("organizer", {}).get("email", "")
+
+                        if organizer_email.lower() == user_email_lower:
+                            organized += 1
+                        elif any(
+                            a.get("email", "").lower() == user_email_lower
+                            for a in event.get("attendees", [])
+                        ):
+                            invited += 1
+
+                    calendar_data["organized"] = organized
+                    calendar_data["invited"] = invited
+            except Exception:
+                # Some calendars might not allow event listing (e.g., freeBusyReader)
+                calendar_data["upcoming"] = None
+
+        calendars.append(calendar_data)
+
+    # Sort: primary first, then by relevance (organized + invited), then total upcoming
+    def sort_key(c):
+        # Primary always first (0), others after (1)
+        primary_order = 0 if c["primary"] else 1
+        # Higher relevance first (events user is involved in)
+        relevance = -((c.get("organized") or 0) + (c.get("invited") or 0))
+        # Higher event counts first (negative for descending)
+        event_order = -(c.get("upcoming") or 0)
+        return (primary_order, relevance, event_order, c["name"].lower())
+
+    calendars.sort(key=sort_key)
+    return calendars
 
 
 def resolve_calendar_id(calendar: str) -> str:
@@ -98,7 +193,7 @@ def resolve_calendar_ids(
             # Find the primary calendar's name
             for c in all_calendars:
                 if c.get("primary"):
-                    resolved.append((c["id"], c.get("summary", c["id"])))
+                    resolved.append((c["id"], calendar_display_name(c)))
                     break
             else:
                 resolved.append(("primary", "primary"))
@@ -107,20 +202,18 @@ def resolve_calendar_ids(
         # If it's an exact match for a calendar ID, use directly
         if calendar in cal_by_id:
             cal = cal_by_id[calendar]
-            resolved.append((calendar, cal.get("summary", calendar)))
+            resolved.append((calendar, calendar_display_name(cal)))
             continue
 
         # Search by name substring
         matches = []
         for cal in all_calendars:
-            summary = cal.get("summary", "")
-            if calendar.lower() in summary.lower():
+            if calendar.lower() in calendar_display_name(cal).lower():
                 matches.append(cal)
 
         if not matches:
             available = [
-                f"  - {c.get('summary', '(unnamed)')} ({c['id']})"
-                for c in all_calendars
+                f"  - {calendar_display_name(c)} ({c['id']})" for c in all_calendars
             ]
             raise JeanClaudeError(
                 f"No calendar found matching '{calendar}'. Available calendars:\n"
@@ -128,12 +221,12 @@ def resolve_calendar_ids(
             )
 
         if len(matches) > 1:
-            names = [f"  - {c.get('summary', c['id'])} ({c['id']})" for c in matches]
+            names = [f"  - {calendar_display_name(c)} ({c['id']})" for c in matches]
             raise JeanClaudeError(
                 f"Multiple calendars match '{calendar}':\n" + "\n".join(names)
             )
 
-        resolved.append((matches[0]["id"], matches[0].get("summary", matches[0]["id"])))
+        resolved.append((matches[0]["id"], calendar_display_name(matches[0])))
 
     return resolved
 
@@ -230,22 +323,7 @@ def cli():
 @cli.command()
 def calendars():
     """List available calendars. Returns JSON array."""
-    service = get_calendar()
-    result = service.calendarList().list().execute()
-    items = result.get("items", [])
-
-    output = []
-    for cal in items:
-        output.append(
-            {
-                "id": cal["id"],
-                "name": cal.get("summary", "(no name)"),
-                "primary": cal.get("primary", False),
-                "accessRole": cal.get("accessRole"),
-            }
-        )
-
-    click.echo(json.dumps(output, indent=2))
+    click.echo(json.dumps(list_calendars(get_calendar()), indent=2))
 
 
 @cli.command()
