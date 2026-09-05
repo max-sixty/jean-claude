@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import click
 
 from googleapiclient.errors import HttpError
 
-from .auth import SCOPES_FULL, SCOPES_READONLY, TOKEN_FILE, run_auth
+from .applescript import run_applescript
+from .auth import (
+    SCOPES_FULL,
+    SCOPES_READONLY,
+    TOKEN_FILE,
+    build_service,
+    run_auth,
+)
 from .config import (
     CONFIG_FILE,
+    DEFAULT_CONFIG,
     get_config,
     is_contacts_enabled,
     is_imessage_enabled,
@@ -24,16 +32,18 @@ from .config import (
 )
 from .errors import ErrorHandlingGroup
 from .gcal import cli as gcal_cli
-from .gcal import list_calendars
+from .gcal import get_event_start, list_calendars
 from .gdocs import cli as gdocs_cli
 from .gdrive import cli as gdrive_cli
 from .gmail import cli as gmail_cli
 from .gsheets import cli as gsheets_cli
 from .imessage import cli as imessage_cli
 from .reminders import cli as reminders_cli
+from .signal import _get_signal_cli_path, _run_signal_cli
 from .signal import cli as signal_cli
 from .logging import JeanClaudeError, configure_logging, get_logger
-from .timezone import TIMEZONE
+from .timezone import LOCAL_TZ, TIMEZONE
+from .whatsapp import _get_whatsapp_cli_path, _run_whatsapp_cli
 from .whatsapp import cli as whatsapp_cli
 
 logger = get_logger(__name__)
@@ -243,8 +253,6 @@ def _get_google_status() -> dict:
     # Try to get user email
     user_email = None
     try:
-        from .auth import build_service
-
         gmail = build_service("gmail", "v1")
         profile = gmail.users().getProfile(userId="me").execute()
         user_email = profile.get("emailAddress")
@@ -254,8 +262,6 @@ def _get_google_status() -> dict:
 
     # Get calendars list with stats
     try:
-        from .auth import build_service
-
         cal = build_service("calendar", "v3")
         result["calendars"] = list_calendars(
             cal, with_stats=True, user_email=user_email
@@ -373,9 +379,6 @@ def _get_reminders_status() -> dict:
 
 def _get_whatsapp_status() -> dict:
     """Get WhatsApp status as a dict."""
-    from .logging import JeanClaudeError
-    from .whatsapp import _get_whatsapp_cli_path, _run_whatsapp_cli
-
     if not is_whatsapp_enabled():
         return {"enabled": False}
 
@@ -407,9 +410,6 @@ def _get_whatsapp_status() -> dict:
 
 def _get_signal_status() -> dict:
     """Get Signal status as a dict."""
-    from .logging import JeanClaudeError
-    from .signal import _get_signal_cli_path, _run_signal_cli
-
     if not is_signal_enabled():
         return {"enabled": False}
 
@@ -441,8 +441,6 @@ def _get_signal_status() -> dict:
 
 def _check_google_apis() -> None:
     """Check Google API availability and show message counts."""
-    from .auth import build_service
-
     gmail = build_service("gmail", "v1")
 
     # Check Gmail API and show counts
@@ -661,9 +659,6 @@ def _check_reminders_status() -> None:
 
 def _check_whatsapp_status() -> None:
     """Check WhatsApp CLI availability and authentication."""
-    from .logging import JeanClaudeError
-    from .whatsapp import _get_whatsapp_cli_path, _run_whatsapp_cli
-
     click.echo("WhatsApp:")
 
     # Check if feature is enabled
@@ -701,9 +696,6 @@ def _check_whatsapp_status() -> None:
 
 def _check_signal_status() -> None:
     """Check Signal CLI availability and authentication."""
-    from .logging import JeanClaudeError
-    from .signal import _get_signal_cli_path, _run_signal_cli
-
     click.echo("Signal:")
 
     # Check if feature is enabled
@@ -789,8 +781,6 @@ def _show_imessage_counts(conn) -> None:
 
 def _show_whatsapp_counts() -> None:
     """Show WhatsApp unread counts."""
-    from .whatsapp import _run_whatsapp_cli
-
     result = _run_whatsapp_cli("chats", "--unread")
     if result and isinstance(result, list):
         total_unread = sum(chat["unread_count"] for chat in result)
@@ -805,10 +795,6 @@ def _show_whatsapp_counts() -> None:
 
 def _show_calendar_counts(cal) -> None:
     """Show calendar event counts for today and this week."""
-    from datetime import datetime, timedelta
-
-    from .gcal import LOCAL_TZ, get_event_start
-
     now = datetime.now(LOCAL_TZ)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1)
@@ -891,8 +877,6 @@ def _show_calendars_list(cal, user_email: str | None = None) -> None:
 
 def _show_reminders_counts() -> None:
     """Show incomplete reminders count."""
-    from .applescript import run_applescript
-
     script = """tell application "Reminders"
     set totalCount to 0
     repeat with lst in lists
@@ -960,7 +944,6 @@ def config_set(key: str, value: str):
         jean-claude config set enable_signal true
         jean-claude config set setup_completed true
     """
-    from .config import DEFAULT_CONFIG
 
     # Validate key is known
     if key not in DEFAULT_CONFIG:
