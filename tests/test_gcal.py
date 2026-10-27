@@ -394,6 +394,99 @@ class TestUpdateDurationPreservation:
         assert new_end - new_start == timedelta(minutes=90)
 
 
+ORGANIZER = {
+    "email": "max@example.com",
+    "organizer": True,
+    "self": True,
+    "responseStatus": "accepted",
+}
+GUEST = {"email": "alice@example.com", "responseStatus": "accepted"}
+OPTIONAL_GUEST = {
+    "email": "bob@example.com",
+    "optional": True,
+    "responseStatus": "tentative",
+}
+
+
+def _run_update(args, attendees):
+    """Run `gcal update` against an event with these attendees.
+
+    Returns the CliRunner result and the attendee list sent to the API.
+    """
+    service = MagicMock()
+    service.events().get().execute.return_value = {
+        "summary": "Dinner",
+        "attendees": [dict(a) for a in attendees],
+    }
+    service.events().update().execute.return_value = {"id": "evt123"}
+
+    with (
+        patch("jean_claude.gcal.get_calendar", return_value=service),
+        patch("jean_claude.gcal.resolve_calendar_id", return_value="primary"),
+    ):
+        result = CliRunner().invoke(cli, ["update", "evt123", *args])
+
+    body = service.events().update.call_args.kwargs.get("body")
+    return result, body and body.get("attendees")
+
+
+class TestUpdateAttendees:
+    """Attendees who stay on an event keep their response and flags."""
+
+    def test_add_keeps_existing_entries(self):
+        result, sent = _run_update(
+            ["--add-attendees", "family@group.calendar.google.com"],
+            [ORGANIZER, GUEST, OPTIONAL_GUEST],
+        )
+        assert result.exit_code == 0, result.output
+        assert sent == [
+            ORGANIZER,
+            GUEST,
+            OPTIONAL_GUEST,
+            {"email": "family@group.calendar.google.com"},
+        ]
+
+    def test_add_existing_attendee_is_a_no_op(self):
+        result, sent = _run_update(
+            ["--add-attendees", "Bob@Example.com"], [ORGANIZER, OPTIONAL_GUEST]
+        )
+        assert result.exit_code == 0, result.output
+        assert sent == [ORGANIZER, OPTIONAL_GUEST]
+
+    def test_remove_keeps_the_others(self):
+        result, sent = _run_update(
+            ["--remove-attendees", "alice@example.com"],
+            [ORGANIZER, GUEST, OPTIONAL_GUEST],
+        )
+        assert result.exit_code == 0, result.output
+        assert sent == [ORGANIZER, OPTIONAL_GUEST]
+
+    def test_remove_non_attendee_fails(self):
+        result, sent = _run_update(
+            ["--remove-attendees", "carol@example.com"], [ORGANIZER, GUEST]
+        )
+        assert result.exit_code != 0
+        assert sent is None
+        assert "carol@example.com" in result.output
+        assert "alice@example.com" in result.output
+
+    def test_replace_keeps_entries_for_people_who_stay(self):
+        result, sent = _run_update(
+            ["--attendees", "max@example.com, bob@example.com,dan@example.com"],
+            [ORGANIZER, GUEST, OPTIONAL_GUEST],
+        )
+        assert result.exit_code == 0, result.output
+        assert sent == [ORGANIZER, OPTIONAL_GUEST, {"email": "dan@example.com"}]
+
+    def test_replace_with_add_is_rejected(self):
+        result, sent = _run_update(
+            ["--attendees", "a@example.com", "--add-attendees", "b@example.com"],
+            [ORGANIZER],
+        )
+        assert result.exit_code != 0
+        assert sent is None
+
+
 class TestSearchEmptyHint:
     """Empty search results carry a hint, so they aren't read as absence."""
 

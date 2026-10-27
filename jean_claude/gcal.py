@@ -547,7 +547,7 @@ def create(
     if description:
         event_body["description"] = description
     if attendees:
-        event_body["attendees"] = [{"email": e.strip()} for e in attendees.split(",")]
+        event_body["attendees"] = [{"email": e} for e in _parse_emails(attendees)]
 
     calendar_id = resolve_calendar_id(calendar)
     result = (
@@ -849,7 +849,12 @@ def delete(event_id: str, notify: bool, calendar: str):
 )
 @click.option("--location", help="New location")
 @click.option("--description", help="New description")
-@click.option("--attendees", help="Comma-separated attendee emails (replaces existing)")
+@click.option(
+    "--attendees",
+    help="Comma-separated attendee emails (replaces the list; people kept keep their responses)",
+)
+@click.option("--add-attendees", help="Comma-separated emails to invite")
+@click.option("--remove-attendees", help="Comma-separated emails to uninvite")
 @click.option(
     "--timezone",
     "tz",
@@ -875,6 +880,8 @@ def update(
     location: str,
     description: str,
     attendees: str,
+    add_attendees: str,
+    remove_attendees: str,
     tz: str,
     notify: bool,
     calendar: str,
@@ -883,8 +890,21 @@ def update(
 
     EVENT_ID: The event ID (from list or search output)
 
-    Only specified fields are updated; others remain unchanged.
+    Only specified fields are updated; others remain unchanged. Attendees who
+    stay on the event keep their response, optional flag, and organizer entry.
+
+    \b
+    Examples:
+        jean-claude gcal update EVENT_ID --start "tomorrow 2pm"
+        jean-claude gcal update EVENT_ID --add-attendees bob@example.com
+        jean-claude gcal update EVENT_ID --remove-attendees alice@example.com
     """
+    if attendees and (add_attendees or remove_attendees):
+        raise click.UsageError(
+            "--attendees replaces the whole list; use it alone, or use "
+            "--add-attendees/--remove-attendees to change part of it"
+        )
+
     calendar_id = resolve_calendar_id(calendar)
     service = get_calendar()
 
@@ -898,8 +918,10 @@ def update(
         event["location"] = location
     if description:
         event["description"] = description
-    if attendees:
-        event["attendees"] = [{"email": e.strip()} for e in attendees.split(",")]
+    if attendees or add_attendees or remove_attendees:
+        event["attendees"] = _edit_attendees(
+            event.get("attendees", []), attendees, add_attendees, remove_attendees
+        )
 
     if all_day:
         if not start:
@@ -947,6 +969,45 @@ def update(
 
     logger.info("Event updated", event_id=result["id"], notified=notify)
     click.echo(json.dumps(result, indent=2))
+
+
+def _parse_emails(value: str) -> list[str]:
+    return [e.strip() for e in value.split(",") if e.strip()]
+
+
+def _edit_attendees(
+    current: list[dict],
+    replace: str | None,
+    add: str | None,
+    remove: str | None,
+) -> list[dict]:
+    """Apply attendee edits, keeping existing entries for people who stay.
+
+    An attendee entry carries more than the email (responseStatus, optional,
+    organizer, self), so rebuilding entries from bare emails would make
+    everyone required and reset their responses.
+    """
+    by_email = {a["email"].lower(): a for a in current}
+
+    if replace:
+        return [by_email.get(e.lower(), {"email": e}) for e in _parse_emails(replace)]
+
+    result = list(current)
+    if remove:
+        to_remove = {e.lower() for e in _parse_emails(remove)}
+        if missing := sorted(to_remove - by_email.keys()):
+            raise JeanClaudeError(
+                f"Not attendees of this event: {', '.join(missing)}. "
+                f"Current attendees: {', '.join(a['email'] for a in current) or 'none'}"
+            )
+        result = [a for a in result if a["email"].lower() not in to_remove]
+    if add:
+        present = {a["email"].lower() for a in result}
+        for email in _parse_emails(add):
+            if email.lower() not in present:
+                result.append({"email": email})
+                present.add(email.lower())
+    return result
 
 
 def _parse_event_times(event: dict) -> tuple[datetime | None, datetime | None]:

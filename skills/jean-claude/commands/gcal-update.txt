@@ -4,20 +4,29 @@ Usage: jean-claude gcal update [OPTIONS] EVENT_ID
 
   EVENT_ID: The event ID (from list or search output)
 
-  Only specified fields are updated; others remain unchanged.
+  Only specified fields are updated; others remain unchanged. Attendees who
+  stay on the event keep their response, optional flag, and organizer entry.
+
+  Examples:
+      jean-claude gcal update EVENT_ID --start "tomorrow 2pm"
+      jean-claude gcal update EVENT_ID --add-attendees bob@example.com
+      jean-claude gcal update EVENT_ID --remove-attendees alice@example.com
 
 Options:
-  --summary TEXT          New event title
-  --start TEXT            New start time (e.g., 2024-01-15 14:00, tomorrow
-                          2pm)
-  --end TEXT              New end time (e.g., 2024-01-15 15:00, tomorrow 3pm)
-  --duration INTEGER      New duration in minutes (or days if --all-day)
-  --all-day               Make this an all-day event (uses date only)
-  --location TEXT         New location
-  --description TEXT      New description
-  --attendees TEXT        Comma-separated attendee emails (replaces existing)
-  --timezone TEXT         IANA timezone for the event (e.g., America/Denver).
-                          Defaults to local timezone.
-  --notify / --no-notify  Send update emails to attendees (default: notify)
-  --calendar TEXT         Calendar ID, email, or name (default: primary)
-  --help                  Show this message and exit.
+  --summary TEXT           New event title
+  --start TEXT             New start time (e.g., 2024-01-15 14:00, tomorrow
+                           2pm)
+  --end TEXT               New end time (e.g., 2024-01-15 15:00, tomorrow 3pm)
+  --duration INTEGER       New duration in minutes (or days if --all-day)
+  --all-day                Make this an all-day event (uses date only)
+  --location TEXT          New location
+  --description TEXT       New description
+  --attendees TEXT         Comma-separated attendee emails (replaces the list;
+                           people kept keep their responses)
+  --add-attendees TEXT     Comma-separated emails to invite
+  --remove-attendees TEXT  Comma-separated emails to uninvite
+  --timezone TEXT          IANA timezone for the event (e.g., America/Denver).
+                           Defaults to local timezone.
+  --notify / --no-notify   Send update emails to attendees (default: notify)
+  --calendar TEXT          Calendar ID, email, or name (default: primary)
+  --help                   Show this message and exit.

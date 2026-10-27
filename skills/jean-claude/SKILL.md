@@ -1662,9 +1662,17 @@ jean-claude gcal search "standup" --calendar "Roos family"
 # Update
 jean-claude gcal update EVENT_ID --start "2025-01-16T14:00"
 
+# Invite or uninvite people, leaving everyone else as they were
+jean-claude gcal update EVENT_ID --add-attendees bob@example.com
+jean-claude gcal update EVENT_ID --remove-attendees alice@example.com
+
 # Delete
 jean-claude gcal delete EVENT_ID
 ```
+
+To change who's invited, use `--add-attendees` / `--remove-attendees`.
+`--attendees` replaces the whole list, so anyone you leave out, the organizer
+included, is uninvited.
 
 **Search matches whole words, not substrings.** Google indexes the terms in an
 event's summary, description, location, and attendee names/emails, then matches
