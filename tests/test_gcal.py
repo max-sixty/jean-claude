@@ -487,56 +487,162 @@ class TestUpdateAttendees:
         assert sent is None
 
 
+class FakeCalendarService:
+    """``events().list`` serving fixed pages per calendar, tokens like the API's.
+
+    A page's token is its index, so a resumed request gets the same page back.
+    """
+
+    def __init__(self, pages_by_calendar):
+        self.pages_by_calendar = pages_by_calendar
+
+    def events(self):
+        return self
+
+    def list(self, calendarId, pageToken=None, **params):
+        pages = self.pages_by_calendar[calendarId]
+        index = int(pageToken or 0)
+        response = {"items": pages[index]}
+        if index + 1 < len(pages):
+            response["nextPageToken"] = str(index + 1)
+        return MagicMock(execute=MagicMock(return_value=response))
+
+
+def _event(summary: str, start: str) -> dict:
+    return {"id": summary, "summary": summary, "start": {"dateTime": start}}
+
+
+def _invoke(pages_by_calendar, args) -> dict:
+    calendar_ids = [(calendar_id, calendar_id) for calendar_id in pages_by_calendar]
+    with (
+        patch(
+            "jean_claude.gcal.get_calendar",
+            return_value=FakeCalendarService(pages_by_calendar),
+        ),
+        patch("jean_claude.gcal.resolve_calendar_ids", return_value=calendar_ids),
+    ):
+        result = CliRunner().invoke(cli, args)
+
+    assert result.exit_code == 0, result.output
+    return json.loads(result.output)
+
+
+class TestListAcrossCalendars:
+    """`gcal list` over several calendars returns every event, in start order."""
+
+    # "work" is on Eastern time, so its 10:00 is "home"'s 07:00 Pacific.
+    PAGES = {
+        "home": [
+            [_event("h1", "2025-01-01T06:00:00-08:00")],
+            [_event("h2", "2025-01-01T08:00:00-08:00")],
+            [_event("h3", "2025-01-01T12:00:00-08:00")],
+        ],
+        "work": [
+            [
+                _event("w1", "2025-01-01T10:00:00-05:00"),
+                _event("w2", "2025-01-01T14:00:00-05:00"),
+            ],
+            [],
+            [_event("w3", "2025-01-01T16:00:00-05:00")],
+        ],
+    }
+    ORDER = ["h1", "w1", "h2", "w2", "h3", "w3"]
+
+    def test_unbounded_list_fetches_every_page(self):
+        output = _invoke(self.PAGES, ["list", "--from", "2025-01-01"])
+
+        assert [e["id"] for e in output["events"]] == self.ORDER
+        assert "nextPageToken" not in output
+
+    def test_pages_resume_where_the_last_one_stopped(self):
+        seen = []
+        token = None
+        while True:
+            args = ["list", "--from", "2025-01-01", "-n", "4"]
+            output = _invoke(
+                self.PAGES, args + (["--page-token", token] if token else [])
+            )
+            assert len(output["events"]) <= 4
+            seen += [e["id"] for e in output["events"]]
+            token = output.get("nextPageToken")
+            if not token:
+                break
+
+        assert seen == self.ORDER
+
+    def test_resume_survives_events_leaving_the_page(self):
+        """Search's window starts at "now", so an event can drop off page one."""
+        pages = {
+            "home": [
+                [
+                    _event("a", "2025-01-01T06:00:00-08:00"),
+                    _event("b", "2025-01-01T07:00:00-08:00"),
+                    _event("c", "2025-01-01T08:00:00-08:00"),
+                ]
+            ]
+        }
+        first = _invoke(pages, ["list", "--from", "2025-01-01", "-n", "2"])
+        del pages["home"][0][0]
+        rest = _invoke(
+            pages,
+            ["list", "--from", "2025-01-01", "--page-token", first["nextPageToken"]],
+        )
+
+        assert [e["id"] for e in first["events"] + rest["events"]] == ["a", "b", "c"]
+
+    def test_events_name_their_calendar(self):
+        output = _invoke(self.PAGES, ["list", "--from", "2025-01-01"])
+
+        assert {e["id"]: e["calendar_id"] for e in output["events"]}["w3"] == "work"
+
+    def test_token_for_other_calendars_is_rejected(self):
+        token = _invoke(self.PAGES, ["list", "--from", "2025-01-01", "-n", "1"])[
+            "nextPageToken"
+        ]
+        with (
+            patch(
+                "jean_claude.gcal.get_calendar",
+                return_value=FakeCalendarService(self.PAGES),
+            ),
+            patch(
+                "jean_claude.gcal.resolve_calendar_ids",
+                return_value=[("home", "home")],
+            ),
+        ):
+            result = CliRunner().invoke(
+                cli, ["list", "--from", "2025-01-01", "--page-token", token]
+            )
+
+        assert result.exit_code != 0
+        assert "different calendars" in result.output
+
+
 class TestSearchEmptyHint:
     """Empty search results carry a hint, so they aren't read as absence."""
 
-    def _run(self, items, args, next_page_token=None):
-        response = {"items": items}
-        if next_page_token:
-            response["nextPageToken"] = next_page_token
-
-        service = MagicMock()
-        service.events().list().execute.return_value = response
-
-        with (
-            patch("jean_claude.gcal.get_calendar", return_value=service),
-            patch(
-                "jean_claude.gcal.resolve_calendar_ids",
-                return_value=[("primary", "Personal")],
-            ),
-        ):
-            result = CliRunner().invoke(cli, args)
-
-        assert result.exit_code == 0, result.output
-        return json.loads(result.output)
-
     def test_no_results_explains_whole_word_matching(self):
-        output = self._run([], ["search", "irthday", "--days", "400"])
+        output = _invoke({"primary": [[]]}, ["search", "irthday", "--days", "400"])
 
         assert output["events"] == []
         hint = output["hint"]
         assert "irthday" in hint
         assert "whole words" in hint
         assert "400 days" in hint
-        assert "Personal" in hint
+        assert "primary" in hint
 
     def test_results_carry_no_hint(self):
-        event = {
-            "summary": "Alice Birthday",
-            "start": {"date": "2027-07-04"},
-            "end": {"date": "2027-07-05"},
-        }
-        output = self._run([event], ["search", "birthday"])
+        event = _event("Alice Birthday", "2027-07-04T10:00:00-07:00")
+        output = _invoke({"primary": [[event]]}, ["search", "birthday"])
 
         assert len(output["events"]) == 1
         assert "hint" not in output
 
-    def test_empty_page_with_more_results_carries_no_hint(self):
-        """An empty page mid-pagination means "keep paging", not "no match"."""
-        output = self._run([], ["search", "birthday"], next_page_token="tok123")
+    def test_empty_page_is_skipped_not_reported(self):
+        """The API can return an empty page with a token; the match is on a later page."""
+        event = _event("Alice Birthday", "2027-07-04T10:00:00-07:00")
+        output = _invoke({"primary": [[], [event]]}, ["search", "birthday"])
 
-        assert output["events"] == []
-        assert output["nextPageToken"] == "tok123"
+        assert [e["id"] for e in output["events"]] == ["Alice Birthday"]
         assert "hint" not in output
 
 

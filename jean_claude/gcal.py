@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 from datetime import datetime, timedelta
@@ -94,18 +95,11 @@ def list_calendars(
         if with_stats:
             # Fetch upcoming events for this calendar
             try:
-                events_result = (
-                    service.events()
-                    .list(
-                        calendarId=item["id"],
-                        timeMin=time_min,
-                        timeMax=time_max,
-                        singleEvents=True,
-                        maxResults=100,
-                    )
-                    .execute()
+                events, _ = fetch_events(
+                    service,
+                    [(item["id"], calendar_data["name"])],
+                    {"timeMin": time_min, "timeMax": time_max},
                 )
-                events = events_result.get("items", [])
                 calendar_data["upcoming"] = len(events)
 
                 # Count organized vs invited events (requires user email)
@@ -235,6 +229,184 @@ def get_event_start(event: dict) -> str:
     """Get the start time of an event as ISO string (dateTime or date)."""
     start = event.get("start", {})
     return start.get("dateTime", start.get("date", ""))
+
+
+# The API's largest page, so fetching everything takes the fewest requests.
+_MAX_PAGE_SIZE = 2500
+
+
+def _start_instant(event: dict) -> datetime:
+    """When an event starts, comparable across calendars in other time zones.
+
+    All-day events start at local midnight.
+    """
+    start = event["start"]
+    if "dateTime" in start:
+        return datetime.fromisoformat(start["dateTime"])
+    return datetime.fromisoformat(start["date"]).replace(tzinfo=LOCAL_TZ)
+
+
+# Where each calendar's stream resumes: the token of the API page holding its
+# next event (None for the first page), and that event's ID (None for the
+# page's start). The ID, not an index, marks the spot, since the page can
+# shift between requests: search's window starts at "now", and events get
+# added and removed. Calendars with no events left have no entry.
+Positions = dict[str, tuple[str | None, str | None]]
+
+
+class _CalendarCursor:
+    """Read position in one calendar's events: the fetched page and the next item."""
+
+    def __init__(
+        self,
+        service,
+        calendar_id: str,
+        calendar_name: str,
+        params: dict,
+        page_size: int,
+        position: tuple[str | None, str | None],
+    ):
+        self.service = service
+        self.calendar_id = calendar_id
+        self.calendar_name = calendar_name
+        self.params = params
+        self.page_size = page_size
+        page_token, next_id = position
+        self._fetch(page_token)
+        # If the event is gone, restart the page: repeating events beats
+        # skipping them.
+        ids = [event["id"] for event in self.items]
+        self.index = ids.index(next_id) if next_id in ids else 0
+        self._skip_exhausted_pages()
+
+    def _fetch(self, page_token: str | None) -> None:
+        result = (
+            self.service.events()
+            .list(
+                calendarId=self.calendar_id,
+                singleEvents=True,
+                orderBy="startTime",
+                maxResults=self.page_size,
+                pageToken=page_token,
+                **self.params,
+            )
+            .execute()
+        )
+        self.page_token = page_token
+        self.items = result.get("items", [])
+        self.next_page_token = result.get("nextPageToken")
+        self.index = 0
+
+    def _skip_exhausted_pages(self) -> None:
+        # Pages can be empty and still carry a token, so loop.
+        while self.index >= len(self.items) and self.next_page_token:
+            self._fetch(self.next_page_token)
+
+    @property
+    def head(self) -> dict | None:
+        return self.items[self.index] if self.index < len(self.items) else None
+
+    def pop(self) -> dict:
+        event = self.items[self.index]
+        self.index += 1
+        self._skip_exhausted_pages()
+        event["calendar_id"] = self.calendar_id
+        event["calendar_name"] = self.calendar_name
+        return event
+
+
+def _encode_page_token(
+    calendar_ids: list[tuple[str, str]], page_size: int, positions: Positions
+) -> str:
+    payload = {
+        "calendars": [calendar_id for calendar_id, _ in calendar_ids],
+        "page_size": page_size,
+        "positions": positions,
+    }
+    return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
+
+
+def _decode_page_token(
+    page_token: str, calendar_ids: list[tuple[str, str]]
+) -> tuple[int, Positions]:
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(page_token.encode()))
+        calendars, page_size = payload["calendars"], payload["page_size"]
+        positions = {
+            calendar_id: (token, next_id)
+            for calendar_id, (token, next_id) in payload["positions"].items()
+        }
+        if not 1 <= page_size <= _MAX_PAGE_SIZE or not set(positions) <= set(calendars):
+            raise ValueError
+    except (ValueError, KeyError, TypeError, AttributeError):
+        raise JeanClaudeError(
+            "Invalid --page-token. Pass the nextPageToken from the previous "
+            "response unchanged."
+        ) from None
+    if calendars != [calendar_id for calendar_id, _ in calendar_ids]:
+        raise JeanClaudeError(
+            "--page-token came from a request for different calendars. Pass the "
+            "same --calendar options as the request that returned it."
+        )
+    return page_size, positions
+
+
+def fetch_events(
+    service,
+    calendar_ids: list[tuple[str, str]],
+    params: dict,
+    max_results: int | None = None,
+    page_token: str | None = None,
+) -> tuple[list[dict], str | None]:
+    """List events from several calendars as one stream ordered by start time.
+
+    ``params`` are the ``events().list`` filters (time range, query), shared by
+    every calendar. Recurring events are expanded into instances, since only
+    then does the API order by start time. Each event gains ``calendar_id`` and
+    ``calendar_name``.
+
+    Without ``max_results``, every page of every calendar is fetched and no
+    token is returned. With it, returns the first ``max_results`` events of the
+    merged stream and, if any remain, a token that resumes after them. The
+    stream can stop partway through one calendar's API page, so the token
+    records a position within each calendar (see ``Positions``) rather than
+    the API's own token.
+    """
+    if page_token:
+        page_size, positions = _decode_page_token(page_token, calendar_ids)
+    else:
+        page_size = max_results or _MAX_PAGE_SIZE
+        positions = {calendar_id: (None, None) for calendar_id, _ in calendar_ids}
+
+    cursors = [
+        _CalendarCursor(
+            service,
+            calendar_id,
+            calendar_name,
+            params,
+            page_size,
+            positions[calendar_id],
+        )
+        for calendar_id, calendar_name in calendar_ids
+        if calendar_id in positions
+    ]
+
+    events = []
+    while max_results is None or len(events) < max_results:
+        heads = [(c.head, c) for c in cursors if c.head is not None]
+        if not heads:
+            break
+        _, cursor = min(heads, key=lambda head: _start_instant(head[0]))
+        events.append(cursor.pop())
+
+    positions = {
+        c.calendar_id: (c.page_token, c.head["id"])
+        for c in cursors
+        if c.head is not None
+    }
+    if not positions:
+        return events, None
+    return events, _encode_page_token(calendar_ids, page_size, positions)
 
 
 def parse_datetime(s: str) -> datetime:
@@ -437,39 +609,18 @@ def list_events(
     else:
         time_max = time_min + timedelta(days=days)
 
-    service = get_calendar()
-    all_events = []
-
-    for calendar_id, calendar_name in calendar_ids:
-        list_kwargs = {
-            "calendarId": calendar_id,
+    events, next_page_token = fetch_events(
+        get_calendar(),
+        calendar_ids,
+        {
             "timeMin": time_min.isoformat(),
             "timeMax": time_max.isoformat(),
-            "singleEvents": True,
-            "orderBy": "startTime",
-        }
-        if max_results and len(calendar_ids) == 1:
-            list_kwargs["maxResults"] = max_results
-        if page_token and len(calendar_ids) == 1:
-            list_kwargs["pageToken"] = page_token
+        },
+        max_results,
+        page_token,
+    )
 
-        result = service.events().list(**list_kwargs).execute()
-
-        # Add calendar info to each event
-        for event in result.get("items", []):
-            event["calendar_id"] = calendar_id
-            event["calendar_name"] = calendar_name
-            all_events.append(event)
-
-    # Sort by start time
-    all_events.sort(key=get_event_start)
-
-    # Only include pagination token for single-calendar queries
-    next_page_token = None
-    if len(calendar_ids) == 1:
-        next_page_token = result.get("nextPageToken")
-
-    output = paginated_output("events", all_events, next_page_token)
+    output = paginated_output("events", events, next_page_token)
     click.echo(json.dumps(output, indent=2))
 
 
@@ -591,39 +742,20 @@ def search(
     time_min = datetime.now(LOCAL_TZ)
     time_max = time_min + timedelta(days=days)
 
-    service = get_calendar()
-    all_events = []
-
-    for calendar_id, calendar_name in calendar_ids:
-        list_kwargs = {
-            "calendarId": calendar_id,
+    events, next_page_token = fetch_events(
+        get_calendar(),
+        calendar_ids,
+        {
             "timeMin": time_min.isoformat(),
             "timeMax": time_max.isoformat(),
             "q": query,
-            "singleEvents": True,
-            "orderBy": "startTime",
-        }
-        if max_results and len(calendar_ids) == 1:
-            list_kwargs["maxResults"] = max_results
-        if page_token and len(calendar_ids) == 1:
-            list_kwargs["pageToken"] = page_token
+        },
+        max_results,
+        page_token,
+    )
 
-        result = service.events().list(**list_kwargs).execute()
-
-        for event in result.get("items", []):
-            event["calendar_id"] = calendar_id
-            event["calendar_name"] = calendar_name
-            all_events.append(event)
-
-    all_events.sort(key=get_event_start)
-
-    next_page_token = None
-    if len(calendar_ids) == 1:
-        next_page_token = result.get("nextPageToken")
-
-    output = paginated_output("events", all_events, next_page_token)
-    # An empty page with a token means "keep paging", not "nothing matched".
-    if not all_events and not next_page_token:
+    output = paginated_output("events", events, next_page_token)
+    if not events:
         output["hint"] = _empty_search_hint(query, days, calendar_ids)
     click.echo(json.dumps(output, indent=2))
 
@@ -653,37 +785,25 @@ def invitations(days: int | None, expand: bool, calendar: tuple[str, ...]):
     calendar_ids = resolve_calendar_ids(calendar)
     time_min = datetime.now(LOCAL_TZ)
 
-    service = get_calendar()
-    pending = []
+    params = {
+        "timeMin": time_min.isoformat(),
+    }
+    if days is not None:
+        params["timeMax"] = (time_min + timedelta(days=days)).isoformat()
+    events, _ = fetch_events(get_calendar(), calendar_ids, params)
 
-    for calendar_id, calendar_name in calendar_ids:
-        params = {
-            "calendarId": calendar_id,
-            "timeMin": time_min.isoformat(),
-            "singleEvents": True,
-            "orderBy": "startTime",
-        }
-        if days is not None:
-            params["timeMax"] = (time_min + timedelta(days=days)).isoformat()
-
-        result = service.events().list(**params).execute()
-
-        # Filter to events where user is attendee with needsAction status
-        for event in result.get("items", []):
-            attendees = event.get("attendees", [])
-            for attendee in attendees:
-                if (
-                    attendee.get("self")
-                    and attendee.get("responseStatus") == "needsAction"
-                ):
-                    event["calendar_id"] = calendar_id
-                    event["calendar_name"] = calendar_name
-                    pending.append(event)
-                    break
+    # Filter to events where user is attendee with needsAction status
+    pending = [
+        event
+        for event in events
+        if any(
+            attendee.get("self") and attendee.get("responseStatus") == "needsAction"
+            for attendee in event.get("attendees", [])
+        )
+    ]
 
     # If --expand, return all instances without collapsing
     if expand:
-        pending.sort(key=get_event_start)
         click.echo(json.dumps(pending, indent=2))
         return
 
@@ -1087,29 +1207,14 @@ def conflicts(from_date: str, to_date: str, calendar: tuple[str, ...]):
     if time_max <= time_min:
         time_max = time_min + timedelta(days=7)
 
-    service = get_calendar()
-    all_events = []
-
-    for calendar_id, calendar_name in calendar_ids:
-        result = (
-            service.events()
-            .list(
-                calendarId=calendar_id,
-                timeMin=time_min.isoformat(),
-                timeMax=time_max.isoformat(),
-                singleEvents=True,
-                orderBy="startTime",
-            )
-            .execute()
-        )
-
-        for event in result.get("items", []):
-            event["calendar_id"] = calendar_id
-            event["calendar_name"] = calendar_name
-            all_events.append(event)
-
-    # Sort by start time
-    all_events.sort(key=get_event_start)
+    all_events, _ = fetch_events(
+        get_calendar(),
+        calendar_ids,
+        {
+            "timeMin": time_min.isoformat(),
+            "timeMax": time_max.isoformat(),
+        },
+    )
 
     # Find conflicts
     conflicts_found = []

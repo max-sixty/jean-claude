@@ -32,7 +32,7 @@ from .config import (
 )
 from .errors import ErrorHandlingGroup
 from .gcal import cli as gcal_cli
-from .gcal import get_event_start, list_calendars
+from .gcal import fetch_events, get_event_start, list_calendars
 from .gdocs import cli as gdocs_cli
 from .gdrive import cli as gdrive_cli
 from .gmail import cli as gmail_cli
@@ -800,18 +800,12 @@ def _show_calendar_counts(cal) -> None:
     today_end = today_start + timedelta(days=1)
     week_end = today_start + timedelta(days=7)
 
-    # Single API call for the week, filter locally for today
-    week_result = (
-        cal.events()
-        .list(
-            calendarId="primary",
-            timeMin=today_start.isoformat(),
-            timeMax=week_end.isoformat(),
-            singleEvents=True,
-        )
-        .execute()
+    # One listing for the week, filtered locally for today
+    week_events, _ = fetch_events(
+        cal,
+        [("primary", "primary")],
+        {"timeMin": today_start.isoformat(), "timeMax": week_end.isoformat()},
     )
-    week_events = week_result.get("items", [])
     week_count = len(week_events)
 
     # Filter for today: event starts before end of today

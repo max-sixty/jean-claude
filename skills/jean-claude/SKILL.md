@@ -1489,15 +1489,20 @@ The `--calendar` flag accepts:
 
 If a name matches multiple calendars, the command fails with a list of options.
 
-**Multiple calendars in one query:** The `list`, `search`, and `invitations`
-commands accept multiple `--calendar` flags to query across calendars:
+**Multiple calendars in one query:** The `list`, `search`, `invitations`, and
+`conflicts` commands accept multiple `--calendar` flags to query across
+calendars:
 
 ```bash
 jean-claude gcal list --from 2025-01-15 --to 2025-01-15 \
   --calendar "Personal" --calendar "Work"
 ```
 
-Each event includes `calendar_id` and `calendar_name` in the output.
+Each event includes `calendar_id` and `calendar_name` in the output. Results
+from all calendars come back as one list in start-time order, covering the
+whole requested range. With `-n`, `list` and `search` return that many events
+in total and a `nextPageToken` while more remain; pass it back with the same
+`--calendar` flags to continue.
 
 ### Choosing the Right Calendar
 
