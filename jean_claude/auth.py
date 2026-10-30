@@ -8,6 +8,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from googleapiclient.http import HttpRequest
 
 from .logging import LoggingHttp, get_logger
 from .paths import CLIENT_SECRET_FILE, CONFIG_DIR, TOKEN_FILE
@@ -164,10 +165,31 @@ def run_auth(readonly: bool = False) -> None:
     print(f"OAuth setup complete! ({scope_type})")
 
 
+# Retries for a read whose connection drops, or that gets a 429 or 5xx, with
+# the client library's exponential backoff (about 2s, 4s, 8s).
+READ_RETRIES = 3
+
+
+class RetryingReadRequest(HttpRequest):
+    """An API request that retries reads on transient failures.
+
+    A dropped TLS connection (SSLEOFError) otherwise fails the whole command,
+    and a run that makes a hundred calls meets one most days. Only GETs retry:
+    a send or draft-create retried after the server acted on it would happen
+    twice.
+    """
+
+    def execute(self, http=None, num_retries=0):
+        if self.method == "GET":
+            num_retries = max(num_retries, READ_RETRIES)
+        return super().execute(http=http, num_retries=num_retries)
+
+
 def build_service(service_name: str, version: str):
     """Build a Google API service with automatic request logging.
 
-    All API requests (GET, POST, PUT, DELETE, PATCH) are logged automatically.
+    All API requests (GET, POST, PUT, DELETE, PATCH) are logged automatically,
+    and reads retry transient failures (RetryingReadRequest).
 
     Args:
         service_name: API service name (e.g., "gmail", "calendar", "drive")
@@ -182,4 +204,6 @@ def build_service(service_name: str, version: str):
     creds = get_credentials()
     authorized_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
     logging_http = LoggingHttp(authorized_http)
-    return build(service_name, version, http=logging_http)
+    return build(
+        service_name, version, http=logging_http, requestBuilder=RetryingReadRequest
+    )
