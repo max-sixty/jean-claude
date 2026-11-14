@@ -1,9 +1,33 @@
 # Run tests before merging (blocking, fail-fast)
 pre-merge = "uv run pytest"
 
-# Post-merge hooks
-# These run in the main worktree after successful merge and push
-# Available template variables: {{ repo }}, {{ branch }}, {{ worktree }}, {{ repo_root }}, {{ target }}
+# After a merge to main, move the installed plugin onto the merged commit.
+#
+# The marketplace updates from GitHub, so this has to wait until origin holds
+# the commit. The user config's `push` hook is what lands it there, rebasing
+# main first when origin has commits main lacks, and this hook waits for it
+# rather than pushing too. Worktrunk runs the user and project post-merge hooks
+# as two concurrent background pipelines, so a push from here would race that
+# one, and an update that starts before the push finds the old commit and
+# reports the plugin already at the latest version. So this hook polls until
+# origin's main matches the local main, re-reading main each time because the
+# rebase moves it, and gives up after a minute. By then the `push` hook has
+# stopped: on unstaged changes it can't rebase over, on a conflict, or on a
+# rejected push.
+#
+# `update`, not `install`: `install` reports an installed plugin as already
+# installed and leaves it on its old commit.
 [post-merge]
-sync = 'if [ "{{ target }}" = "main" ]; then git pull && git push; fi'
-plugin = 'claude plugin marketplace update jean-claude && claude plugin update jean-claude@jean-claude'
+plugin = '''
+branch={{ target }}
+if [ "$branch" != {{ default_branch }} ]; then exit 0; fi
+deadline=$(($(date +%s) + 60))
+until [ "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = "$(git rev-parse "$branch")" ]; do
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    echo "origin's $branch never matched the local $branch; plugin not updated. Re-run this hook once $branch is on origin." >&2
+    exit 1
+  fi
+  sleep 2
+done
+claude plugin marketplace update jean-claude && claude plugin update jean-claude@jean-claude
+'''
