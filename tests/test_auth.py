@@ -52,7 +52,7 @@ def test_write_is_not_retried():
     assert http.attempts == 1
 
 
-def test_read_gives_up_after_retries():
+def test_read_gives_up_after_retries(monkeypatch):
     http = httplib2.Http()
     attempts = []
 
@@ -60,7 +60,7 @@ def test_read_gives_up_after_retries():
         attempts.append(1)
         raise ssl.SSLEOFError("EOF occurred in violation of protocol")
 
-    http.request = always_drop
+    monkeypatch.setattr(http, "request", always_drop)
     with pytest.raises(ssl.SSLEOFError):
         make_request(http, "GET").execute()
     assert len(attempts) == 4
